@@ -2484,36 +2484,102 @@ async def bulk_upload(
     for row in reader:
         try:
             # Clean empty strings into None for optional fields
-            processed_row = {k: (v if v else None) for k, v in row.items()}
+            processed_row = {k: (v.strip() if v and v.strip() else None) for k, v in row.items()}
             
             # Basic validation: Name is required
-            if not processed_row.get('name'):
+            name = processed_row.get('name') or processed_row.get('full_name')
+            if not name:
                 errors.append(f"Row {count + 1}: Name is required")
                 continue
 
-            # Core fields
+            # Handle slug uniqueness
+            base_slug = create_slug(name)
+            slug = base_slug
+            slug_count = 1
+            while await collection.find_one({'slug': slug}):
+                slug = f"{base_slug}-{slug_count}"
+                slug_count += 1
+
+            # URL Sanitization Helper
+            def sanitize_url(url):
+                if not url: return None
+                # If it's already a full URL (ImageKit or external), keep it
+                if url.startswith('http') or url.startswith('https'):
+                    # Replace old localhost URLs if they exist
+                    if 'localhost' in url:
+                        return url.replace('http://localhost:8000', '').replace('http://localhost:3000', '')
+                    return url
+                # If it's a relative path, ensure it starts with /
+                if not url.startswith('/'):
+                    return f"/{url}"
+                return url
+
+            # Core fields mapping
             doc = {
                 'id': str(uuid.uuid4()),
                 'owner_id': current_user['id'],
-                'slug': create_slug(processed_row['name']),
+                'slug': slug,
                 'status': ListingStatus.PUBLISHED,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat(),
-                **processed_row
+                'is_verified': True,
+                'is_featured': False
             }
-            
-            # Specific cleanups
+
+            # Map CSV fields to DB fields
+            # We use a broad mapping to handle different CSV versions
+            field_map = {
+                'tagline': 'tagline',
+                'description': 'description',
+                'bio': 'bio',
+                'address': 'address',
+                'phone': 'phone',
+                'email': 'email',
+                'website': 'website',
+                'denomination': 'denomination',
+                'worship_style': 'worship_style',
+                'facebook': 'facebook',
+                'instagram': 'instagram',
+                'youtube': 'youtube',
+                'twitter': 'twitter',
+                'years_in_ministry': 'years_in_ministry',
+                'highest_degree': 'highest_degree'
+            }
+
+            for csv_key, db_key in field_map.items():
+                if processed_row.get(csv_key):
+                    doc[db_key] = processed_row[csv_key]
+
+            # Special field handling
             if type == 'church':
-                # Convert list strings to actual lists if they exist (comma separated)
+                doc['name'] = name
+                doc['logo_url'] = sanitize_url(processed_row.get('logo_url'))
+                doc['cover_url'] = sanitize_url(processed_row.get('cover_url'))
+                
+                # List fields
                 for list_field in ['ministries', 'worship_styles', 'facilities', 'languages', 'other_branches']:
-                    if processed_row.get(list_field):
-                        doc[list_field] = [x.strip() for x in processed_row[list_field].split(',')]
+                    val = processed_row.get(list_field)
+                    if val:
+                        doc[list_field] = [x.strip() for x in val.split(',')]
                     else:
                         doc[list_field] = []
+                
+                # Coordinates
+                try:
+                    doc['latitude'] = float(processed_row.get('latitude')) if processed_row.get('latitude') else 0.0
+                    doc['longitude'] = float(processed_row.get('longitude')) if processed_row.get('longitude') else 0.0
+                except (ValueError, TypeError):
+                    doc['latitude'] = 0.0
+                    doc['longitude'] = 0.0
             else:
-                for list_field in ['locations_serving', 'languages_known', 'certifications', 'skills', 'training', 'ministry_experience', 'roles_interested', 'passion_areas', 'cities_served']:
-                    if processed_row.get(list_field):
-                        doc[list_field] = [x.strip() for x in processed_row[list_field].split(',')]
+                doc['full_name'] = name
+                doc['profile_image_url'] = sanitize_url(processed_row.get('profile_image_url') or processed_row.get('logo_url'))
+                
+                # List fields
+                for list_field in ['locations_serving', 'languages_known', 'certifications', 'skills', 'training', 'ministry_experience', 'roles_interested', 'passion_areas', 'cities_served', 'languages']:
+                    val = processed_row.get(list_field)
+                    if val:
+                        doc[list_field] = [x.strip() for x in val.split(',')]
                     else:
                         doc[list_field] = []
 
