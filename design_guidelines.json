@@ -1,0 +1,136 @@
+{
+  "identity": {
+    "name": "Church Navigator",
+    "persona": "The Digital Sanctuary",
+    "vibe": "Soft, Welcoming, Connected, Serene",
+    "description": "A faith-based directory that feels like a mindfulness app mixed with a community network. It avoids the sterile 'corporate directory' look in favor of warm, human-centric storytelling."
+  },
+  "tokens": {
+    "colors": {
+      "primary": {
+        "DEFAULT": "#6c1cff",
+        "foreground": "#FFFFFF",
+        "hover": "#5b17d6",
+        "soft": "#F3E8FF"
+      },
+      "secondary": {
+        "DEFAULT": "#F4F4F5",
+        "foreground": "#18181B"
+      },
+      "background": {
+        "DEFAULT": "#FFFFFF",
+        "subtle": "#FAFAFA",
+        "warm": "#FDFCF8"
+      },
+      "text": {
+        "primary": "#1A1A1A",
+        "secondary": "#71717A",
+        "muted": "#A1A1AA",
+        "brand": "#4C1D95"
+      },
+      "status": {
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "error": "#EF4444"
+      }
+    },
+    "typography": {
+      "fontFamily": {
+        "sans": ["Poppins", "sans-serif"],
+        "serif": ["Playfair Display", "serif"]
+      },
+      "weights": {
+        "normal": 400,
+        "medium": 500,
+        "semibold": 600,
+        "bold": 700
+      },
+      "sizes": {
+        "h1": "text-4xl md:text-5xl font-bold tracking-tight",
+        "h2": "text-3xl md:text-4xl font-semibold tracking-tight",
+        "h3": "text-2xl font-semibold",
+        "body": "text-base leading-relaxed",
+        "small": "text-sm font-medium text-muted-foreground"
+      }
+    },
+    "radius": {
+      "default": "0.75rem",
+      "large": "1rem",
+      "full": "9999px"
+    },
+    "shadows": {
+      "soft": "0 4px 20px -2px rgba(108, 28, 255, 0.1)",
+      "card": "0 1px 3px rgba(0,0,0,0.05), 0 10px 30px -10px rgba(108, 28, 255, 0.05)",
+      "hover": "0 20px 40px -10px rgba(108, 28, 255, 0.15)"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#6c1cff] text-white hover:bg-[#5b17d6] rounded-full px-8 py-3 font-medium transition-all shadow-lg shadow-purple-200 hover:shadow-purple-300 hover:-translate-y-0.5",
+      "secondary": "bg-white text-[#6c1cff] border-2 border-[#6c1cff]/10 hover:border-[#6c1cff]/30 hover:bg-purple-50 rounded-full px-8 py-3 font-medium transition-all",
+      "ghost": "text-slate-600 hover:text-[#6c1cff] hover:bg-purple-50 rounded-lg px-4 py-2 transition-colors"
+    },
+    "cards": {
+      "base": "bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group",
+      "interactive": "cursor-pointer hover:-translate-y-1 hover:shadow-[0_20px_40px_-12px_rgba(108,28,255,0.1)]"
+    },
+    "inputs": {
+      "base": "rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white focus:border-[#6c1cff] focus:ring-4 focus:ring-[#6c1cff]/10 transition-all h-12 px-4"
+    },
+    "badges": {
+      "base": "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+      "primary": "bg-[#6c1cff]/10 text-[#6c1cff]",
+      "secondary": "bg-slate-100 text-slate-700"
+    }
+  },
+  "layout": {
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "section_spacing": "py-16 md:py-24",
+    "grid_explore": "grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-4rem)]",
+    "grid_cards": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
+  },
+  "assets": {
+    "images": {
+      "hero_bg": "https://images.unsplash.com/photo-1555069855-e580a9adbf43?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "church_exteriors": [
+        "https://images.unsplash.com/photo-1636051551573-15d6cb59db52?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "https://images.unsplash.com/photo-1643138871855-753971a63a90?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "https://images.unsplash.com/photo-1694878276633-dc6bcba7ee33?crop=entropy&cs=srgb&fm=jpg&q=85"
+      ],
+      "community": [
+        "https://images.unsplash.com/photo-1555069855-e580a9adbf43?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "https://images.unsplash.com/photo-1758275557588-12e336174500?crop=entropy&cs=srgb&fm=jpg&q=85"
+      ],
+      "pastors": [
+        "https://images.unsplash.com/photo-1731419223645-5166ef2f0488?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "https://images.unsplash.com/photo-1560279800-8b23f487ce83?crop=entropy&cs=srgb&fm=jpg&q=85"
+      ],
+      "worship": [
+        "https://images.unsplash.com/photo-1653003956303-22a1e422a2ea?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "https://images.unsplash.com/photo-1770097043369-4ee5a231ecc0?crop=entropy&cs=srgb&fm=jpg&q=85"
+      ]
+    }
+  },
+  "instructions_to_main_agent": [
+    "THEME: Implement a 'Light Mode' first strategy. The app should feel airy, using generous whitespace.",
+    "ROUNDNESS: Override default Shadcn radius to '0.75rem' or '1rem' in `theme.extend.borderRadius`.",
+    "SHADOWS: Do not use black shadows. Use colored shadows (purple-tinted) for a premium feel.",
+    "FONTS: Use 'Poppins' for everything. Import it from Google Fonts in index.css.",
+    "MAP: For the Explore page, use a placeholder Map component (grey background with markers) if Mapbox is not configured, but layout must be split: Filters (Left), List (Middle), Map (Right) or Mobile: List/Map Toggle.",
+    "FORMS: Break the 'Add Listing' form into a Multi-step Wizard. Do not show 20 inputs at once.",
+    "CARDS: Church cards must show: Image (Top), Name (Bold), Location (Icon), Tags (Pills), and a 'View Profile' button.",
+    "NAVBAR: Sticky white navbar with subtle blur `backdrop-blur-md bg-white/80`.",
+    "TESTING: Add `data-testid` to all interactive elements (buttons, inputs, cards)."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Avoid generic centered layouts. Use asymmetry where possible.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) for overlays.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Never use AI assistant Emoji characters for icons. Use Lucide React icons.",
+    "Prioritize using pre-existing components from src/components/ui.",
+    "Components MUST use named exports.",
+    "Pages MUST use default exports."
+  ]
+}
