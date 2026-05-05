@@ -27,6 +27,7 @@ import asyncio
 from analytics_utils import AnalyticsService
 import math
 import re
+from imagekitio import ImageKit
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -384,6 +385,25 @@ async def get_timezone_endpoint(request: TimezoneRequest):
     """
     timezone_id = await get_timezone_from_coords(request.latitude, request.longitude)
     return {"timezone": timezone_id}
+
+# ImageKit Configuration
+imagekit = ImageKit(
+    private_key=os.environ.get('IMAGEKIT_PRIVATE_KEY', ''),
+    public_key=os.environ.get('IMAGEKIT_PUBLIC_KEY', ''),
+    url_endpoint=os.environ.get('IMAGEKIT_URL_ENDPOINT', '')
+)
+
+@api_router.get("/utility/imagekit-auth")
+async def get_imagekit_auth():
+    """
+    Returns authentication parameters for ImageKit client-side uploads.
+    """
+    try:
+        auth_params = imagekit.get_authentication_parameters()
+        return auth_params
+    except Exception as e:
+        logger.error(f"ImageKit Auth Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate auth parameters")
 
 # Relationship Model
 class RelationshipBase(BaseModel):
@@ -2679,6 +2699,10 @@ async def delete_file(
     current_user: Dict = Depends(get_current_user)
 ):
     """Delete an uploaded file"""
+    # Handle ImageKit URLs (Skip deletion as they are managed in the cloud)
+    if "ik.imagekit.io" in url:
+        return {"message": "Cloud file removal skipped"}
+
     # Security: Only allow deleting files in uploads directory
     # Accept both /uploads/ and /api/uploads/ prefixes
     if url.startswith("/api/uploads/"):

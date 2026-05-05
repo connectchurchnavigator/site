@@ -195,6 +195,7 @@ export const claimAPI = {
 export const utilityAPI = {
   resolveMap: (url) => api.post('/utility/resolve-map', { url }),
   getTimezone: (lat, lng) => api.post('/utility/timezone', { latitude: lat, longitude: lng }),
+  getImageKitAuth: () => api.get('/utility/imagekit-auth'),
 };
 
 

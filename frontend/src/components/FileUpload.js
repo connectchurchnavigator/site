@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { Upload, X, Image as ImageIcon, FileText, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
-import { uploadAPI } from '../lib/api';
+import { uploadAPI, utilityAPI } from '../lib/api';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
+import axios from 'axios';
 
 const compressToWebP = async (file, maxMB = 1) => {
   if (!file.type.startsWith('image/')) return file;
@@ -89,7 +90,7 @@ const FileUpload = ({
 
   const getFullUrl = (url) => {
     if (!url) return '';
-    if (url.startsWith('http')) return url;
+    if (url.startsWith('http') || url.startsWith('https')) return url;
     return `${backendUrl}${url}`;
   };
 
@@ -128,28 +129,42 @@ const FileUpload = ({
     setUploading(true);
 
     try {
+      // Get authentication parameters from backend
+      const authResponse = await utilityAPI.getImageKitAuth();
+      const { signature, expire, token } = authResponse.data;
+      const publicKey = process.env.REACT_APP_IMAGEKIT_PUBLIC_KEY;
+
+      const uploadToImageKit = async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('fileName', file.name);
+        formData.append('publicKey', publicKey);
+        formData.append('signature', signature);
+        formData.append('expire', expire);
+        formData.append('token', token);
+        formData.append('useUniqueFileName', 'true');
+        formData.append('folder', `/church_navigator/${category}`);
+
+        const res = await axios.post('https://upload.imagekit.io/api/v1/files/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return res.data.url;
+      };
+
       if (multiple) {
-        const response = await uploadAPI.uploadMultiple(processedFiles, category);
-        const { uploaded, errors } = response.data;
-        
-        if (uploaded.length > 0) {
-          const newUrls = uploaded.map(f => f.url);
-          const currentUrls = Array.isArray(value) ? value : [];
-          onChange([...currentUrls, ...newUrls]);
-          toast.success(`${uploaded.length} file(s) uploaded`);
-        }
-        
-        if (errors.length > 0) {
-          errors.forEach(e => toast.error(`${e.filename}: ${e.error}`));
-        }
+        const uploadPromises = processedFiles.map(file => uploadToImageKit(file));
+        const newUrls = await Promise.all(uploadPromises);
+        const currentUrls = Array.isArray(value) ? value : [];
+        onChange([...currentUrls, ...newUrls]);
+        toast.success(`${newUrls.length} file(s) uploaded to cloud`);
       } else {
-        const response = await uploadAPI.upload(processedFiles[0], category);
-        onChange(response.data.url);
-        toast.success('File uploaded');
+        const url = await uploadToImageKit(processedFiles[0]);
+        onChange(url);
+        toast.success('File uploaded to cloud');
       }
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error(error.response?.data?.detail || 'Upload failed');
+      toast.error('Cloud upload failed. Please check your connection.');
     } finally {
       setUploading(false);
     }
