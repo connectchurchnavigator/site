@@ -5,7 +5,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 // production worker fix
 // @ts-ignore
-// eslint-disable-next-line import/no-webpack-loader-syntax
+// eslint-disable-next-line
 mapboxgl.workerClass = require('worker-loader!mapbox-gl/dist/mapbox-gl-csp-worker').default;
 import { MapPin, Church, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
