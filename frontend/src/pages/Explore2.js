@@ -283,11 +283,7 @@ export default function Explore2() {
   };
 
   const showAllGlobally = () => {
-    setFilters(prev => ({
-      ...prev,
-      location: '',
-      userCoords: null
-    }));
+    resetFilters();
     setMapBounds(null);
     toast.info(`Showing all ${activeType === 'church' ? 'churches' : 'pastors'} globally`);
   };
