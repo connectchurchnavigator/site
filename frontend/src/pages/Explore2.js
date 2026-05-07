@@ -678,6 +678,9 @@ export default function Explore2() {
       </section>
 
 
+      <div className="fixed bottom-2 left-2 p-1 bg-black/10 backdrop-blur-sm rounded text-[8px] text-slate-500 z-[9999] pointer-events-none">
+        Build: {new Date().toLocaleTimeString()} | API: {process.env.REACT_APP_BACKEND_URL || 'Local'}
+      </div>
     </div>
   );
 }

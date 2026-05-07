@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const API_URL = (process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '') + '/api';
+let rawUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+if (rawUrl !== 'http://localhost:8000' && !rawUrl.startsWith('http')) {
+  rawUrl = `https://${rawUrl}`;
+}
+const API_URL = rawUrl.replace(/\/$/, '') + '/api';
 
 console.log('DEBUG_CONNECTIVITY: App is attempting to connect to API at:', API_URL);
 
