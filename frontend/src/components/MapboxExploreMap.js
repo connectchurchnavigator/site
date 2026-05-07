@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import mapboxgl from 'mapbox-gl';
 import { Map, Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
+
+// production worker fix
+// @ts-ignore
+// eslint-disable-next-line import/no-webpack-loader-syntax
+mapboxgl.workerClass = require('worker-loader!mapbox-gl/dist/mapbox-gl-csp-worker').default;
 import { MapPin, Church, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
