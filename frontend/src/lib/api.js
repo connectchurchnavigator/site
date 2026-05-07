@@ -1,23 +1,23 @@
 import axios from 'axios';
 
 const getApiUrl = () => {
+  // 1. Try Environment Variable first
   const envUrl = process.env.REACT_APP_BACKEND_URL;
-  
-  // If we have an env variable, clean it up (remove trailing slash)
-  if (envUrl && envUrl !== 'undefined') {
+  if (envUrl && envUrl !== 'undefined' && envUrl !== 'null') {
     return envUrl.replace(/\/$/, '') + '/api';
   }
   
-  // In production, if no env variable, assume backend is on same domain
-  if (process.env.NODE_ENV === 'production') {
-    return window.location.origin + '/api';
+  // 2. Fallback for production (relative path is safest)
+  if (process.env.NODE_ENV === 'production' || window.location.hostname !== 'localhost') {
+    return '/api';
   }
   
-  // Fallback for local development
+  // 3. Fallback for local dev
   return 'http://localhost:8000/api';
 };
 
 const API_URL = getApiUrl();
+console.log("Connecting to API at:", API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
