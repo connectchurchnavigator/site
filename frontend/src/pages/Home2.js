@@ -214,7 +214,7 @@ const Home2 = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {loading ? (
               [...Array(6)].map((_, i) => <div key={i} className="h-64 bg-slate-100 rounded-3xl shimmer" />)
-            ) : Array.isArray(data.featuredChurches) && data.featuredChurches.map((church, i) => (
+            ) : (data.featuredChurches || []).map((church, i) => (
               <div key={church.id} className="reveal transition-transform hover:-translate-y-2 duration-500">
                 <ChurchCard church={church} />
               </div>
@@ -237,8 +237,8 @@ const Home2 = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {Array.isArray(data.openChurches) && data.openChurches.length > 0 ? (
-              data.openChurches.map((church, i) => (
+            {(data.openChurches || []).length > 0 ? (
+              (data.openChurches || []).map((church, i) => (
                 <div key={church.id} className="reveal transition-transform hover:-translate-y-2 duration-500">
                    <ChurchCard church={church} />
                 </div>
@@ -267,7 +267,7 @@ const Home2 = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {Array.isArray(data.featuredPastors) && data.featuredPastors.map((pastor, i) => (
+            {(data.featuredPastors || []).map((pastor, i) => (
               <div key={pastor.id} className="reveal transition-transform hover:-translate-y-2 duration-500">
                 <PastorCard pastor={pastor} />
               </div>
@@ -289,8 +289,8 @@ const Home2 = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {Array.isArray(data.newPastors) && data.newPastors.length > 0 ? (
-              data.newPastors.map((pastor, i) => (
+            {(data.newPastors || []).length > 0 ? (
+              (data.newPastors || []).map((pastor, i) => (
                 <div key={pastor.id} className="reveal transition-transform hover:-translate-y-2 duration-500">
                   <PastorCard pastor={pastor} />
                 </div>
