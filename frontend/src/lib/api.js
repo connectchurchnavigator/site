@@ -2,6 +2,8 @@ import axios from 'axios';
 
 const API_URL = (process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '') + '/api';
 
+console.log('DEBUG_CONNECTIVITY: App is attempting to connect to API at:', API_URL);
+
 const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -45,6 +47,18 @@ api.interceptors.response.use(
       window.location.href = '/auth/login';
     }
     return Promise.reject(error);
+  }
+);
+
+// Interceptor to detect HTML-instead-of-JSON errors (Routing Loop Detector)
+api.interceptors.response.use(
+  (response) => {
+    if (typeof response.data === 'string' && response.data.includes('<!doctype html>')) {
+      console.error('CRITICAL_API_ERROR: Received HTML instead of JSON. Check your REACT_APP_BACKEND_URL.');
+      // Return a predictable empty object so the app doesn't crash trying to map over HTML
+      return { data: { data: [], total: 0 } };
+    }
+    return response;
   }
 );
 
