@@ -347,7 +347,7 @@ export default function Explore2() {
                   <div className="relative group">
                     <MapPin className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-brand transition-colors" />
                     <Input 
-                      placeholder="Where?" 
+                      placeholder="Search City" 
                       value={filters.location}
                       onChange={(e) => setFilters({...filters, location: e.target.value})}
                       className="pl-8 border-0 border-b border-slate-200 bg-transparent rounded-none h-14 text-sm font-medium text-slate-500 focus-visible:ring-0 focus-visible:border-brand transition-all placeholder:text-slate-400" 

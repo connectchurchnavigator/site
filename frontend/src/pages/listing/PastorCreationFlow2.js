@@ -144,6 +144,7 @@ const PastorCreationFlow2 = () => {
       name: '', email: '', phone: '', denomination: '',
       latitude: '', longitude: '', timezone: 'UTC', google_maps_link: '',
       address_line1: '',
+      city: '',
       relationship_to_listing: ''
    });
    const [quickChurchLoading, setQuickChurchLoading] = useState(false);
@@ -529,8 +530,8 @@ const PastorCreationFlow2 = () => {
    };
 
    const handleQuickChurchCreate = async () => {
-      if (!quickChurch.name || !quickChurch.email || !quickChurch.phone || !quickChurch.denomination) {
-         toast.error('Please fill in required fields (Name, Email, Phone, Denomination)');
+      if (!quickChurch.name || !quickChurch.email || !quickChurch.phone || !quickChurch.denomination || !quickChurch.city) {
+         toast.error('Please fill in required fields (Name, Email, Phone, City, Denomination)');
          return;
       }
       setQuickChurchLoading(true);
@@ -539,9 +540,9 @@ const PastorCreationFlow2 = () => {
             ...quickChurch,
             pastor_name: formData.name, 
             address_line1: quickChurch.address_line1 || 'Quick Profile', 
-            city: 'N/A',
-            state: 'N/A',
-            country: 'N/A',
+            city: quickChurch.city || 'N/A',
+            state: quickChurch.state || 'N/A',
+            country: quickChurch.country || 'N/A',
             status: 'draft'
          };
          const res = await churchAPI.create(churchData);
@@ -567,6 +568,7 @@ const PastorCreationFlow2 = () => {
          if (!formData.name?.trim()) return toast.error('Full Name is mandatory');
          if (!formData.email?.trim()) return toast.error('Email is mandatory');
          if (!formData.phone?.trim()) return toast.error('Phone number is mandatory');
+         if (!formData.city?.trim()) return toast.error('Search City is mandatory');
          if (!formData.denomination) return toast.error('Denomination is mandatory');
          
          // Simple email validation
@@ -912,6 +914,15 @@ const PastorCreationFlow2 = () => {
                                     value={formData.address_line1} 
                                     onChange={(e) => updateFormData('address_line1', e.target.value)} 
                                     placeholder="Building No, Street Name, Area, City, State, Country, Zip" 
+                                    className={inputStyle} 
+                                 />
+                              </GMBRow>
+
+                              <GMBRow label="Search City *" hint="The primary city where seekers will search for you.">
+                                 <Input 
+                                    value={formData.city} 
+                                    onChange={(e) => updateFormData('city', e.target.value)} 
+                                    placeholder="e.g. Hyderabad" 
                                     className={inputStyle} 
                                  />
                               </GMBRow>
@@ -1508,6 +1519,11 @@ const PastorCreationFlow2 = () => {
                      <div className="space-y-2">
                         <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Full Address *</Label>
                         <Input placeholder="Building No, Street Name, Area, City, State, Country, Zip" value={quickChurch.address_line1} onChange={(e) => setQuickChurch({ ...quickChurch, address_line1: e.target.value })} className={inputStyle} />
+                     </div>
+                     <div className="space-y-2">
+                        <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Search City *</Label>
+                        <p className="text-[11px] text-gray-400 -mt-1">The primary city where seekers will search for your church.</p>
+                        <Input placeholder="e.g. Hyderabad" value={quickChurch.city} onChange={(e) => setQuickChurch({ ...quickChurch, city: e.target.value })} className={inputStyle} />
                      </div>
                      <div className="space-y-2">
                         <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">How are you related to this listing? (Optional)</Label>
