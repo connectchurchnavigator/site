@@ -357,15 +357,17 @@ const ChurchCreationFlow = () => {
          const res = await churchAPI.getById(id);
          setChurchId(res.data.id);
          const churchData = res.data;
-         if (churchData.services) {
-            churchData.services = churchData.services.map(s => ({
-               ...s,
-               ends_next_day: s.ends_next_day || false
-            }));
-         }
-         setFormData(prev => ({
-            ...prev,
+
+         // Normalize the church data for the form
+         const normalizedChurch = {
             ...churchData,
+            services: (churchData.services || []).map(s => ({
+               day: s?.day || '',
+               start_time: s?.start_time || '::PM',
+               end_time: s?.end_time || '::PM',
+               event_name: s?.event_name || '',
+               ends_next_day: !!s?.ends_next_day
+            })),
             worship_team: {
                description: churchData.worship_team?.description || '',
                images: churchData.worship_team?.images || [],
@@ -381,7 +383,20 @@ const ChurchCreationFlow = () => {
                images: churchData.outreach_team?.images || [],
                video_urls: churchData.outreach_team?.video_urls || (churchData.outreach_team?.video_url ? [churchData.outreach_team.video_url] : [''])
             }
+         };
+
+         // If no services, add one empty entry
+         if (normalizedChurch.services.length === 0) {
+            normalizedChurch.services = [{ day: '', start_time: '::PM', end_time: '::PM', event_name: '', ends_next_day: false }];
+         }
+
+         setFormData(prev => ({
+            ...prev,
+            ...normalizedChurch,
+            gallery_images: churchData.gallery_images || [],
+            social_links: churchData.social_links || prev.social_links
          }));
+
          if (res.data.latitude && res.data.longitude) {
             setMapViewport(prev => ({
                ...prev,
