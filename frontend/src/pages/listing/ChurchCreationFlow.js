@@ -97,9 +97,9 @@ const BRAND_COLORS = {
 };
 
 const STEPS = [
-   { id: 1, name: 'Identity', description: 'Essential information' },
-   { id: 2, name: 'Hours', description: 'Service timings' },
-   { id: 3, name: 'Assets', description: 'Media & narrative' },
+   { id: 1, name: 'Profile', description: 'Essential information' },
+   { id: 2, name: 'Service Hours', description: 'Service timings' },
+   { id: 3, name: 'Details', description: 'Media & narrative' },
 ];
 
 const FACILITIES_LIST = [
@@ -146,13 +146,15 @@ const FACILITIES_LIST = [
 
 // --- Internal Helper Components Moved Outside to Prevent Focus Loss ---
 
-const GMBRow = ({ label, children, className, hint }) => (
+const GMBRow = ({ label, children, className, hint, error }) => (
    <div className={cn("py-2 flex flex-col gap-2", className)}>
       <div className="flex items-center justify-between">
-         <label className="text-[16px] font-semibold tracking-tight text-gray-800">{label}</label>
+         <label className={cn("text-[16px] font-semibold tracking-tight transition-colors", error ? "text-red-500" : "text-gray-800")}>
+            {label} {error && <span className="ml-1 text-red-500 animate-pulse">!</span>}
+         </label>
          {hint && <span className="text-[11px] text-gray-400 font-normal opacity-80">{hint}</span>}
       </div>
-      <div className="flex-1">
+      <div className={cn("flex-1 transition-all", error && "ring-2 ring-red-100 rounded-xl")}>
          {children}
       </div>
    </div>
@@ -185,26 +187,26 @@ const TimePicker = ({ value, onChange }) => {
 
    return (
       <div className="flex items-center gap-0.5 p-0 bg-transparent transition-all px-2 py-1 rounded-md focus-within:bg-gray-100/80 focus-within:ring-2 focus-within:ring-purple-100">
-         <select 
-            value={h} 
-            onChange={(e) => update(e.target.value, m, p)} 
+         <select
+            value={h}
+            onChange={(e) => update(e.target.value, m, p)}
             className="bg-transparent text-[15px] font-medium outline-none cursor-pointer w-[28px] appearance-none focus:text-[#6c1cff]"
          >
             <option value="">HH</option>
             {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map(n => <option key={n} value={n}>{n}</option>)}
          </select>
          <span className="text-gray-300 pointer-events-none">:</span>
-         <select 
-            value={m} 
-            onChange={(e) => update(h, e.target.value, p)} 
+         <select
+            value={m}
+            onChange={(e) => update(h, e.target.value, p)}
             className="bg-transparent text-[15px] font-medium outline-none cursor-pointer w-[28px] appearance-none text-center focus:text-[#6c1cff]"
          >
             <option value="">MM</option>
             {['00', '15', '30', '45'].map(n => <option key={n} value={n}>{n}</option>)}
          </select>
-         <select 
-            value={p} 
-            onChange={(e) => update(h, m, e.target.value)} 
+         <select
+            value={p}
+            onChange={(e) => update(h, m, e.target.value)}
             className="bg-transparent text-[15px] font-medium outline-none ml-1 cursor-pointer w-[32px] appearance-none uppercase focus:text-[#6c1cff]"
          >
             <option value="">--</option>
@@ -226,10 +228,11 @@ const ChurchCreationFlow = () => {
    const [pastors, setPastors] = useState([]);
    const [churches, setChurches] = useState([]);
    const [loading, setLoading] = useState(false);
+   const [showErrors, setShowErrors] = useState(false);
    const [locationMethod, setLocationMethod] = useState('google_link');
    const [showQuickPastorDialog, setShowQuickPastorDialog] = useState(false);
    const [pastorPopoverOpen, setPastorPopoverOpen] = useState(false);
-   const [quickPastor, setQuickPastor] = useState({ 
+   const [quickPastor, setQuickPastor] = useState({
       name: '', email: '', phone: '', denomination: '', profile_picture: '',
       address_line1: '', google_maps_link: '', latitude: null, longitude: null, timezone: 'UTC',
       relationship_to_listing: ''
@@ -244,7 +247,7 @@ const ChurchCreationFlow = () => {
    const [quickPastorSearchSuggestions, setQuickPastorSearchSuggestions] = useState([]);
    const [quickPastorSearchLoading, setQuickPastorSearchLoading] = useState(false);
    const [resolvingMap, setResolvingMap] = useState(false);
-   
+
    const [formData, setFormData] = useState({
       name: '',
       address_line1: '',
@@ -360,8 +363,8 @@ const ChurchCreationFlow = () => {
                ends_next_day: s.ends_next_day || false
             }));
          }
-         setFormData(prev => ({ 
-            ...prev, 
+         setFormData(prev => ({
+            ...prev,
             ...churchData,
             worship_team: {
                description: churchData.worship_team?.description || '',
@@ -415,6 +418,20 @@ const ChurchCreationFlow = () => {
       } catch (error) { }
    };
 
+   const isFieldEmpty = (field) => {
+      if (!showErrors) return false;
+      if (field === 'pastor') return !formData.pastor_id;
+      return !formData[field]?.toString().trim();
+   };
+
+   const isServiceIncomplete = (service) => {
+      if (!showErrors) return false;
+      // Only check if at least one field is touched
+      const isTouched = service.day?.trim() || service.event_name?.trim() || (service.start_time && service.start_time !== '::PM');
+      if (!isTouched) return false;
+      return !service.day?.trim() || !service.event_name?.trim() || !service.start_time || service.start_time === '::PM';
+   };
+
    const updateFormData = (field, value) => {
       setFormData(prev => {
          const newData = { ...prev, [field]: value };
@@ -447,9 +464,12 @@ const ChurchCreationFlow = () => {
             .map(([_, label]) => label);
 
          if (missing.length > 0) {
+            setShowErrors(true);
             toast.error(`Required: ${missing.join(', ')}`);
             return false;
          }
+
+         setShowErrors(false);
 
          if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
             toast.error('Invalid email format');
@@ -465,18 +485,18 @@ const ChurchCreationFlow = () => {
          }
 
          // Filter for services that have at least one field touched
-         const activeServices = formData.services.filter(s => 
-            s.day?.trim() || 
-            s.event_name?.trim() || 
-            (s.start_time && s.start_time !== '::PM') || 
+         const activeServices = formData.services.filter(s =>
+            s.day?.trim() ||
+            s.event_name?.trim() ||
+            (s.start_time && s.start_time !== '::PM') ||
             (s.end_time && s.end_time !== '::PM')
          );
 
          // If anything is touched, ensure required fields (Day, Title, Start Time) are present
-         const incompleteIdx = activeServices.findIndex(s => 
-            !s.day?.trim() || 
-            !s.event_name?.trim() || 
-            !s.start_time || 
+         const incompleteIdx = activeServices.findIndex(s =>
+            !s.day?.trim() ||
+            !s.event_name?.trim() ||
+            !s.start_time ||
             s.start_time === '::PM'
          );
 
@@ -556,7 +576,7 @@ const ChurchCreationFlow = () => {
          if (zip.length >= 5) {
             const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${zip}&format=json&addressdetails=1`);
             const data = await res.json();
-            
+
             if (data && data.length > 0) {
                const result = data[0].address;
                const city = result.city || result.town || result.village || result.suburb || result.city_district || "";
@@ -665,12 +685,12 @@ const ChurchCreationFlow = () => {
       if (!formData.name) return toast.error('Name required to save draft');
       setLoading(true);
       try {
-         const cleanedServices = (formData.services || []).filter(s => 
-            s.day?.trim() || 
-            s.event_name?.trim() || 
+         const cleanedServices = (formData.services || []).filter(s =>
+            s.day?.trim() ||
+            s.event_name?.trim() ||
             (s.start_time && s.start_time !== '::PM')
          );
-         
+
          const cleanedData = {
             ...formData,
             services: cleanedServices
@@ -699,9 +719,9 @@ const ChurchCreationFlow = () => {
       setLoading(true);
       try {
          // Clean up coordinates and services
-         const cleanedServices = (formData.services || []).filter(s => 
-            s.day?.trim() || 
-            s.event_name?.trim() || 
+         const cleanedServices = (formData.services || []).filter(s =>
+            s.day?.trim() ||
+            s.event_name?.trim() ||
             (s.start_time && s.start_time !== '::PM')
          );
 
@@ -712,7 +732,7 @@ const ChurchCreationFlow = () => {
             services: cleanedServices,
             status: 'published'
          };
-         
+
          if (churchId) await churchAPI.update(churchId, cleanedData);
          else await churchAPI.create(cleanedData);
          toast.success('Published Successfully');
@@ -760,7 +780,7 @@ const ChurchCreationFlow = () => {
          fetchPastors();
 
          setShowQuickPastorDialog(false);
-         setQuickPastor({ 
+         setQuickPastor({
             name: '', email: '', phone: '', denomination: '', profile_picture: '',
             address_line1: '', google_maps_link: '', latitude: null, longitude: null, timezone: 'UTC',
             relationship_to_listing: ''
@@ -806,7 +826,7 @@ const ChurchCreationFlow = () => {
          }
 
          setShowQuickChurchDialog(false);
-         setQuickChurch({ 
+         setQuickChurch({
             name: '', email: '', phone: '', city: '', address_line1: '', state: '', zip_code: '', country: 'USA', logo: '',
             google_maps_link: '', latitude: null, longitude: null, timezone: 'UTC', denomination: ''
          });
@@ -839,12 +859,12 @@ const ChurchCreationFlow = () => {
          }
       }
    };
-   
+
    const handleQuickGoogleMapsLinkChange = async (url) => {
       setQuickChurch(prev => ({ ...prev, google_maps_link: url }));
-      
+
       let coords = parseGoogleMapsUrl(url);
-      
+
       if (!coords && url && url.startsWith('http')) {
          setQuickSearchLoading(true);
          try {
@@ -880,9 +900,9 @@ const ChurchCreationFlow = () => {
 
    const handleQuickMarkerDrag = (evt) => {
       const { lng, lat } = evt.lngLat;
-      setQuickChurch(prev => ({ 
-         ...prev, 
-         latitude: lat.toString(), 
+      setQuickChurch(prev => ({
+         ...prev,
+         latitude: lat.toString(),
          longitude: lng.toString(),
          google_maps_link: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
       }));
@@ -900,7 +920,7 @@ const ChurchCreationFlow = () => {
          longitude: lng.toString(),
          google_maps_link: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
       }));
-      
+
       // Extract city/state if available
       const context = suggestion.context || [];
       const city = context.find(c => c.id.includes('place'))?.text;
@@ -926,9 +946,9 @@ const ChurchCreationFlow = () => {
    // --- Quick Pastor Map Handlers ---
    const handleQuickPastorGoogleMapsLinkChange = async (url) => {
       setQuickPastor(prev => ({ ...prev, google_maps_link: url }));
-      
+
       let coords = parseGoogleMapsUrl(url);
-      
+
       if (!coords && url && url.startsWith('http')) {
          setQuickPastorSearchLoading(true);
          try {
@@ -964,9 +984,9 @@ const ChurchCreationFlow = () => {
 
    const handleQuickPastorMarkerDrag = (evt) => {
       const { lng, lat } = evt.lngLat;
-      setQuickPastor(prev => ({ 
-         ...prev, 
-         latitude: lat.toString(), 
+      setQuickPastor(prev => ({
+         ...prev,
+         latitude: lat.toString(),
          longitude: lng.toString(),
          google_maps_link: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
       }));
@@ -1020,10 +1040,10 @@ const ChurchCreationFlow = () => {
 
    const handleGoogleMapsLinkChange = async (url) => {
       updateFormData('google_maps_link', url);
-      
+
       // 1. Try local parsing first (for full URLs)
       let coords = parseGoogleMapsUrl(url);
-      
+
       // 2. If no coords and it looks like a URL, try backend resolution (for short links)
       if (!coords && url && url.startsWith('http')) {
          setResolvingMap(true);
@@ -1049,7 +1069,7 @@ const ChurchCreationFlow = () => {
          updateFormData('longitude', coords.lng.toString());
          detectTimezone(coords.lat, coords.lng);
          setMapViewport(prev => ({ ...prev, latitude: coords.lat, longitude: coords.lng, zoom: 15 }));
-         
+
          if (!resolvingMap) toast.info('Coordinates extracted.');
       } else if (url && !url.includes('http')) {
          toast.success('Wait, searching...');
@@ -1074,7 +1094,7 @@ const ChurchCreationFlow = () => {
    const handleSuggestionSelect = (suggestion) => {
       const [lng, lat] = suggestion.center;
       const context = suggestion.context || [];
-      
+
       const city = context.find(c => c.id.startsWith('place'))?.text || "";
       const state = context.find(c => c.id.startsWith('region'))?.text || "";
       const country = context.find(c => c.id.startsWith('country'))?.text || "";
@@ -1203,12 +1223,12 @@ const ChurchCreationFlow = () => {
 
                         {currentStep === 1 && (
                            <div className="space-y-2">
-                              <GMBRow label="Church Name *">
+                              <GMBRow label="Church Name *" error={isFieldEmpty('name')}>
                                  <Input value={formData.name} onChange={(e) => updateFormData('name', e.target.value)} placeholder="e.g. Grace Community" className={inputStyle} />
                               </GMBRow>
 
                               <div className="grid grid-cols-2 gap-x-8">
-                                 <GMBRow label="Denomination *">
+                                 <GMBRow label="Denomination *" error={isFieldEmpty('denomination')}>
                                     <Select value={formData.denomination} onValueChange={(v) => updateFormData('denomination', v)}>
                                        <SelectTrigger className={selectStyle}><SelectValue placeholder="Select denomination" /></SelectTrigger>
                                        <SelectContent position="popper" side="bottom" sideOffset={8} avoidCollisions={false} className="z-[100] max-h-[300px]">
@@ -1216,7 +1236,7 @@ const ChurchCreationFlow = () => {
                                        </SelectContent>
                                     </Select>
                                  </GMBRow>
-                                 <GMBRow label="Pastor *">
+                                 <GMBRow label="Pastor *" error={isFieldEmpty('pastor')}>
                                     <div className="space-y-3">
                                        <Popover open={pastorPopoverOpen} onOpenChange={setPastorPopoverOpen}>
                                           <PopoverTrigger asChild>
@@ -1284,7 +1304,7 @@ const ChurchCreationFlow = () => {
                               </div>
 
                               <div className="grid grid-cols-2 gap-x-8">
-                                 <GMBRow label="Email *">
+                                 <GMBRow label="Email *" error={isFieldEmpty('email')}>
                                     <Input
                                        value={formData.email}
                                        onChange={(e) => updateFormData('email', e.target.value)}
@@ -1292,7 +1312,7 @@ const ChurchCreationFlow = () => {
                                        className={cn(inputStyle, formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) ? "border-red-300" : "")}
                                     />
                                  </GMBRow>
-                                 <GMBRow label="Phone *">
+                                 <GMBRow label="Phone *" error={isFieldEmpty('phone')}>
                                     <PhoneInputPremium
                                        value={formData.phone}
                                        onChange={(val) => updateFormData('phone', val)}
@@ -1307,11 +1327,11 @@ const ChurchCreationFlow = () => {
                                        <div className="flex gap-4">
                                           <div className="relative flex-1 group">
                                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors" />
-                                             <Input 
-                                                value={formData.google_maps_link} 
-                                                onChange={(e) => handleGoogleMapsLinkChange(e.target.value)} 
-                                                placeholder="Search address or paste Google Maps URL..." 
-                                                className={cn(inputStyle, "flex-1 pl-10")} 
+                                             <Input
+                                                value={formData.google_maps_link}
+                                                onChange={(e) => handleGoogleMapsLinkChange(e.target.value)}
+                                                placeholder="Search address or paste Google Maps URL..."
+                                                className={cn(inputStyle, "flex-1 pl-10")}
                                              />
                                           </div>
                                           <Button
@@ -1374,11 +1394,11 @@ const ChurchCreationFlow = () => {
                                              </div>
                                           </Marker>
                                           <NavigationControl position="top-right" />
-                                          <GeolocateControl 
-                                             position="top-right" 
+                                          <GeolocateControl
+                                             position="top-right"
                                              positionOptions={{ enableHighAccuracy: true }}
                                              trackUserLocation={true}
-                                             style={{ marginRight: 0, marginTop: 40 }} 
+                                             style={{ marginRight: 0, marginTop: 40 }}
                                              onGeolocate={async (pos) => {
                                                 const { latitude, longitude } = pos.coords;
                                                 updateFormData('latitude', latitude.toString());
@@ -1390,7 +1410,7 @@ const ChurchCreationFlow = () => {
                                              }}
                                           />
                                        </MapGL>
-                                       
+
                                        <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                                           Interactive Map Picker Active
@@ -1432,9 +1452,9 @@ const ChurchCreationFlow = () => {
                                              <SelectContent position="popper" side="bottom" className="z-[110] max-h-[300px]">
                                                 {/* Common Timezones Subset + Currently Selected */}
                                                 {[
-                                                   'UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 
+                                                   'UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London',
                                                    'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-                                                   'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo', 
+                                                   'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo',
                                                    formData.timezone // Include detected one if not in list
                                                 ].filter((v, i, a) => v && a.indexOf(v) === i).sort().map(tz => (
                                                    <SelectItem key={tz} value={tz}>{tz}</SelectItem>
@@ -1447,21 +1467,21 @@ const ChurchCreationFlow = () => {
                                  </div>
                               </GMBRow>
 
-                              <GMBRow label="Full Address *">
-                                 <Input 
-                                    value={formData.address_line1} 
-                                    onChange={(e) => updateFormData('address_line1', e.target.value)} 
-                                    placeholder="Full Address (Building, Street, Area, City, State, Zip)" 
-                                    className={inputStyle} 
+                              <GMBRow label="Full Address *" error={isFieldEmpty('address_line1')}>
+                                 <Input
+                                    value={formData.address_line1}
+                                    onChange={(e) => updateFormData('address_line1', e.target.value)}
+                                    placeholder="Full Address (Building, Street, Area, City, State, Zip)"
+                                    className={inputStyle}
                                  />
                               </GMBRow>
 
-                              <GMBRow label="Search City *" hint="The primary city where seekers will search for your church.">
-                                 <Input 
-                                    value={formData.city} 
-                                    onChange={(e) => updateFormData('city', e.target.value)} 
-                                    placeholder="e.g. Hyderabad, Dallas, etc." 
-                                    className={inputStyle} 
+                              <GMBRow label="Search City *" error={isFieldEmpty('city')} hint="The primary city where seekers will search for your church.">
+                                 <Input
+                                    value={formData.city}
+                                    onChange={(e) => updateFormData('city', e.target.value)}
+                                    placeholder="e.g. Hyderabad, Dallas, etc."
+                                    className={inputStyle}
                                  />
                               </GMBRow>
                            </div>
@@ -1484,19 +1504,23 @@ const ChurchCreationFlow = () => {
                                     {formData.services.map((s, i) => {
                                        const isMandatory = !!s.day;
                                        // Duplicate Check for UI highlighting
-                                       const isDuplicate = s.day && s.event_name && s.start_time && s.start_time !== '::PM' && 
-                                          formData.services.some((other, idx) => 
-                                             idx < i && 
-                                             other.day === s.day && 
-                                             other.event_name?.toLowerCase().trim() === s.event_name?.toLowerCase().trim() && 
+                                       const isDuplicate = s.day && s.event_name && s.start_time && s.start_time !== '::PM' &&
+                                          formData.services.some((other, idx) =>
+                                             idx < i &&
+                                             other.day === s.day &&
+                                             other.event_name?.toLowerCase().trim() === s.event_name?.toLowerCase().trim() &&
                                              other.start_time === s.start_time
                                           );
 
                                        return (
                                           <div key={i} className={cn(
-                                             "grid grid-cols-[160px_1fr_135px_135px_60px] items-center hover:bg-gray-50/20 transition-colors group",
-                                             isDuplicate && "bg-red-100/60 border-l-[6px] border-l-red-500"
+                                             "grid grid-cols-[160px_1fr_135px_135px_60px] items-center hover:bg-gray-50/20 transition-colors group relative",
+                                             isDuplicate && "bg-red-100/60 border-l-[6px] border-l-red-500",
+                                             isServiceIncomplete(s) && "bg-red-50 ring-1 ring-red-200"
                                           )}>
+                                             {isServiceIncomplete(s) && (
+                                                <div className="absolute -left-2 top-1/2 -translate-y-1/2 bg-red-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg z-10 animate-pulse">!</div>
+                                             )}
                                              {/* Day Cell */}
                                              <div className="p-4 border-r border-gray-100">
                                                 <Select value={s.day} onValueChange={(v) => { const n = [...formData.services]; n[i].day = v; updateFormData('services', n); }}>
@@ -1539,10 +1563,10 @@ const ChurchCreationFlow = () => {
                                              <div className="p-4 border-r border-gray-100">
                                                 <TimePicker
                                                    value={s.start_time}
-                                                   onChange={(v) => { 
-                                                      const n = [...formData.services]; 
-                                                      n[i].start_time = v; 
-                                                      updateFormData('services', n); 
+                                                   onChange={(v) => {
+                                                      const n = [...formData.services];
+                                                      n[i].start_time = v;
+                                                      updateFormData('services', n);
                                                    }}
                                                    isMandatory={isMandatory}
                                                 />
@@ -1599,10 +1623,10 @@ const ChurchCreationFlow = () => {
 
                         {currentStep === 3 && (
                            <div className="pb-20 text-center">
-                              <Accordion 
-                                 type="single" 
-                                 collapsible 
-                                 defaultValue="visual" 
+                              <Accordion
+                                 type="single"
+                                 collapsible
+                                 defaultValue="visual"
                                  className="border-none space-y-4 text-left"
                                  onValueChange={(value) => {
                                     if (value) {
@@ -1705,7 +1729,7 @@ const ChurchCreationFlow = () => {
                                              </PopoverContent>
                                           </Popover>
                                        </GMBRow>
-                                        <GMBRow label="Worship Styles">
+                                       <GMBRow label="Worship Styles">
                                           {formData.worship_styles.length > 0 && (
                                              <div className="flex flex-wrap gap-1.5 mb-3">
                                                 {formData.worship_styles.map(s => (
@@ -1836,229 +1860,229 @@ const ChurchCreationFlow = () => {
                                        </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="pt-2 pb-8">
-                                        {/* Network Tree Preview */}
-                                        <div className="mb-8 p-6 bg-slate-50/50 rounded-2xl border border-slate-100">
-                                            <div className="flex items-center justify-between mb-6">
+                                       {/* Network Tree Preview */}
+                                       <div className="mb-8 p-6 bg-slate-50/50 rounded-2xl border border-slate-100">
+                                          <div className="flex items-center justify-between mb-6">
+                                             <div>
+                                                <h4 className="text-[15px] font-bold text-slate-800">Network Preview</h4>
+                                                <p className="text-[12px] text-slate-500">How branches will appear on your landing page</p>
+                                             </div>
+                                             <Badge variant="outline" className="bg-white text-slate-400 border-slate-200 font-medium px-2 py-0.5 text-[10px] uppercase tracking-wider">Live Preview</Badge>
+                                          </div>
+
+                                          <div className="space-y-4">
+                                             {/* Main Branch Node */}
+                                             {(() => {
+                                                const mainId = formData.main_branch_id;
+                                                const main = churches.find(c => c.id === mainId);
+                                                if (!main || mainId === 'none' || mainId === 'independent') return null;
+                                                const isHidden = formData.hidden_branches.includes(main.id);
+                                                return (
+                                                   <div className="relative pl-8">
+                                                      <div className="absolute left-[15px] top-0 bottom-0 w-[2px] bg-slate-200" />
+                                                      <div className="absolute left-[15px] top-1/2 -translate-y-1/2 w-4 h-[2px] bg-slate-200" />
+                                                      <div className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", isHidden ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-slate-200 shadow-sm")}>
+                                                         <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-[10px]">MAIN</div>
+                                                            <div>
+                                                               <div className="text-[13px] font-semibold text-slate-700">{main.name}</div>
+                                                               <div className="text-[10px] text-slate-400">Main Branch / Parent</div>
+                                                            </div>
+                                                         </div>
+                                                         <button
+                                                            type="button"
+                                                            onClick={() => updateFormData('hidden_branches', isHidden ? formData.hidden_branches.filter(id => id !== main.id) : [...formData.hidden_branches, main.id])}
+                                                            className={cn("p-2 rounded-lg transition-all", isHidden ? "text-amber-500 hover:bg-amber-50" : "text-slate-400 hover:bg-slate-50")}
+                                                            title={isHidden ? "Show in listing" : "Hide from listing"}
+                                                         >
+                                                            {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                         </button>
+                                                      </div>
+                                                   </div>
+                                                );
+                                             })()}
+
+                                             {/* Current Church Node */}
+                                             <div className="flex items-center gap-3 p-4 rounded-xl bg-purple-50 border border-purple-100 ring-2 ring-purple-100/50">
+                                                <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white">
+                                                   <Sparkles className="h-5 w-5" />
+                                                </div>
                                                 <div>
-                                                    <h4 className="text-[15px] font-bold text-slate-800">Network Preview</h4>
-                                                    <p className="text-[12px] text-slate-500">How branches will appear on your landing page</p>
+                                                   <div className="text-[14px] font-bold text-purple-900">{formData.name || 'Your Church'}</div>
+                                                   <div className="text-[11px] text-purple-600 font-medium">Currently Editing</div>
                                                 </div>
-                                                <Badge variant="outline" className="bg-white text-slate-400 border-slate-200 font-medium px-2 py-0.5 text-[10px] uppercase tracking-wider">Live Preview</Badge>
-                                            </div>
+                                             </div>
 
-                                            <div className="space-y-4">
-                                                {/* Main Branch Node */}
-                                                {(() => {
-                                                    const mainId = formData.main_branch_id;
-                                                    const main = churches.find(c => c.id === mainId);
-                                                    if (!main || mainId === 'none' || mainId === 'independent') return null;
-                                                    const isHidden = formData.hidden_branches.includes(main.id);
-                                                    return (
-                                                        <div className="relative pl-8">
-                                                            <div className="absolute left-[15px] top-0 bottom-0 w-[2px] bg-slate-200" />
-                                                            <div className="absolute left-[15px] top-1/2 -translate-y-1/2 w-4 h-[2px] bg-slate-200" />
-                                                            <div className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", isHidden ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-slate-200 shadow-sm")}>
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-[10px]">MAIN</div>
-                                                                    <div>
-                                                                        <div className="text-[13px] font-semibold text-slate-700">{main.name}</div>
-                                                                        <div className="text-[10px] text-slate-400">Main Branch / Parent</div>
-                                                                    </div>
-                                                                </div>
-                                                                <button 
-                                                                   type="button"
-                                                                   onClick={() => updateFormData('hidden_branches', isHidden ? formData.hidden_branches.filter(id => id !== main.id) : [...formData.hidden_branches, main.id])}
-                                                                   className={cn("p-2 rounded-lg transition-all", isHidden ? "text-amber-500 hover:bg-amber-50" : "text-slate-400 hover:bg-slate-50")}
-                                                                   title={isHidden ? "Show in listing" : "Hide from listing"}
-                                                                >
-                                                                   {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                                                </button>
+                                             {/* Sister/Branch Nodes */}
+                                             {(() => {
+                                                const others = [];
+                                                const seenIds = new Set();
+                                                const currentId = churchId;
+                                                const churchMainId = formData.main_branch_id;
+
+                                                const isExplicitExcluded = (id) => !id || id === 'independent' || id === 'none';
+                                                const findMatch = (idOrSlug) => {
+                                                   if (isExplicitExcluded(idOrSlug)) return null;
+                                                   return churches.find(c => c.id === idOrSlug || c._id === idOrSlug || c.slug === idOrSlug);
+                                                };
+
+                                                const add = (c) => {
+                                                   if (!c || (c.id === currentId || c._id === currentId || c.slug === formData.name) || seenIds.has(c.id)) return;
+                                                   seenIds.add(c.id);
+                                                   others.push(c);
+                                                };
+
+                                                // 1. Explicit
+                                                formData.other_branches.forEach(bid => add(findMatch(bid)));
+
+                                                // 2. Reciprocal
+                                                churches.forEach(c => {
+                                                   const cMainId = c.main_branch_id;
+                                                   if (!isExplicitExcluded(cMainId) && (cMainId === currentId || cMainId === formData.name)) add(c);
+                                                });
+
+                                                // 3. Siblings
+                                                const mainObj = findMatch(churchMainId);
+                                                if (mainObj) {
+                                                   churches.forEach(c => {
+                                                      const cMainId = c.main_branch_id;
+                                                      if (!isExplicitExcluded(cMainId)) {
+                                                         if (cMainId === churchMainId) add(c);
+                                                         else {
+                                                            const parentOfC = findMatch(cMainId);
+                                                            if (parentOfC && (parentOfC.id === mainObj.id || parentOfC.slug === mainObj.slug)) add(c);
+                                                         }
+                                                      }
+                                                   });
+                                                }
+
+                                                if (others.length === 0) return (
+                                                   <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                                                      <div className="text-slate-300 text-[12px] font-medium italic">No linked sister branches yet</div>
+                                                   </div>
+                                                );
+
+                                                return others.map(s => {
+                                                   const isHidden = formData.hidden_branches.includes(s.id);
+                                                   return (
+                                                      <div key={s.id} className="relative pl-8">
+                                                         <div className="absolute left-[15px] top-0 bottom-0 w-[2px] bg-slate-200" />
+                                                         <div className="absolute left-[15px] top-1/2 -translate-y-1/2 w-4 h-[2px] bg-slate-200" />
+                                                         <div className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", isHidden ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-slate-200 shadow-sm")}>
+                                                            <div className="flex items-center gap-3">
+                                                               <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-400 font-bold text-[10px]">BRANCH</div>
+                                                               <div>
+                                                                  <div className="text-[13px] font-semibold text-slate-700">{s.name}</div>
+                                                                  <div className="text-[10px] text-slate-400">{s.city}, {s.state}</div>
+                                                               </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })()}
+                                                            <div className="flex items-center gap-1">
+                                                               {isHidden && <span className="text-[10px] font-bold text-amber-600 px-2 py-0.5 bg-amber-50 rounded-full mr-1">HIDDEN</span>}
+                                                               <button
+                                                                  type="button"
+                                                                  onClick={() => updateFormData('hidden_branches', isHidden ? formData.hidden_branches.filter(id => id !== s.id) : [...formData.hidden_branches, s.id])}
+                                                                  className={cn("p-2 rounded-lg transition-all", isHidden ? "text-amber-500 hover:bg-amber-50" : "text-slate-400 hover:bg-slate-50")}
+                                                                  title={isHidden ? "Show in listing" : "Hide from listing"}
+                                                               >
+                                                                  {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                               </button>
+                                                            </div>
+                                                         </div>
+                                                      </div>
+                                                   );
+                                                });
+                                             })()}
+                                          </div>
+                                       </div>
 
-                                                {/* Current Church Node */}
-                                                <div className="flex items-center gap-3 p-4 rounded-xl bg-purple-50 border border-purple-100 ring-2 ring-purple-100/50">
-                                                    <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white">
-                                                        <Sparkles className="h-5 w-5" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-[14px] font-bold text-purple-900">{formData.name || 'Your Church'}</div>
-                                                        <div className="text-[11px] text-purple-600 font-medium">Currently Editing</div>
-                                                    </div>
+                                       <GMBRow label="Main Branch">
+                                          <div className="space-y-3">
+                                             <Select value={formData.main_branch_id} onValueChange={(v) => updateFormData('main_branch_id', v)}>
+                                                <SelectTrigger className={selectStyle}>
+                                                   <SelectValue placeholder="Select main church (optional)" />
+                                                </SelectTrigger>
+                                                <SelectContent className="z-[100] rounded-xl border-none shadow-2xl">
+                                                   <SelectItem value="none" className="font-semibold text-[#6c1cff] text-[14px]">This is the main church</SelectItem>
+                                                   <SelectItem value="independent" className="text-slate-500 text-[14px]">This is an independent church (No branches)</SelectItem>
+                                                   <SelectItem value="not_listed" className="text-gray-500 text-[14px] italic">Not listed? Create profile below</SelectItem>
+                                                   {churches.filter(c => c.id !== churchId).map(c => (
+                                                      <SelectItem key={c.id} value={c.id} className="text-[14px]">{c.name}</SelectItem>
+                                                   ))}
+                                                </SelectContent>
+                                             </Select>
+
+                                             {formData.main_branch_id === 'not_listed' && (
+                                                <button
+                                                   type="button"
+                                                   onClick={() => { setQuickChurchTrigger('main'); setShowQuickChurchDialog(true); }}
+                                                   className="w-full py-3 bg-[#6c1cff]/5 border border-dashed border-[#6c1cff]/20 rounded-lg text-[#6c1cff] text-[14px] font-bold hover:bg-[#6c1cff]/10 transition-all flex items-center justify-center gap-2"
+                                                >
+                                                   <Plus className="h-3 w-3" />
+                                                   Create main church profile in one click
+                                                </button>
+                                             )}
+                                          </div>
+                                       </GMBRow>
+                                       {formData.main_branch_id !== 'independent' && (
+                                          <GMBRow label="Other Branches" className="mb-10">
+                                             <div className="space-y-4">
+                                                {formData.other_branches.length > 0 && (
+                                                   <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                                      {formData.other_branches.map(bid => {
+                                                         const b = churches.find(x => x.id === bid);
+                                                         return (
+                                                            <Badge key={bid} variant="secondary" className="bg-gray-100 text-gray-600 hover:bg-gray-200 border-none px-3 py-1 text-[12px] font-semibold rounded-full flex items-center gap-1.5">
+                                                               {b?.name || "Unknown Branch"}
+                                                               <X className="h-3 w-3 cursor-pointer" onClick={() => toggleOtherBranch(bid)} />
+                                                            </Badge>
+                                                         );
+                                                      })}
+                                                   </div>
+                                                )}
+                                                <div className="space-y-3">
+                                                   <Popover>
+                                                      <PopoverTrigger asChild>
+                                                         <button className={cn(selectStyle, "w-full flex items-center justify-between text-left")}>
+                                                            <span className={formData.other_branches.length > 0 ? "text-gray-900 text-[14px]" : "text-gray-400 text-[14px]"}>
+                                                               {formData.other_branches.length > 0 ? `${formData.other_branches.length} branches selected` : "Select branches"}
+                                                            </span>
+                                                            <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                                                         </button>
+                                                      </PopoverTrigger>
+                                                      <PopoverContent side="bottom" align="start" avoidCollisions={false} className="w-[300px] p-0 z-[100] rounded-xl overflow-hidden shadow-2xl border-none">
+                                                         <Command>
+                                                            <CommandInput placeholder="Search churches..." />
+                                                            <CommandList className="max-h-[300px] custom-scrollbar">
+                                                               <CommandEmpty>No church found.</CommandEmpty>
+                                                               <CommandGroup>
+                                                                  {churches.filter(c => c.id !== churchId).length === 0 ? (
+                                                                     <div className="py-6 px-4 text-center text-[13px] text-gray-400">No other listings available</div>
+                                                                  ) : (
+                                                                     churches.filter(c => c.id !== churchId).map(c => (
+                                                                        <CommandItem key={c.id} onSelect={() => toggleOtherBranch(c.id)} className="py-2.5 px-4 flex items-center justify-between cursor-pointer text-[14px]">
+                                                                           <span>{c.name}</span>
+                                                                           {formData.other_branches.includes(c.id) && <Check className="h-4 w-4 text-[#6c1cff]" />}
+                                                                        </CommandItem>
+                                                                     ))
+                                                                  )}
+                                                               </CommandGroup>
+                                                            </CommandList>
+                                                         </Command>
+                                                      </PopoverContent>
+                                                   </Popover>
+
+                                                   <button
+                                                      type="button"
+                                                      onClick={() => { setQuickChurchTrigger('branch'); setShowQuickChurchDialog(true); }}
+                                                      className="w-full py-3 bg-[#6c1cff]/5 border border-dashed border-[#6c1cff]/20 rounded-lg text-[#6c1cff] text-[14px] font-bold hover:bg-[#6c1cff]/10 transition-all flex items-center justify-center gap-2"
+                                                   >
+                                                      <Plus className="h-3 w-3" />
+                                                      Add a new branch profile in one click
+                                                   </button>
                                                 </div>
-
-                                                {/* Sister/Branch Nodes */}
-                                                {(() => {
-                                                    const others = [];
-                                                    const seenIds = new Set();
-                                                    const currentId = churchId;
-                                                    const churchMainId = formData.main_branch_id;
-                                                    
-                                                    const isExplicitExcluded = (id) => !id || id === 'independent' || id === 'none';
-                                                    const findMatch = (idOrSlug) => {
-                                                        if (isExplicitExcluded(idOrSlug)) return null;
-                                                        return churches.find(c => c.id === idOrSlug || c._id === idOrSlug || c.slug === idOrSlug);
-                                                    };
-
-                                                    const add = (c) => {
-                                                        if (!c || (c.id === currentId || c._id === currentId || c.slug === formData.name) || seenIds.has(c.id)) return;
-                                                        seenIds.add(c.id);
-                                                        others.push(c);
-                                                    };
-
-                                                    // 1. Explicit
-                                                    formData.other_branches.forEach(bid => add(findMatch(bid)));
-                                                    
-                                                    // 2. Reciprocal
-                                                    churches.forEach(c => {
-                                                        const cMainId = c.main_branch_id;
-                                                        if (!isExplicitExcluded(cMainId) && (cMainId === currentId || cMainId === formData.name)) add(c);
-                                                    });
-
-                                                    // 3. Siblings
-                                                    const mainObj = findMatch(churchMainId);
-                                                    if (mainObj) {
-                                                        churches.forEach(c => {
-                                                            const cMainId = c.main_branch_id;
-                                                            if (!isExplicitExcluded(cMainId)) {
-                                                                if (cMainId === churchMainId) add(c);
-                                                                else {
-                                                                    const parentOfC = findMatch(cMainId);
-                                                                    if (parentOfC && (parentOfC.id === mainObj.id || parentOfC.slug === mainObj.slug)) add(c);
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-
-                                                    if (others.length === 0) return (
-                                                        <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-2xl">
-                                                            <div className="text-slate-300 text-[12px] font-medium italic">No linked sister branches yet</div>
-                                                        </div>
-                                                    );
-
-                                                    return others.map(s => {
-                                                        const isHidden = formData.hidden_branches.includes(s.id);
-                                                        return (
-                                                            <div key={s.id} className="relative pl-8">
-                                                                <div className="absolute left-[15px] top-0 bottom-0 w-[2px] bg-slate-200" />
-                                                                <div className="absolute left-[15px] top-1/2 -translate-y-1/2 w-4 h-[2px] bg-slate-200" />
-                                                                <div className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", isHidden ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-slate-200 shadow-sm")}>
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-400 font-bold text-[10px]">BRANCH</div>
-                                                                        <div>
-                                                                            <div className="text-[13px] font-semibold text-slate-700">{s.name}</div>
-                                                                            <div className="text-[10px] text-slate-400">{s.city}, {s.state}</div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-1">
-                                                                        {isHidden && <span className="text-[10px] font-bold text-amber-600 px-2 py-0.5 bg-amber-50 rounded-full mr-1">HIDDEN</span>}
-                                                                        <button 
-                                                                           type="button"
-                                                                           onClick={() => updateFormData('hidden_branches', isHidden ? formData.hidden_branches.filter(id => id !== s.id) : [...formData.hidden_branches, s.id])}
-                                                                           className={cn("p-2 rounded-lg transition-all", isHidden ? "text-amber-500 hover:bg-amber-50" : "text-slate-400 hover:bg-slate-50")}
-                                                                           title={isHidden ? "Show in listing" : "Hide from listing"}
-                                                                        >
-                                                                           {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    });
-                                                })()}
-                                            </div>
-                                        </div>
-
-                                        <GMBRow label="Main Branch">
-                                           <div className="space-y-3">
-                                              <Select value={formData.main_branch_id} onValueChange={(v) => updateFormData('main_branch_id', v)}>
-                                                 <SelectTrigger className={selectStyle}>
-                                                    <SelectValue placeholder="Select main church (optional)" />
-                                                 </SelectTrigger>
-                                                 <SelectContent className="z-[100] rounded-xl border-none shadow-2xl">
-                                                    <SelectItem value="none" className="font-semibold text-[#6c1cff] text-[14px]">This is the main church</SelectItem>
-                                                    <SelectItem value="independent" className="text-slate-500 text-[14px]">This is an independent church (No branches)</SelectItem>
-                                                    <SelectItem value="not_listed" className="text-gray-500 text-[14px] italic">Not listed? Create profile below</SelectItem>
-                                                    {churches.filter(c => c.id !== churchId).map(c => (
-                                                       <SelectItem key={c.id} value={c.id} className="text-[14px]">{c.name}</SelectItem>
-                                                    ))}
-                                                 </SelectContent>
-                                              </Select>
-
-                                              {formData.main_branch_id === 'not_listed' && (
-                                                 <button
-                                                    type="button"
-                                                    onClick={() => { setQuickChurchTrigger('main'); setShowQuickChurchDialog(true); }}
-                                                    className="w-full py-3 bg-[#6c1cff]/5 border border-dashed border-[#6c1cff]/20 rounded-lg text-[#6c1cff] text-[14px] font-bold hover:bg-[#6c1cff]/10 transition-all flex items-center justify-center gap-2"
-                                                 >
-                                                    <Plus className="h-3 w-3" />
-                                                    Create main church profile in one click
-                                                 </button>
-                                              )}
-                                           </div>
-                                        </GMBRow>
-                                        {formData.main_branch_id !== 'independent' && (
-                                           <GMBRow label="Other Branches" className="mb-10">
-                                           <div className="space-y-4">
-                                              {formData.other_branches.length > 0 && (
-                                                 <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                                    {formData.other_branches.map(bid => {
-                                                       const b = churches.find(x => x.id === bid);
-                                                       return (
-                                                          <Badge key={bid} variant="secondary" className="bg-gray-100 text-gray-600 hover:bg-gray-200 border-none px-3 py-1 text-[12px] font-semibold rounded-full flex items-center gap-1.5">
-                                                             {b?.name || "Unknown Branch"}
-                                                             <X className="h-3 w-3 cursor-pointer" onClick={() => toggleOtherBranch(bid)} />
-                                                          </Badge>
-                                                       );
-                                                    })}
-                                                 </div>
-                                              )}
-                                              <div className="space-y-3">
-                                                 <Popover>
-                                                    <PopoverTrigger asChild>
-                                                       <button className={cn(selectStyle, "w-full flex items-center justify-between text-left")}>
-                                                          <span className={formData.other_branches.length > 0 ? "text-gray-900 text-[14px]" : "text-gray-400 text-[14px]"}>
-                                                             {formData.other_branches.length > 0 ? `${formData.other_branches.length} branches selected` : "Select branches"}
-                                                          </span>
-                                                          <ChevronsUpDown className="h-4 w-4 opacity-50" />
-                                                       </button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent side="bottom" align="start" avoidCollisions={false} className="w-[300px] p-0 z-[100] rounded-xl overflow-hidden shadow-2xl border-none">
-                                                       <Command>
-                                                          <CommandInput placeholder="Search churches..." />
-                                                          <CommandList className="max-h-[300px] custom-scrollbar">
-                                                             <CommandEmpty>No church found.</CommandEmpty>
-                                                             <CommandGroup>
-                                                                {churches.filter(c => c.id !== churchId).length === 0 ? (
-                                                                   <div className="py-6 px-4 text-center text-[13px] text-gray-400">No other listings available</div>
-                                                                ) : (
-                                                                   churches.filter(c => c.id !== churchId).map(c => (
-                                                                      <CommandItem key={c.id} onSelect={() => toggleOtherBranch(c.id)} className="py-2.5 px-4 flex items-center justify-between cursor-pointer text-[14px]">
-                                                                         <span>{c.name}</span>
-                                                                         {formData.other_branches.includes(c.id) && <Check className="h-4 w-4 text-[#6c1cff]" />}
-                                                                      </CommandItem>
-                                                                   ))
-                                                                )}
-                                                             </CommandGroup>
-                                                          </CommandList>
-                                                       </Command>
-                                                    </PopoverContent>
-                                                 </Popover>
-
-                                                 <button
-                                                    type="button"
-                                                    onClick={() => { setQuickChurchTrigger('branch'); setShowQuickChurchDialog(true); }}
-                                                    className="w-full py-3 bg-[#6c1cff]/5 border border-dashed border-[#6c1cff]/20 rounded-lg text-[#6c1cff] text-[14px] font-bold hover:bg-[#6c1cff]/10 transition-all flex items-center justify-center gap-2"
-                                                 >
-                                                    <Plus className="h-3 w-3" />
-                                                    Add a new branch profile in one click
-                                                 </button>
-                                              </div>
-                                           </div>
-                                           </GMBRow>
-                                        )}
+                                             </div>
+                                          </GMBRow>
+                                       )}
                                     </AccordionContent>
                                  </AccordionItem>
 
@@ -2150,18 +2174,18 @@ const ChurchCreationFlow = () => {
                                                 {(formData.worship_team?.video_urls || ['']).map((url, idx) => (
                                                    <div key={idx} className="flex gap-2 group/vid">
                                                       <div className="relative flex-1">
-                                                         <Input 
-                                                            value={url} 
+                                                         <Input
+                                                            value={url}
                                                             onChange={(e) => {
                                                                const urls = [...(formData.worship_team?.video_urls || [''])];
                                                                urls[idx] = e.target.value;
                                                                updateFormData('worship_team', { ...(formData.worship_team || {}), video_urls: urls });
-                                                            }} 
-                                                            placeholder="Paste YouTube Link..." 
-                                                            className={inputStyle} 
+                                                            }}
+                                                            placeholder="Paste YouTube Link..."
+                                                            className={inputStyle}
                                                          />
                                                          {(formData.worship_team?.video_urls?.length > 1) && (
-                                                            <button 
+                                                            <button
                                                                type="button"
                                                                onClick={() => {
                                                                   const urls = formData.worship_team.video_urls.filter((_, i) => i !== idx);
@@ -2209,18 +2233,18 @@ const ChurchCreationFlow = () => {
                                                 {(formData.it_media_team?.video_urls || ['']).map((url, idx) => (
                                                    <div key={idx} className="flex gap-2 group/vid">
                                                       <div className="relative flex-1">
-                                                         <Input 
-                                                            value={url} 
+                                                         <Input
+                                                            value={url}
                                                             onChange={(e) => {
                                                                const urls = [...(formData.it_media_team?.video_urls || [''])];
                                                                urls[idx] = e.target.value;
                                                                updateFormData('it_media_team', { ...(formData.it_media_team || {}), video_urls: urls });
-                                                            }} 
-                                                            placeholder="Paste YouTube Link..." 
-                                                            className={inputStyle} 
+                                                            }}
+                                                            placeholder="Paste YouTube Link..."
+                                                            className={inputStyle}
                                                          />
                                                          {(formData.it_media_team?.video_urls?.length > 1) && (
-                                                            <button 
+                                                            <button
                                                                type="button"
                                                                onClick={() => {
                                                                   const urls = formData.it_media_team.video_urls.filter((_, i) => i !== idx);
@@ -2268,18 +2292,18 @@ const ChurchCreationFlow = () => {
                                                 {(formData.outreach_team?.video_urls || ['']).map((url, idx) => (
                                                    <div key={idx} className="flex gap-2 group/vid">
                                                       <div className="relative flex-1">
-                                                         <Input 
-                                                            value={url} 
+                                                         <Input
+                                                            value={url}
                                                             onChange={(e) => {
                                                                const urls = [...(formData.outreach_team?.video_urls || [''])];
                                                                urls[idx] = e.target.value;
                                                                updateFormData('outreach_team', { ...(formData.outreach_team || {}), video_urls: urls });
-                                                            }} 
-                                                            placeholder="Paste YouTube Link..." 
-                                                            className={inputStyle} 
+                                                            }}
+                                                            placeholder="Paste YouTube Link..."
+                                                            className={inputStyle}
                                                          />
                                                          {(formData.outreach_team?.video_urls?.length > 1) && (
-                                                            <button 
+                                                            <button
                                                                type="button"
                                                                onClick={() => {
                                                                   const urls = formData.outreach_team.video_urls.filter((_, i) => i !== idx);
@@ -2332,11 +2356,11 @@ const ChurchCreationFlow = () => {
                                              <h4 className="text-base font-semibold text-gray-900">Entity Relationship</h4>
                                           </div>
                                           <GMBRow label="How are you related to this listing? (Optional)">
-                                             <Input 
-                                                value={formData.relationship_to_listing} 
-                                                onChange={(e) => updateFormData('relationship_to_listing', e.target.value)} 
-                                                placeholder="e.g. Lead Pastor, Admin, Founder..." 
-                                                className={inputStyle} 
+                                             <Input
+                                                value={formData.relationship_to_listing}
+                                                onChange={(e) => updateFormData('relationship_to_listing', e.target.value)}
+                                                placeholder="e.g. Lead Pastor, Admin, Founder..."
+                                                className={inputStyle}
                                              />
                                           </GMBRow>
                                        </div>
@@ -2373,268 +2397,268 @@ const ChurchCreationFlow = () => {
             </div>
          </main>
 
-          {/* Quick Pastor Creation Dialog */}
-          <Dialog open={showQuickPastorDialog} onOpenChange={setShowQuickPastorDialog}>
-             <DialogContent className="max-w-2xl p-0 border-none rounded-[32px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-                <div className="flex-1 p-10 space-y-10 bg-white overflow-y-auto custom-scrollbar min-h-0">
-                   <div className="space-y-3">
-                      <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Quick Pastor Profile</h2>
-                      <p className="text-[15px] text-slate-500 font-medium leading-relaxed">Complete your leadership profile with location and contact details.</p>
-                   </div>
-  
-                   <div className="space-y-12">
-                      <div className="flex justify-center">
-                         <div className="space-y-4 w-full">
-                            <Label className="text-[12px] font-bold tracking-widest uppercase text-gray-400 block text-left">Profile Picture (Optional)</Label>
-                            <FileUpload 
-                               category="avatar" 
-                               accept=".jpg,.jpeg,.png,.webp" 
-                               previewType="thumbnail" 
-                               value={quickPastor.profile_picture} 
-                               onChange={(u) => setQuickPastor(prev => ({ ...prev, profile_picture: u }))} 
-                               className="h-[180px] bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-100 hover:border-[#6c1cff]/30 transition-all" 
-                            />
-                         </div>
-                      </div>
+         {/* Quick Pastor Creation Dialog */}
+         <Dialog open={showQuickPastorDialog} onOpenChange={setShowQuickPastorDialog}>
+            <DialogContent className="max-w-2xl p-0 border-none rounded-[32px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+               <div className="flex-1 p-10 space-y-10 bg-white overflow-y-auto custom-scrollbar min-h-0">
+                  <div className="space-y-3">
+                     <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Quick Pastor Profile</h2>
+                     <p className="text-[15px] text-slate-500 font-medium leading-relaxed">Complete your leadership profile with location and contact details.</p>
+                  </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                         <div className="space-y-3">
-                            <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Full Name *</Label>
-                            <Input
-                               name="qp-fullname-unique"
-                               autoComplete="new-password"
-                               value={quickPastor.name}
-                               onChange={(e) => setQuickPastor(prev => ({ ...prev, name: e.target.value }))}
-                               placeholder="e.g. John Doe"
-                               className="h-12 bg-gray-50/50 border-gray-100 focus:border-[#6c1cff] focus:ring-purple-100 transition-all rounded-xl"
-                            />
-                         </div>
-                         <div className="space-y-3">
-                            <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Email *</Label>
-                            <Input
-                               name="qp-email-unique"
-                               autoComplete="new-password"
-                               type="email"
-                               value={quickPastor.email}
-                               onChange={(e) => {
-                                  setQuickPastor(prev => ({ ...prev, email: e.target.value }));
-                                  if (quickPastorEmailError) setQuickPastorEmailError('');
-                               }}
-                               placeholder="pastor@example.com"
-                               className={cn(
-                                  "h-12 bg-gray-50/50 border-gray-100 focus:border-[#6c1cff] focus:ring-purple-100 transition-all rounded-xl",
-                                  quickPastorEmailError && "border-red-400 bg-red-50/10 focus:ring-red-50"
-                               )}
-                            />
-                            {quickPastorEmailError && (
-                               <p className="text-[12px] font-medium text-red-500 mt-1 pl-1 flex items-center gap-1">
-                                  <AlertCircle className="h-3 w-3" />
-                                  {quickPastorEmailError}
-                               </p>
-                            )}
-                         </div>
-                      </div>
+                  <div className="space-y-12">
+                     <div className="flex justify-center">
+                        <div className="space-y-4 w-full">
+                           <Label className="text-[12px] font-bold tracking-widest uppercase text-gray-400 block text-left">Profile Picture (Optional)</Label>
+                           <FileUpload
+                              category="avatar"
+                              accept=".jpg,.jpeg,.png,.webp"
+                              previewType="thumbnail"
+                              value={quickPastor.profile_picture}
+                              onChange={(u) => setQuickPastor(prev => ({ ...prev, profile_picture: u }))}
+                              className="h-[180px] bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-100 hover:border-[#6c1cff]/30 transition-all"
+                           />
+                        </div>
+                     </div>
 
-                      <div className="space-y-3">
-                         <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Phone *</Label>
-                         <PhoneInputPremium 
-                            value={quickPastor.phone} 
-                            onChange={(val) => setQuickPastor(prev => ({ ...prev, phone: val }))}
-                            placeholder="Phone number"
-                         />
-                      </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-3">
+                           <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Full Name *</Label>
+                           <Input
+                              name="qp-fullname-unique"
+                              autoComplete="new-password"
+                              value={quickPastor.name}
+                              onChange={(e) => setQuickPastor(prev => ({ ...prev, name: e.target.value }))}
+                              placeholder="e.g. John Doe"
+                              className="h-12 bg-gray-50/50 border-gray-100 focus:border-[#6c1cff] focus:ring-purple-100 transition-all rounded-xl"
+                           />
+                        </div>
+                        <div className="space-y-3">
+                           <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Email *</Label>
+                           <Input
+                              name="qp-email-unique"
+                              autoComplete="new-password"
+                              type="email"
+                              value={quickPastor.email}
+                              onChange={(e) => {
+                                 setQuickPastor(prev => ({ ...prev, email: e.target.value }));
+                                 if (quickPastorEmailError) setQuickPastorEmailError('');
+                              }}
+                              placeholder="pastor@example.com"
+                              className={cn(
+                                 "h-12 bg-gray-50/50 border-gray-100 focus:border-[#6c1cff] focus:ring-purple-100 transition-all rounded-xl",
+                                 quickPastorEmailError && "border-red-400 bg-red-50/10 focus:ring-red-50"
+                              )}
+                           />
+                           {quickPastorEmailError && (
+                              <p className="text-[12px] font-medium text-red-500 mt-1 pl-1 flex items-center gap-1">
+                                 <AlertCircle className="h-3 w-3" />
+                                 {quickPastorEmailError}
+                              </p>
+                           )}
+                        </div>
+                     </div>
 
-                      <div className="space-y-3">
-                         <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Denomination *</Label>
-                         <Select 
-                            value={quickPastor.denomination} 
-                            onValueChange={(v) => setQuickPastor(prev => ({ ...prev, denomination: v }))}
-                         >
-                            <SelectTrigger className={cn(selectStyle, "h-12 bg-gray-50/50 border-gray-100 rounded-xl")}>
-                               <SelectValue placeholder="Select denomination" />
-                            </SelectTrigger>
-                            <SelectContent position="popper" side="bottom" className="z-[130] max-h-[300px] rounded-2xl border-none shadow-2xl">
-                               {(taxonomies.denomination || []).sort().map(d => (
-                                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                               ))}
-                            </SelectContent>
-                         </Select>
-                      </div>
+                     <div className="space-y-3">
+                        <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Phone *</Label>
+                        <PhoneInputPremium
+                           value={quickPastor.phone}
+                           onChange={(val) => setQuickPastor(prev => ({ ...prev, phone: val }))}
+                           placeholder="Phone number"
+                        />
+                     </div>
 
-                      <div className="space-y-8 pt-4 border-t border-gray-50">
-                         <div className="space-y-4">
-                            <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Service Location</Label>
-                            
-                            <div className="space-y-4">
-                               <div className="flex gap-4">
-                                  <div className="relative flex-1 group">
-                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors" />
-                                     <Input 
-                                        value={quickPastor.google_maps_link} 
-                                        onChange={(e) => handleQuickPastorGoogleMapsLinkChange(e.target.value)} 
-                                        placeholder="Search address or paste Google Maps URL..." 
-                                        className={cn(inputStyle, "flex-1 pl-10 h-12")} 
-                                     />
-                                  </div>
-                                  <Button
-                                     onClick={() => handleQuickPastorGoogleMapsLinkChange(quickPastor.google_maps_link)}
-                                     variant="outline"
-                                     className="h-12 px-6 border-[#6c1cff] text-[#6c1cff] font-medium text-[13px] tracking-wide hover:bg-[#6c1cff]/5 rounded-xl transition-all"
-                                  >
-                                     {quickPastorSearchLoading ? "..." : "Fetch"}
-                                  </Button>
-                               </div>
+                     <div className="space-y-3">
+                        <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Denomination *</Label>
+                        <Select
+                           value={quickPastor.denomination}
+                           onValueChange={(v) => setQuickPastor(prev => ({ ...prev, denomination: v }))}
+                        >
+                           <SelectTrigger className={cn(selectStyle, "h-12 bg-gray-50/50 border-gray-100 rounded-xl")}>
+                              <SelectValue placeholder="Select denomination" />
+                           </SelectTrigger>
+                           <SelectContent position="popper" side="bottom" className="z-[130] max-h-[300px] rounded-2xl border-none shadow-2xl">
+                              {(taxonomies.denomination || []).sort().map(d => (
+                                 <SelectItem key={d} value={d}>{d}</SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                     </div>
 
-                               {quickPastorSearchSuggestions.length > 0 && (
-                                  <div className="bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden mt-1">
-                                     {quickPastorSearchSuggestions.map((s, idx) => (
-                                        <button
-                                           key={idx}
-                                           onClick={() => handleQuickPastorSuggestionSelect(s)}
-                                           className="w-full px-5 py-3.5 text-left hover:bg-gray-50 flex items-start gap-3 transition-colors border-b border-gray-50 last:border-none"
-                                        >
-                                           <MapPin className="h-4 w-4 text-[#6c1cff] mt-0.5" />
-                                           <div>
-                                              <p className="text-[14px] font-bold text-slate-800">{s.text}</p>
-                                              <p className="text-[12px] text-slate-500 line-clamp-1">{s.place_name}</p>
-                                           </div>
-                                        </button>
-                                     ))}
-                                  </div>
-                               )}
-                            </div>
-                         </div>
+                     <div className="space-y-8 pt-4 border-t border-gray-50">
+                        <div className="space-y-4">
+                           <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Service Location</Label>
 
-                         <div className="h-[260px] w-full rounded-3xl overflow-hidden border border-gray-100 shadow-inner relative group">
-                            <MapGL
-                               {...quickPastorViewport}
-                               onMove={evt => setQuickPastorViewport(evt.viewState)}
-                               mapStyle="mapbox://styles/mapbox/streets-v12"
-                               mapboxAccessToken={MAPBOX_TOKEN}
-                               style={{ width: '100%', height: '100%' }}
-                            >
-                               <Marker
-                                  latitude={safeParse(quickPastor.latitude, quickPastorViewport.latitude)}
-                                  longitude={safeParse(quickPastor.longitude, quickPastorViewport.longitude)}
-                                  draggable
-                                  onDragEnd={handleQuickPastorMarkerDrag}
-                                  anchor="bottom"
-                               >
-                                  <div className="cursor-grab active:cursor-grabbing">
-                                     <div className="w-12 h-12 bg-[#6c1cff] rounded-full flex items-center justify-center shadow-2xl border-4 border-white transform hover:scale-110 transition-transform">
-                                        <Users size={20} className="text-white" />
-                                     </div>
-                                     <div className="w-1.5 h-4 bg-[#6c1cff] mx-auto -mt-1 rounded-full shadow-lg"></div>
-                                  </div>
-                               </Marker>
-                               <NavigationControl position="top-right" />
-                               <GeolocateControl 
-                                  position="top-right" 
-                                  positionOptions={{ enableHighAccuracy: true }}
-                                  trackUserLocation={true}
-                                  style={{ marginRight: 0, marginTop: 40 }} 
-                                  onGeolocate={async (pos) => {
-                                     const { latitude, longitude } = pos.coords;
-                                     setQuickPastor(prev => ({ 
-                                        ...prev, 
-                                        latitude: latitude.toString(), 
-                                        longitude: longitude.toString(),
-                                        google_maps_link: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
-                                     }));
-                                     setQuickPastorViewport(prev => ({ ...prev, latitude, longitude, zoom: 15 }));
-                                     detectTimezone(latitude, longitude).then(tz => {
-                                        if (tz) setQuickPastor(prev => ({ ...prev, timezone: tz }));
-                                     });
-                                  }}
-                               />
-                            </MapGL>
-                            
-                            <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2 rounded-xl border border-gray-100 shadow-lg text-[11px] font-bold text-gray-600 uppercase tracking-wider flex items-center gap-2">
-                               <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
-                               Interactive Map Picker Active
-                            </div>
-                         </div>
+                           <div className="space-y-4">
+                              <div className="flex gap-4">
+                                 <div className="relative flex-1 group">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors" />
+                                    <Input
+                                       value={quickPastor.google_maps_link}
+                                       onChange={(e) => handleQuickPastorGoogleMapsLinkChange(e.target.value)}
+                                       placeholder="Search address or paste Google Maps URL..."
+                                       className={cn(inputStyle, "flex-1 pl-10 h-12")}
+                                    />
+                                 </div>
+                                 <Button
+                                    onClick={() => handleQuickPastorGoogleMapsLinkChange(quickPastor.google_maps_link)}
+                                    variant="outline"
+                                    className="h-12 px-6 border-[#6c1cff] text-[#6c1cff] font-medium text-[13px] tracking-wide hover:bg-[#6c1cff]/5 rounded-xl transition-all"
+                                 >
+                                    {quickPastorSearchLoading ? "..." : "Fetch"}
+                                 </Button>
+                              </div>
 
-                         <div className="grid grid-cols-2 gap-8">
-                            <div className="space-y-2">
-                               <Label className="text-[11px] font-bold tracking-widest uppercase text-gray-400">Latitude</Label>
-                               <Input
-                                  value={quickPastor.latitude || ''}
-                                  onChange={(e) => setQuickPastor(prev => ({ ...prev, latitude: e.target.value }))}
-                                  placeholder="e.g. 17.3850"
-                                  className="h-10 bg-gray-50 border-none text-[13px] rounded-lg"
-                               />
-                            </div>
-                            <div className="space-y-2">
-                               <Label className="text-[11px] font-bold tracking-widest uppercase text-gray-400">Longitude</Label>
-                               <Input
-                                  value={quickPastor.longitude || ''}
-                                  onChange={(e) => setQuickPastor(prev => ({ ...prev, longitude: e.target.value }))}
-                                  placeholder="e.g. 78.4867"
-                                  className="h-10 bg-gray-50 border-none text-[13px] rounded-lg"
-                               />
-                            </div>
-                         </div>
+                              {quickPastorSearchSuggestions.length > 0 && (
+                                 <div className="bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden mt-1">
+                                    {quickPastorSearchSuggestions.map((s, idx) => (
+                                       <button
+                                          key={idx}
+                                          onClick={() => handleQuickPastorSuggestionSelect(s)}
+                                          className="w-full px-5 py-3.5 text-left hover:bg-gray-50 flex items-start gap-3 transition-colors border-b border-gray-50 last:border-none"
+                                       >
+                                          <MapPin className="h-4 w-4 text-[#6c1cff] mt-0.5" />
+                                          <div>
+                                             <p className="text-[14px] font-bold text-slate-800">{s.text}</p>
+                                             <p className="text-[12px] text-slate-500 line-clamp-1">{s.place_name}</p>
+                                          </div>
+                                       </button>
+                                    ))}
+                                 </div>
+                              )}
+                           </div>
+                        </div>
 
-                         <div className="space-y-3">
-                            <Label className="text-[12px] font-bold tracking-widest uppercase text-gray-500 block">Operating Timezone</Label>
-                            <div className="relative group">
-                               <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors z-10" />
-                               <Select value={quickPastor.timezone} onValueChange={(v) => setQuickPastor(prev => ({ ...prev, timezone: v }))}>
-                                  <SelectTrigger className={cn(selectStyle, "pl-10 h-12 bg-gray-50/50")}>
-                                     <SelectValue placeholder="Select timezone" />
-                                  </SelectTrigger>
-                                  <SelectContent position="popper" side="bottom" className="z-[130] max-h-[300px] rounded-2xl border-none shadow-2xl">
-                                     {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo'].map(tz => (
-                                        <SelectItem key={tz} value={tz}>{tz}</SelectItem>
-                                     ))}
-                                  </SelectContent>
-                               </Select>
-                            </div>
-                         </div>
+                        <div className="h-[260px] w-full rounded-3xl overflow-hidden border border-gray-100 shadow-inner relative group">
+                           <MapGL
+                              {...quickPastorViewport}
+                              onMove={evt => setQuickPastorViewport(evt.viewState)}
+                              mapStyle="mapbox://styles/mapbox/streets-v12"
+                              mapboxAccessToken={MAPBOX_TOKEN}
+                              style={{ width: '100%', height: '100%' }}
+                           >
+                              <Marker
+                                 latitude={safeParse(quickPastor.latitude, quickPastorViewport.latitude)}
+                                 longitude={safeParse(quickPastor.longitude, quickPastorViewport.longitude)}
+                                 draggable
+                                 onDragEnd={handleQuickPastorMarkerDrag}
+                                 anchor="bottom"
+                              >
+                                 <div className="cursor-grab active:cursor-grabbing">
+                                    <div className="w-12 h-12 bg-[#6c1cff] rounded-full flex items-center justify-center shadow-2xl border-4 border-white transform hover:scale-110 transition-transform">
+                                       <Users size={20} className="text-white" />
+                                    </div>
+                                    <div className="w-1.5 h-4 bg-[#6c1cff] mx-auto -mt-1 rounded-full shadow-lg"></div>
+                                 </div>
+                              </Marker>
+                              <NavigationControl position="top-right" />
+                              <GeolocateControl
+                                 position="top-right"
+                                 positionOptions={{ enableHighAccuracy: true }}
+                                 trackUserLocation={true}
+                                 style={{ marginRight: 0, marginTop: 40 }}
+                                 onGeolocate={async (pos) => {
+                                    const { latitude, longitude } = pos.coords;
+                                    setQuickPastor(prev => ({
+                                       ...prev,
+                                       latitude: latitude.toString(),
+                                       longitude: longitude.toString(),
+                                       google_maps_link: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+                                    }));
+                                    setQuickPastorViewport(prev => ({ ...prev, latitude, longitude, zoom: 15 }));
+                                    detectTimezone(latitude, longitude).then(tz => {
+                                       if (tz) setQuickPastor(prev => ({ ...prev, timezone: tz }));
+                                    });
+                                 }}
+                              />
+                           </MapGL>
 
-                         <div className="space-y-2">
-                            <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Full Address</Label>
-                            <Input 
-                               placeholder="Full Address (Building, Street, Area, City, State, Country, Zip)" 
-                               value={quickPastor.address_line1} 
-                               onChange={(e) => setQuickPastor(prev => ({ ...prev, address_line1: e.target.value }))} 
-                               className={cn(inputStyle, "h-12")}
-                            />
-                         </div>
+                           <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-md px-4 py-2 rounded-xl border border-gray-100 shadow-lg text-[11px] font-bold text-gray-600 uppercase tracking-wider flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
+                              Interactive Map Picker Active
+                           </div>
+                        </div>
 
-                         <div className="space-y-2">
-                            <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Search City *</Label>
-                            <p className="text-[10px] text-gray-400 -mt-1 mb-1">The city where people will search for you in the directory</p>
-                            <Input
-                               placeholder="e.g. Hyderabad, Dallas..."
-                               value={quickPastor.city}
-                               onChange={(e) => setQuickPastor(prev => ({ ...prev, city: e.target.value }))}
-                               className={cn(inputStyle, "h-12")}
-                            />
-                         </div>
-                      </div>
-                   </div>
+                        <div className="grid grid-cols-2 gap-8">
+                           <div className="space-y-2">
+                              <Label className="text-[11px] font-bold tracking-widest uppercase text-gray-400">Latitude</Label>
+                              <Input
+                                 value={quickPastor.latitude || ''}
+                                 onChange={(e) => setQuickPastor(prev => ({ ...prev, latitude: e.target.value }))}
+                                 placeholder="e.g. 17.3850"
+                                 className="h-10 bg-gray-50 border-none text-[13px] rounded-lg"
+                              />
+                           </div>
+                           <div className="space-y-2">
+                              <Label className="text-[11px] font-bold tracking-widest uppercase text-gray-400">Longitude</Label>
+                              <Input
+                                 value={quickPastor.longitude || ''}
+                                 onChange={(e) => setQuickPastor(prev => ({ ...prev, longitude: e.target.value }))}
+                                 placeholder="e.g. 78.4867"
+                                 className="h-10 bg-gray-50 border-none text-[13px] rounded-lg"
+                              />
+                           </div>
+                        </div>
 
-                   <div className="flex gap-4 pt-10 sticky bottom-0 bg-white/95 backdrop-blur-sm -mx-10 px-10 pb-2 border-t border-gray-50">
-                      <Button
-                         onClick={() => setShowQuickPastorDialog(false)}
-                         variant="ghost"
-                         className="flex-1 h-16 text-[14px] font-bold tracking-widest uppercase text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                         Cancel
-                      </Button>
-                      <Button
-                         onClick={handleQuickPastorCreate}
-                         disabled={quickPastorLoading}
-                         className="flex-1 h-16 bg-[#6c1cff] hover:bg-[#5b17d6] text-white text-[14px] font-bold tracking-widest uppercase shadow-2xl shadow-purple-100 rounded-[20px] hover:scale-[1.02] active:scale-95 transition-all"
-                      >
-                         {quickPastorLoading ? 'Creating...' : 'Create & Link'}
-                      </Button>
-                   </div>
-                </div>
-             </DialogContent>
-          </Dialog>
+                        <div className="space-y-3">
+                           <Label className="text-[12px] font-bold tracking-widest uppercase text-gray-500 block">Operating Timezone</Label>
+                           <div className="relative group">
+                              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors z-10" />
+                              <Select value={quickPastor.timezone} onValueChange={(v) => setQuickPastor(prev => ({ ...prev, timezone: v }))}>
+                                 <SelectTrigger className={cn(selectStyle, "pl-10 h-12 bg-gray-50/50")}>
+                                    <SelectValue placeholder="Select timezone" />
+                                 </SelectTrigger>
+                                 <SelectContent position="popper" side="bottom" className="z-[130] max-h-[300px] rounded-2xl border-none shadow-2xl">
+                                    {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo'].map(tz => (
+                                       <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+                                    ))}
+                                 </SelectContent>
+                              </Select>
+                           </div>
+                        </div>
+
+                        <div className="space-y-2">
+                           <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Full Address</Label>
+                           <Input
+                              placeholder="Full Address (Building, Street, Area, City, State, Country, Zip)"
+                              value={quickPastor.address_line1}
+                              onChange={(e) => setQuickPastor(prev => ({ ...prev, address_line1: e.target.value }))}
+                              className={cn(inputStyle, "h-12")}
+                           />
+                        </div>
+
+                        <div className="space-y-2">
+                           <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Search City *</Label>
+                           <p className="text-[10px] text-gray-400 -mt-1 mb-1">The city where people will search for you in the directory</p>
+                           <Input
+                              placeholder="e.g. Hyderabad, Dallas..."
+                              value={quickPastor.city}
+                              onChange={(e) => setQuickPastor(prev => ({ ...prev, city: e.target.value }))}
+                              className={cn(inputStyle, "h-12")}
+                           />
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="flex gap-4 pt-10 pb-6">
+                     <Button
+                        onClick={() => setShowQuickPastorDialog(false)}
+                        variant="ghost"
+                        className="flex-1 h-12 text-[13px] font-bold tracking-widest uppercase text-slate-400 hover:text-slate-600 transition-colors"
+                     >
+                        Cancel
+                     </Button>
+                     <Button
+                        onClick={handleQuickPastorCreate}
+                        disabled={quickPastorLoading}
+                        className="flex-1 h-12 bg-[#6c1cff] hover:bg-[#5b17d6] text-white text-[13px] font-bold tracking-widest uppercase shadow-lg shadow-purple-100 rounded-[16px] hover:scale-[1.02] active:scale-95 transition-all"
+                     >
+                        {quickPastorLoading ? 'Creating...' : 'Create & Link'}
+                     </Button>
+                  </div>
+               </div>
+            </DialogContent>
+         </Dialog>
 
          {/* Quick Church Creation Dialog (Step 3) */}
          <Dialog open={showQuickChurchDialog} onOpenChange={setShowQuickChurchDialog}>
@@ -2649,13 +2673,13 @@ const ChurchCreationFlow = () => {
                      <div className="flex justify-center mb-6">
                         <div className="space-y-3 w-full">
                            <Label className="text-[12px] font-semibold tracking-widest uppercase text-gray-400 text-center block">Church Logo (Optional)</Label>
-                           <FileUpload 
-                              category="logo" 
-                              accept=".jpg,.jpeg,.png,.webp" 
-                              previewType="thumbnail" 
-                              value={quickChurch.logo} 
-                              onChange={(u) => setQuickChurch(prev => ({ ...prev, logo: u }))} 
-                              className="h-[120px] bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-100" 
+                           <FileUpload
+                              category="logo"
+                              accept=".jpg,.jpeg,.png,.webp"
+                              previewType="thumbnail"
+                              value={quickChurch.logo}
+                              onChange={(u) => setQuickChurch(prev => ({ ...prev, logo: u }))}
+                              className="h-[120px] bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-100"
                            />
                         </div>
                      </div>
@@ -2670,8 +2694,8 @@ const ChurchCreationFlow = () => {
                         </div>
                         <div className="space-y-2 group">
                            <Label className="text-[11px] font-medium text-gray-500 uppercase tracking-widest group-focus-within:text-[#6c1cff] transition-colors">Phone *</Label>
-                           <PhoneInputPremium 
-                              value={quickChurch.phone} 
+                           <PhoneInputPremium
+                              value={quickChurch.phone}
                               onChange={(val) => setQuickChurch({ ...quickChurch, phone: val })}
                               placeholder="Phone number"
                            />
@@ -2700,11 +2724,11 @@ const ChurchCreationFlow = () => {
                               <div className="flex gap-4">
                                  <div className="relative flex-1 group">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors" />
-                                    <Input 
-                                       value={quickChurch.google_maps_link} 
-                                       onChange={(e) => handleQuickGoogleMapsLinkChange(e.target.value)} 
-                                       placeholder="Search address or paste Google Maps URL..." 
-                                       className={cn(inputStyle, "flex-1 pl-10")} 
+                                    <Input
+                                       value={quickChurch.google_maps_link}
+                                       onChange={(e) => handleQuickGoogleMapsLinkChange(e.target.value)}
+                                       placeholder="Search address or paste Google Maps URL..."
+                                       className={cn(inputStyle, "flex-1 pl-10")}
                                     />
                                  </div>
                                  <Button
@@ -2760,16 +2784,16 @@ const ChurchCreationFlow = () => {
                                     </div>
                                  </Marker>
                                  <NavigationControl position="top-right" />
-                                 <GeolocateControl 
-                                    position="top-right" 
+                                 <GeolocateControl
+                                    position="top-right"
                                     positionOptions={{ enableHighAccuracy: true }}
                                     trackUserLocation={true}
-                                    style={{ marginRight: 0, marginTop: 40 }} 
+                                    style={{ marginRight: 0, marginTop: 40 }}
                                     onGeolocate={async (pos) => {
                                        const { latitude, longitude } = pos.coords;
-                                       setQuickChurch(prev => ({ 
-                                          ...prev, 
-                                          latitude: latitude.toString(), 
+                                       setQuickChurch(prev => ({
+                                          ...prev,
+                                          latitude: latitude.toString(),
                                           longitude: longitude.toString(),
                                           google_maps_link: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
                                        }));
@@ -2780,7 +2804,7 @@ const ChurchCreationFlow = () => {
                                     }}
                                  />
                               </MapGL>
-                              
+
                               <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                                  Interactive Map Picker Active
@@ -2841,29 +2865,28 @@ const ChurchCreationFlow = () => {
                            </SelectContent>
                         </Select>
                      </div>
-                  </div>
-
-                  <div className="flex gap-4 pt-6">
-                     <Button
-                        variant="ghost" 
-                        className="flex-1 h-14 rounded-2xl text-[13px] font-medium tracking-widest uppercase text-gray-400"
-                        onClick={() => setShowQuickChurchDialog(false)}
-                     >
-                        Cancel
-                     </Button>
-                     <Button
-                        onClick={handleQuickChurchCreate}
-                        disabled={quickChurchLoading}
-                        className="flex-1 h-14 rounded-2xl bg-[#6c1cff] hover:bg-[#5b17d6] text-white font-semibold text-[12px] tracking-widest uppercase shadow-xl shadow-purple-100"
-                     >
-                        {quickChurchLoading ? 'Creating...' : 'Create & Link'}
-                     </Button>
+                     <div className="flex gap-4 pt-10 pb-6">
+                        <Button
+                           variant="ghost"
+                           className="flex-1 h-12 rounded-xl text-[12px] font-bold tracking-widest uppercase text-gray-400"
+                           onClick={() => setShowQuickChurchDialog(false)}
+                        >
+                           Cancel
+                        </Button>
+                        <Button
+                           onClick={handleQuickChurchCreate}
+                           disabled={quickChurchLoading}
+                           className="flex-1 h-12 rounded-xl bg-[#6c1cff] hover:bg-[#5b17d6] text-white font-bold text-[12px] tracking-widest uppercase shadow-lg shadow-purple-100"
+                        >
+                           {quickChurchLoading ? 'Creating...' : 'Create & Link'}
+                        </Button>
+                     </div>
                   </div>
                </div>
             </DialogContent>
          </Dialog>
 
-            <Footer />
+         <Footer />
       </div>
    );
 };

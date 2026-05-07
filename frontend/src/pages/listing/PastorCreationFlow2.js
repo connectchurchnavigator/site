@@ -1373,7 +1373,7 @@ const PastorCreationFlow2 = () => {
 
          {/* Quick Church Dialog */}
          <Dialog open={showQuickChurchDialog} onOpenChange={setShowQuickChurchDialog}>
-            <DialogContent className="sm:max-w-xl rounded-3xl border-none p-8 max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-xl rounded-3xl border-none p-8 max-h-[90vh] overflow-y-auto custom-scrollbar">
                <DialogHeader className="space-y-3">
                   <DialogTitle className="text-2xl font-extrabold tracking-tight">Quick Church Profile</DialogTitle>
                   <p className="text-[14px] text-gray-500">Add the church name and basic details to link your profile.</p>
@@ -1530,9 +1530,9 @@ const PastorCreationFlow2 = () => {
                   </div>
                </div>
 
-               <DialogFooter className="pt-10 flex gap-4">
-                  <Button variant="ghost" className="h-12 px-8 rounded-2xl text-[12px] font-medium tracking-widest uppercase text-gray-400" onClick={() => setShowQuickChurchDialog(false)}>Cancel</Button>
-                  <Button onClick={handleQuickChurchCreate} disabled={quickChurchLoading} className="h-12 px-10 rounded-2xl bg-[#6c1cff] hover:bg-[#5b17d6] text-white font-medium text-[12px] tracking-widest uppercase shadow-xl shadow-purple-100 flex-1">
+               <DialogFooter className="pt-10 pb-6 flex gap-4">
+                  <Button variant="ghost" className="flex-1 h-12 rounded-xl text-[12px] font-bold tracking-widest uppercase text-gray-400" onClick={() => setShowQuickChurchDialog(false)}>Cancel</Button>
+                  <Button onClick={handleQuickChurchCreate} disabled={quickChurchLoading} className="flex-1 h-12 rounded-xl bg-[#6c1cff] hover:bg-[#5b17d6] text-white font-bold text-[12px] tracking-widest uppercase shadow-lg shadow-purple-100">
                      {quickChurchLoading ? 'Creating...' : 'Create & Link'}
                   </Button>
                </DialogFooter>

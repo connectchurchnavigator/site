@@ -80,6 +80,7 @@ class ListingType(str, Enum):
 class RelationshipStatus(str, Enum):
     PENDING = "pending"
     ACTIVE = "active"
+    REJECTED = "rejected"
 
 class ClaimRequestStatus(str, Enum):
     PENDING = "pending"
@@ -339,28 +340,35 @@ async def resolve_map_url(request: MapResolveRequest):
         
     try:
         async with httpx.AsyncClient() as client:
-            # We use a user-agent to ensure Google responds correctly to the redirect request
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-            response = await client.get(url, headers=headers, allow_redirects=True)
+            # follow_redirects is for newer httpx, allow_redirects for older. 
+            # Production uses 0.27.0 which needs follow_redirects.
+            try:
+                response = await client.get(url, headers=headers, follow_redirects=True)
+            except TypeError:
+                # Fallback for very old local environments
+                response = await client.get(url, headers=headers, allow_redirects=True)
+            
             final_url = str(response.url)
             
             # Extract coordinates from URL if they exist
-            # Format: @lat,long,zoomz or /place/Name/@lat,long,zoomz
             import re
             lat = None
             lng = None
             
             # Pattern 1: @(lat),(lng)
-            match = re.search(r'@(-?\d+\.\d+),(-?\d+\.\d+)', final_url)
-            if match:
-                lat = float(match.group(1))
-                lng = float(match.group(2))
-            else:
-                # Pattern 2: query parameter ll=(lat),(lng) or q=(lat),(lng)
-                match = re.search(r'[?&](?:q|ll|query)=(-?\d+\.\d+),(-?\d+\.\d+)', final_url)
-                if match:
-                    lat = float(match.group(1))
-                    lng = float(match.group(2))
+            at_match = re.search(r'@(-?\d+\.\d+),(-?\d+\.\d+)', final_url)
+            # Pattern 2: !3d(lat)!4d(lng) - common in Google Maps redirects
+            d_match = re.search(r'!3d(-?\d+\.\d+).*!4d(-?\d+\.\d+)', final_url)
+            # Pattern 3: query parameter ll=(lat),(lng) or q=(lat),(lng)
+            q_match = re.search(r'[?&](?:q|ll|query)=(-?\d+\.\d+),(-?\d+\.\d+)', final_url)
+
+            if at_match:
+                lat, lng = float(at_match.group(1)), float(at_match.group(2))
+            elif d_match:
+                lat, lng = float(d_match.group(1)), float(d_match.group(2))
+            elif q_match:
+                lat, lng = float(q_match.group(1)), float(q_match.group(2))
 
             # Get timezone for coordinates
             timezone_id = "UTC"
@@ -400,10 +408,11 @@ async def get_imagekit_auth():
     """
     try:
         auth_params = imagekit.get_authentication_parameters()
+        logger.info(f"Generated ImageKit auth parameters: {auth_params.get('token', 'no token')[:10]}...")
         return auth_params
     except Exception as e:
-        logger.error(f"ImageKit Auth Error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate auth parameters")
+        logger.error(f"ImageKit Auth Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate auth parameters: {str(e)}")
 
 # Relationship Model
 class RelationshipBase(BaseModel):
@@ -823,6 +832,14 @@ async def get_church(church_id: str):
     
     if not church:
         raise HTTPException(status_code=404, detail="Church not found")
+    
+    # Find main branch if this church is linked in other_branches of another church
+    main_branch = await db.churches.find_one(
+        {'other_branches': church['id']},
+        {'id': 1, 'name': 1, 'slug': 1, 'logo': 1, 'city': 1, 'state': 1, '_id': 0}
+    )
+    if main_branch:
+        church['main_branch_info'] = main_branch
     
     return church
 
@@ -3034,5 +3051,7 @@ async def startup_event():
     # Start cleanup task
     asyncio.create_task(cleanup_trash())
     
-    # Import and Seed taxonomies logic was here
-    # (Leaving original seed_data function as is, just adding this startup block)
+    # Seed taxonomies and admin
+    await seed_data()
+    logger.info("Startup sequence complete: Background tasks and seeding initialized.")
+ 

@@ -394,6 +394,11 @@ const ChurchDetailPage = () => {
     main = findMatch(churchMainId);
     if (main && isHidden(main)) main = null;
 
+    // 1.5 Fallback to bidirectional main branch from backend
+    if (!main && church.main_branch_info) {
+      main = church.main_branch_info;
+    }
+
     churches.forEach(c => {
       const cMainId = c.main_branch_id;
       const cId = c.id || c._id;

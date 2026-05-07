@@ -129,12 +129,13 @@ const FileUpload = ({
     setUploading(true);
 
     try {
-      // Get authentication parameters from backend
-      const authResponse = await utilityAPI.getImageKitAuth();
-      const { signature, expire, token } = authResponse.data;
       const publicKey = process.env.REACT_APP_IMAGEKIT_PUBLIC_KEY;
 
       const uploadToImageKit = async (file) => {
+        // Fetch fresh authentication parameters for EACH file (tokens are single-use)
+        const authResponse = await utilityAPI.getImageKitAuth();
+        const { signature, expire, token } = authResponse.data;
+
         const formData = new FormData();
         formData.append('file', file);
         formData.append('fileName', file.name);
