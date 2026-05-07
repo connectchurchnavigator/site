@@ -10,6 +10,14 @@ const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
 
 const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, onBoundsChange, center }) => {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!MAPBOX_TOKEN) {
+      toast.error("Map Token Missing", {
+        description: "Set REACT_APP_MAPBOX_TOKEN in your Railway dashboard.",
+      });
+    }
+  }, []);
   const [mapMoved, setMapMoved] = useState(false);
   const prevCenterRef = React.useRef(center);
   const [viewport, setViewport] = useState({
