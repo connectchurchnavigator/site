@@ -1,18 +1,14 @@
 import axios from 'axios';
 
 const getApiUrl = () => {
-  // 1. Try Environment Variable first
-  const envUrl = process.env.REACT_APP_BACKEND_URL;
-  if (envUrl && envUrl !== 'undefined' && envUrl !== 'null') {
-    return envUrl.replace(/\/$/, '') + '/api';
+  // Use the verified production URL directly
+  const PROD_URL = "https://site-production-46c8.up.railway.app/api";
+  
+  if (process.env.NODE_ENV === 'production' || window.location.hostname.includes('railway.app')) {
+    return PROD_URL;
   }
   
-  // 2. Fallback for production (relative path is safest)
-  if (process.env.NODE_ENV === 'production' || window.location.hostname !== 'localhost') {
-    return '/api';
-  }
-  
-  // 3. Fallback for local dev
+  // Fallback for local dev
   return 'http://localhost:8000/api';
 };
 
