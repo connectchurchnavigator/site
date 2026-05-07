@@ -2488,14 +2488,30 @@ async def bulk_upload(
     if type not in ['church', 'pastor']:
         raise HTTPException(status_code=400, detail="Invalid listing type")
     
-    content = await file.read()
-    string_content = content.decode('utf-8')
-    f = io.StringIO(string_content)
-    reader = csv.DictReader(f)
+    try:
+        contents = await file.read()
+        # Try to decode as utf-8-sig first (handles BOM from Excel), then utf-8, then latin-1
+        try:
+            decoded = contents.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            try:
+                decoded = contents.decode('utf-8')
+            except UnicodeDecodeError:
+                decoded = contents.decode('latin-1')
+        
+        buffer = io.StringIO(decoded)
+        reader = csv.DictReader(buffer)
+        
+        if not reader.fieldnames:
+            raise HTTPException(status_code=400, detail="CSV file is empty or invalid")
+            
+        logger.info(f"Starting bulk upload of {type} for user {current_user['id']}. Columns: {reader.fieldnames}")
+    except Exception as e:
+        logger.error(f"Failed to read/parse CSV: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(e)}")
     
     count = 0
     errors = []
-    
     collection = db.churches if type == 'church' else db.pastors
     
     for row in reader:
@@ -2608,6 +2624,7 @@ async def bulk_upload(
             await collection.insert_one(doc)
             count += 1
         except Exception as e:
+            logger.error(f"Error processing row {count + 1}: {str(e)}")
             errors.append(f"Row {count + 1}: {str(e)}")
     
     await log_admin_action(current_user['id'], 'bulk_upload', f"Bulk uploaded {count} {type}s")
@@ -2913,10 +2930,24 @@ async def log_requests(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(',') if os.environ.get('CORS_ORIGINS') else ["*"] if not os.environ.get('CORS_ORIGINS') and os.environ.get('NODE_ENV') == 'development' else [],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Note: If credentials are True, allow_origins cannot be ["*"] in Starlette/FastAPI.
+# This logic ensures we don't crash on production if CORS_ORIGINS is missing.
+if not os.environ.get('CORS_ORIGINS') and os.environ.get('NODE_ENV') != 'development':
+    # In production, if no origins are specified, we should at least allow the app's own domain
+    # or print a warning. For now, we'll revert to a safer check.
+    app.user_middleware.pop()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_credentials=True,
+        allow_origins=["*"] if os.environ.get('NODE_ENV') == 'development' else [os.environ.get('FRONTEND_URL', '*')],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Mount static files for uploads under /api/uploads path for proper routing
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
