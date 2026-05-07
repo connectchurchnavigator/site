@@ -160,8 +160,9 @@ const GMBRow = ({ label, children, className, hint, error }) => (
    </div>
 );
 
-const TimePicker = ({ value, onChange }) => {
-   const parts = value ? value.split(/[: ]/) : ["", "", ""];
+const TimePicker = ({ value, onChange, isMandatory }) => {
+   const safeValue = typeof value === 'string' ? value : '';
+   const parts = safeValue.split(/[: ]/);
    const h = parts[0] || "";
    const m = parts[1] || "";
    const p = parts[2] || "";
@@ -171,14 +172,13 @@ const TimePicker = ({ value, onChange }) => {
       let fM = nm !== undefined ? nm : m;
       let fP = np !== undefined ? np : p;
 
-      // If hour is selected but minutes are empty, default to 00
       if (nh && nh !== "" && !fM) {
          fM = '00';
       }
 
       const val = `${fH}:${fM} ${fP}`.trim();
 
-      if (!fH && !fM && (fP === 'AM' || fP === 'PM') && !value) {
+      if (!fH && !fM && (fP === 'AM' || fP === 'PM') && !safeValue) {
          onChange(`::${fP}`);
       } else {
          onChange(val);
@@ -190,16 +190,16 @@ const TimePicker = ({ value, onChange }) => {
          <select
             value={h}
             onChange={(e) => update(e.target.value, m, p)}
-            className="bg-transparent text-[15px] font-medium outline-none cursor-pointer w-[28px] appearance-none focus:text-[#6c1cff]"
+            className="bg-transparent text-[14px] font-medium outline-none cursor-pointer w-[30px] appearance-none focus:text-[#6c1cff]"
          >
             <option value="">HH</option>
             {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map(n => <option key={n} value={n}>{n}</option>)}
          </select>
-         <span className="text-gray-300 pointer-events-none">:</span>
+         <span className="text-gray-300 pointer-events-none text-[12px]">:</span>
          <select
             value={m}
             onChange={(e) => update(h, e.target.value, p)}
-            className="bg-transparent text-[15px] font-medium outline-none cursor-pointer w-[28px] appearance-none text-center focus:text-[#6c1cff]"
+            className="bg-transparent text-[14px] font-medium outline-none cursor-pointer w-[30px] appearance-none text-center focus:text-[#6c1cff]"
          >
             <option value="">MM</option>
             {['00', '15', '30', '45'].map(n => <option key={n} value={n}>{n}</option>)}
@@ -207,7 +207,7 @@ const TimePicker = ({ value, onChange }) => {
          <select
             value={p}
             onChange={(e) => update(h, m, e.target.value)}
-            className="bg-transparent text-[15px] font-medium outline-none ml-1 cursor-pointer w-[32px] appearance-none uppercase focus:text-[#6c1cff]"
+            className="bg-transparent text-[13px] font-bold outline-none ml-1 cursor-pointer w-[34px] appearance-none uppercase focus:text-[#6c1cff]"
          >
             <option value="">--</option>
             <option value="AM">AM</option>
@@ -1488,62 +1488,61 @@ const ChurchCreationFlow = () => {
                         )}
 
                         {currentStep === 2 && (
-                           <div className="space-y-8 animate-in fade-in duration-500 w-full px-0">
-                              <div className="rounded-xl border border-gray-100 overflow-hidden shadow-sm w-full">
-                                 {/* Table Header */}
-                                 <div className="grid grid-cols-[160px_1fr_135px_135px_60px] bg-gray-50/50 border-b border-gray-100">
-                                    <div className="px-6 py-4 text-[12px] font-semibold tracking-widest text-[#202124] border-r border-gray-100">Day</div>
-                                    <div className="px-6 py-4 text-[12px] font-semibold tracking-widest text-[#202124] border-r border-gray-100">Service Title</div>
-                                    <div className="px-6 py-4 text-[12px] font-semibold tracking-widest text-[#202124] border-r border-gray-100 text-center">Starts At</div>
-                                    <div className="px-6 py-4 text-[12px] font-semibold tracking-widest text-[#202124] border-r border-gray-100 text-center">Ends At</div>
-                                    <div className="w-[60px]"></div>
+                           <div className="space-y-6">
+                              <div className="overflow-hidden rounded-2xl border border-gray-100">
+                                 {/* Header */}
+                                 <div className="grid grid-cols-[160px_1fr_135px_135px_60px] bg-gray-50/50 border-b border-gray-100 py-3 px-2">
+                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-4">Day</div>
+                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-4">Event / Service Name</div>
+                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-4">Start Time</div>
+                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-4">End Time</div>
+                                    <div></div>
                                  </div>
 
                                  {/* Table Body */}
                                  <div className="divide-y divide-gray-50">
-                                    {formData.services.map((s, i) => {
-                                       const isMandatory = !!s.day;
-                                       // Duplicate Check for UI highlighting
-                                       const isDuplicate = s.day && s.event_name && s.start_time && s.start_time !== '::PM' &&
-                                          formData.services.some((other, idx) =>
-                                             idx < i &&
-                                             other.day === s.day &&
-                                             other.event_name?.toLowerCase().trim() === s.event_name?.toLowerCase().trim() &&
-                                             other.start_time === s.start_time
-                                          );
+                                    <TooltipProvider>
+                                       {(formData.services || []).map((s, i) => {
+                                          const isMandatory = !!s.day;
+                                          const isDuplicate = s.day && s.event_name && s.start_time && s.start_time !== '::PM' &&
+                                             (formData.services || []).some((other, idx) =>
+                                                idx < i &&
+                                                other.day === s.day &&
+                                                other.event_name?.toLowerCase().trim() === s.event_name?.toLowerCase().trim() &&
+                                                other.start_time === s.start_time
+                                             );
 
-                                       return (
-                                          <div key={i} className={cn(
-                                             "grid grid-cols-[160px_1fr_135px_135px_60px] items-center hover:bg-gray-50/20 transition-colors group relative",
-                                             isDuplicate && "bg-red-100/60 border-l-[6px] border-l-red-500",
-                                             isServiceIncomplete(s) && "bg-red-50 ring-1 ring-red-200"
-                                          )}>
-                                             {isServiceIncomplete(s) && (
-                                                <div className="absolute -left-2 top-1/2 -translate-y-1/2 bg-red-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg z-10 animate-pulse">!</div>
-                                             )}
-                                             {/* Day Cell */}
-                                             <div className="p-4 border-r border-gray-100">
-                                                <Select value={s.day} onValueChange={(v) => { const n = [...formData.services]; n[i].day = v; updateFormData('services', n); }}>
-                                                   <SelectTrigger className="h-9 border-none bg-transparent text-[14px] font-semibold shadow-none focus:ring-2 focus:ring-purple-100 focus:bg-gray-50 [&>svg]:hidden">
-                                                      <SelectValue placeholder="Day" />
-                                                   </SelectTrigger>
-                                                   <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false} className="z-[100] rounded-xl border-none shadow-2xl">
-                                                      {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(d => <SelectItem key={d} value={d} className="py-2.5 font-medium">{d}</SelectItem>)}
-                                                   </SelectContent>
-                                                </Select>
-                                             </div>
+                                          return (
+                                             <div key={i} className={cn(
+                                                "grid grid-cols-[160px_1fr_135px_135px_60px] items-center hover:bg-gray-50/20 transition-colors group relative",
+                                                isDuplicate && "bg-red-100/60 border-l-[6px] border-l-red-500",
+                                                isServiceIncomplete(s) && "bg-red-50 ring-1 ring-red-200"
+                                             )}>
+                                                {isServiceIncomplete(s) && (
+                                                   <div className="absolute -left-2 top-1/2 -translate-y-1/2 bg-red-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg z-10 animate-pulse">!</div>
+                                                )}
+                                                {/* Day Cell */}
+                                                <div className="p-4 border-r border-gray-100">
+                                                   <Select value={s.day} onValueChange={(v) => { const n = [...formData.services]; n[i].day = v; updateFormData('services', n); }}>
+                                                      <SelectTrigger className="h-9 border-none bg-transparent text-[14px] font-semibold shadow-none focus:ring-2 focus:ring-purple-100 focus:bg-gray-50 [&>svg]:hidden">
+                                                         <SelectValue placeholder="Day" />
+                                                      </SelectTrigger>
+                                                      <SelectContent position="popper" side="bottom" sideOffset={4} avoidCollisions={false} className="z-[100] rounded-xl border-none shadow-2xl">
+                                                         {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(d => <SelectItem key={d} value={d} className="py-2.5 font-medium">{d}</SelectItem>)}
+                                                      </SelectContent>
+                                                   </Select>
+                                                </div>
 
-                                             {/* Title Cell */}
-                                             <div className="p-4 border-r border-gray-100 relative group/title">
-                                                <Input
-                                                   placeholder={isMandatory ? "Enter title" : "Service title"}
-                                                   value={s.event_name}
-                                                   onChange={(e) => { const n = [...formData.services]; n[i].event_name = e.target.value; updateFormData('services', n); }}
-                                                   className={cn("h-10 border-none bg-transparent text-[14px] font-medium shadow-none focus-visible:ring-2 focus-visible:ring-purple-100 focus-visible:bg-gray-50 transition-all px-4 rounded-md", isMandatory && !s.event_name ? "bg-red-50/50 placeholder:text-red-300" : "placeholder:text-gray-300", isDuplicate && "text-red-600")}
-                                                />
-                                                {isDuplicate && (
-                                                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                                      <TooltipProvider>
+                                                {/* Title Cell */}
+                                                <div className="p-4 border-r border-gray-100 relative group/title">
+                                                   <Input
+                                                      placeholder={isMandatory ? "Enter title" : "Service title"}
+                                                      value={s.event_name || ''}
+                                                      onChange={(e) => { const n = [...formData.services]; n[i].event_name = e.target.value; updateFormData('services', n); }}
+                                                      className={cn("h-10 border-none bg-transparent text-[14px] font-medium shadow-none focus-visible:ring-2 focus-visible:ring-purple-100 focus-visible:bg-gray-50 transition-all px-4 rounded-md", isMandatory && !s.event_name ? "bg-red-50/50 placeholder:text-red-300" : "placeholder:text-gray-300", isDuplicate && "text-red-600")}
+                                                   />
+                                                   {isDuplicate && (
+                                                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
                                                          <Tooltip>
                                                             <TooltipTrigger asChild>
                                                                <div className="cursor-help text-red-500 hover:text-red-700 transition-colors">
@@ -1554,53 +1553,53 @@ const ChurchCreationFlow = () => {
                                                                <p>Duplicate Entry</p>
                                                             </TooltipContent>
                                                          </Tooltip>
-                                                      </TooltipProvider>
-                                                   </div>
-                                                )}
-                                             </div>
+                                                      </div>
+                                                   )}
+                                                </div>
 
-                                             {/* Start Time Cell */}
-                                             <div className="p-4 border-r border-gray-100">
-                                                <TimePicker
-                                                   value={s.start_time}
-                                                   onChange={(v) => {
-                                                      const n = [...formData.services];
-                                                      n[i].start_time = v;
-                                                      updateFormData('services', n);
-                                                   }}
-                                                   isMandatory={isMandatory}
-                                                />
-                                             </div>
-
-                                             {/* End Time Cell */}
-                                             <div className="p-4 border-r border-gray-100 flex justify-center">
-                                                <TimePicker
-                                                   value={s.end_time}
-                                                   onChange={(v) => { const n = [...formData.services]; n[i].end_time = v; updateFormData('services', n); }}
-                                                   isMandatory={isMandatory}
-                                                />
-                                             </div>
-
-                                             {/* Actions Cell */}
-                                             <div className="flex justify-center">
-                                                <button
-                                                   onClick={() => {
-                                                      if (i === 0) {
+                                                {/* Start Time Cell */}
+                                                <div className="p-4 border-r border-gray-100">
+                                                   <TimePicker
+                                                      value={s.start_time}
+                                                      onChange={(v) => {
                                                          const n = [...formData.services];
-                                                         n[0] = { day: '', start_time: '::PM', end_time: '::PM', event_name: '' };
+                                                         n[i].start_time = v;
                                                          updateFormData('services', n);
-                                                      } else {
-                                                         updateFormData('services', formData.services.filter((_, idx) => idx !== i));
-                                                      }
-                                                   }}
-                                                   className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
-                                                >
-                                                   <X className="h-4 w-4" />
-                                                </button>
+                                                      }}
+                                                      isMandatory={isMandatory}
+                                                   />
+                                                </div>
+
+                                                {/* End Time Cell */}
+                                                <div className="p-4 border-r border-gray-100 flex justify-center">
+                                                   <TimePicker
+                                                      value={s.end_time}
+                                                      onChange={(v) => { const n = [...formData.services]; n[i].end_time = v; updateFormData('services', n); }}
+                                                      isMandatory={isMandatory}
+                                                   />
+                                                </div>
+
+                                                {/* Actions Cell */}
+                                                <div className="flex justify-center">
+                                                   <button
+                                                      onClick={() => {
+                                                         if (i === 0) {
+                                                            const n = [...formData.services];
+                                                            n[0] = { day: '', start_time: '::PM', end_time: '::PM', event_name: '' };
+                                                            updateFormData('services', n);
+                                                         } else {
+                                                            updateFormData('services', (formData.services || []).filter((_, idx) => idx !== i));
+                                                         }
+                                                      }}
+                                                      className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
+                                                   >
+                                                      <X className="h-4 w-4" />
+                                                   </button>
+                                                </div>
                                              </div>
-                                          </div>
-                                       );
-                                    })}
+                                          );
+                                       })}
+                                    </TooltipProvider>
                                  </div>
                               </div>
 
@@ -1609,7 +1608,7 @@ const ChurchCreationFlow = () => {
                                     onClick={() => {
                                        setFormData(prev => ({
                                           ...prev,
-                                          services: [...prev.services, { day: '', start_time: '::PM', end_time: '::PM', event_name: '' }]
+                                          services: [...(prev.services || []), { day: '', start_time: '::PM', end_time: '::PM', event_name: '' }]
                                        }));
                                     }}
                                     className="h-11 bg-white border-2 border-dashed border-gray-200 text-[#6c1cff] font-medium text-[13px] tracking-wide px-8 rounded-xl hover:bg-gray-50/50 hover:border-[#6c1cff]/30 transition-all flex items-center gap-2"
