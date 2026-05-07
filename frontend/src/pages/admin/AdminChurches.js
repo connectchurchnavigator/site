@@ -39,12 +39,12 @@ const AdminChurches = () => {
   const [selected, setSelected] = useState([]);
   const [denominations, setDenominations] = useState([]);
   const fileInputRef = React.useRef(null);
-  const limit = 15;
+  const [limit, setLimit] = useState(15);
 
   useEffect(() => {
     fetchChurches();
     fetchDenominations();
-  }, [page, statusFilter, denominationFilter]);
+  }, [page, limit, statusFilter, denominationFilter]);
 
   const fetchDenominations = async () => {
     try {
@@ -220,9 +220,9 @@ const AdminChurches = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Church Management</h1>
-          <p className="text-slate-600">Manage all church listings</p>
+        <div className="px-6 py-4 border-b bg-white">
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Church Management</h1>
+          <p className="text-slate-500">Manage and moderate all church listings across the platform</p>
         </div>
         <div className="flex items-center gap-3">
           <input
@@ -319,9 +319,9 @@ const AdminChurches = () => {
       )}
 
       {/* Churches Table */}
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+      <Card className="border-x-0 sm:border-x rounded-none sm:rounded-xl overflow-visible">
+        <div className="overflow-x-auto pb-48">
+          <table className="w-full min-w-[1000px]">
             <thead className="bg-slate-50 border-b">
               <tr>
                 <th className="p-4 w-12">
@@ -362,17 +362,22 @@ const AdminChurches = () => {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        {church.logo ? (
-                          <img 
-                            src={`${process.env.REACT_APP_BACKEND_URL}${church.logo}`}
-                            alt={church.name}
-                            className="w-10 h-10 rounded-lg object-cover"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 bg-slate-200 rounded-lg flex items-center justify-center text-slate-400">
-                            ⛪
-                          </div>
-                        )}
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200">
+                          {church.logo ? (
+                            <img 
+                              src={church.logo.startsWith('http') ? church.logo : `${process.env.REACT_APP_BACKEND_URL}${church.logo}`}
+                              alt={church.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = '';
+                                e.target.parentElement.innerHTML = '<span class="text-xl">⛪</span>';
+                              }}
+                            />
+                          ) : (
+                            <span className="text-xl">⛪</span>
+                          )}
+                        </div>
                         <div>
                           <p className="font-medium">{church.name}</p>
                           <p className="text-xs text-slate-500">{church.email}</p>
@@ -483,31 +488,58 @@ const AdminChurches = () => {
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between p-4 border-t">
-            <p className="text-sm text-slate-600">
+        <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500">Rows per page:</span>
+            <Select 
+              value={limit.toString()} 
+              onValueChange={(v) => {
+                setLimit(v === 'all' ? total : parseInt(v));
+                setPage(0);
+              }}
+            >
+              <SelectTrigger className="w-20 h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="15">15</SelectItem>
+                <SelectItem value="30">30</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-slate-600 ml-4">
               Showing {page * limit + 1} - {Math.min((page + 1) * limit, total)} of {total}
             </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
-        )}
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+            <div className="flex items-center gap-1 px-4">
+              <span className="text-sm font-medium">Page {page + 1}</span>
+              <span className="text-sm text-slate-400">of {totalPages || 1}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="hidden sm:block w-32" /> {/* Spacer for balance */}
+        </div>
       </Card>
     </div>
   );
