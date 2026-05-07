@@ -58,8 +58,13 @@ api.interceptors.response.use(
 api.interceptors.response.use(
   (response) => {
     if (typeof response.data === 'string' && response.data.includes('<!doctype html>')) {
-      console.error('CRITICAL_API_ERROR: Received HTML instead of JSON. Check your REACT_APP_BACKEND_URL.');
-      // Return a predictable empty object so the app doesn't crash trying to map over HTML
+      const msg = `⚠️ API CONFIG ERROR: The app is looking for data at "${API_URL}", but that address is showing a website homepage. Please check your REACT_APP_BACKEND_URL variable.`;
+      console.error(msg);
+      // Alert once
+      if (!window._api_alert_shown) {
+        alert(msg);
+        window._api_alert_shown = true;
+      }
       return { data: { data: [], total: 0 } };
     }
     return response;
