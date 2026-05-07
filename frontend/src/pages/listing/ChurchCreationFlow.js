@@ -1269,7 +1269,7 @@ const ChurchCreationFlow = () => {
                                                          <Plus className="h-4 w-4" />
                                                          Not listed yet
                                                       </CommandItem>
-                                                      {[...pastors].sort((a, b) => a.name.localeCompare(b.name)).map((p) => (
+                                                      {[...pastors].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((p) => (
                                                          <CommandItem
                                                             key={p.id}
                                                             value={p.name}
