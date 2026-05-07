@@ -125,6 +125,7 @@ export default function Explore2() {
     experience: 0,
     openNow: searchParams.get('open_now') === 'true',
     useCustomTime: false,
+    customDate: new Date().toISOString().split('T')[0], // Default to today's date
     startTime: '14:00',
     endTime: '15:00',
     orderBy: 'a-z',
@@ -195,6 +196,13 @@ export default function Explore2() {
     }
   };
 
+  const getDayName = (dateStr) => {
+     if (!dateStr) return undefined;
+     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+     const d = new Date(dateStr);
+     return days[d.getDay()];
+  };
+
   const fetchResults = async () => {
     setLoading(true);
     try {
@@ -212,7 +220,8 @@ export default function Explore2() {
         max_lng: mapBounds?.maxLng,
         open_now: filters.openNow || undefined,
         start_time: filters.useCustomTime ? filters.startTime : undefined,
-        end_time: filters.useCustomTime ? filters.endTime : undefined
+        end_time: filters.useCustomTime ? filters.endTime : undefined,
+        day: filters.useCustomTime ? getDayName(filters.customDate) : undefined
       };
 
       if (activeType === 'pastor') {
@@ -259,6 +268,10 @@ export default function Explore2() {
       designation: '',
       experience: 0,
       openNow: false,
+      useCustomTime: false,
+      customDate: new Date().toISOString().split('T')[0],
+      startTime: '14:00',
+      endTime: '15:00',
       orderBy: 'nearby',
       radius: 25,
       userCoords: filters.userCoords // Keep user coordinates if detected
@@ -360,8 +373,8 @@ export default function Explore2() {
                       <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 mb-2 block">Opening Status</label>
                       <div className="p-1 rounded-xl border border-slate-100 flex shadow-sm bg-white">
                         <button 
-                          onClick={() => setFilters({...filters, openNow: false})}
-                          className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium uppercase tracking-wider ${!filters.openNow ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                          onClick={() => setFilters({...filters, openNow: false, useCustomTime: false})}
+                          className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium uppercase tracking-wider ${!filters.openNow && !filters.useCustomTime ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                         >
                           All
                         </button>
@@ -380,24 +393,35 @@ export default function Explore2() {
                       </div>
 
                       {filters.useCustomTime && (
-                        <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase">From</label>
+                            <label className="text-[9px] font-bold text-slate-400 uppercase">Date</label>
                             <input 
-                              type="time" 
-                              value={filters.startTime}
-                              onChange={(e) => setFilters({...filters, startTime: e.target.value})}
-                              className="w-full px-2 py-1 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand"
+                              type="date" 
+                              value={filters.customDate}
+                              onChange={(e) => setFilters({...filters, customDate: e.target.value})}
+                              className="w-full px-3 py-2 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand bg-slate-50/50"
                             />
                           </div>
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase">To</label>
-                            <input 
-                              type="time" 
-                              value={filters.endTime}
-                              onChange={(e) => setFilters({...filters, endTime: e.target.value})}
-                              className="w-full px-2 py-1 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand"
-                            />
+                          <div className="grid grid-cols-2 gap-2">
+                             <div className="space-y-1">
+                               <label className="text-[9px] font-bold text-slate-400 uppercase">From</label>
+                               <input 
+                                 type="time" 
+                                 value={filters.startTime}
+                                 onChange={(e) => setFilters({...filters, startTime: e.target.value})}
+                                 className="w-full px-2 py-2 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand bg-slate-50/50"
+                               />
+                             </div>
+                             <div className="space-y-1">
+                               <label className="text-[9px] font-bold text-slate-400 uppercase">To</label>
+                               <input 
+                                 type="time" 
+                                 value={filters.endTime}
+                                 onChange={(e) => setFilters({...filters, endTime: e.target.value})}
+                                 className="w-full px-2 py-2 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand bg-slate-50/50"
+                               />
+                             </div>
                           </div>
                         </div>
                       )}

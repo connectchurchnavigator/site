@@ -688,6 +688,7 @@ async def get_churches(
     open_now: Optional[bool] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
+    day: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     status: Optional[str] = None,
@@ -759,18 +760,22 @@ async def get_churches(
         else:
             query['ministries'] = ministry
         
+    # Service Time & Day Filtering
     if start_time and end_time:
-        # Filter churches that have a service within this time range
-        # This is a basic string comparison (expects HH:MM)
-        query['services'] = {
-            '$elemMatch': {
-                'start_time': { '$gte': start_time, '$lte': end_time }
-            }
+        service_query = {
+            'start_time': { '$gte': start_time, '$lte': end_time }
         }
+        if day:
+            service_query['day'] = day
+        query['services'] = { '$elemMatch': service_query }
+    elif day:
+        query['services'] = { '$elemMatch': { 'day': day } }
     elif open_now:
         # Simplified 'open now' - check if there's any service today
-        # For a full implementation, would need to handle current day and time precisely
-        pass
+        from datetime import datetime
+        now = datetime.now()
+        current_day = now.strftime('%A')
+        query['services'] = { '$elemMatch': { 'day': current_day } }
         
     # Map Bounds Filtering
     if min_lat is not None and max_lat is not None and min_lng is not None and max_lng is not None:
