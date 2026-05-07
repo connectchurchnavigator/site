@@ -242,17 +242,14 @@ export default function Explore2() {
         };
       }
 
-      console.log("SEARCH_TRACE: Params being sent:", params);
       const res = activeType === 'church' 
         ? await churchAPI.getAll(params)
         : await pastorAPI.getAll(params);
       
-      console.log("SEARCH_TRACE: API Response:", res.data);
       setResults(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch (error) {
-      console.error('SEARCH_TRACE: Error fetching results:', error);
-      console.error('SEARCH_TRACE: Full Error:', error.response?.data || error.message);
+      console.error('Error fetching results:', error);
       toast.error('Failed to load results');
     } finally {
       setLoading(false);
@@ -605,44 +602,12 @@ export default function Explore2() {
             <div className="lg:w-[500px] border-r border-slate-100 bg-white overflow-y-auto custom-scrollbar">
               <div className="p-6 space-y-6">
                 {/* Stats Bar */}
-                <div className="flex flex-col gap-2 mb-4 sticky top-0 bg-white/95 backdrop-blur-md py-4 z-10 border-b border-slate-50">
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-brand animate-pulse"></div>
-                      <span className="text-xs font-medium text-slate-500 uppercase tracking-widest">
-                        Showing {results.length} of {total} {activeType === 'church' ? 'Churches' : 'Pastors'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                     <button 
-                        onClick={() => {
-                          setFilters(prev => ({ 
-                            ...prev, 
-                            search: '', 
-                            denomination: [], 
-                            language: [], 
-                            worshipStyle: [], 
-                            ministry: [], 
-                            openNow: false, 
-                            useCustomTime: false,
-                            qualification: '',
-                            designation: '',
-                            experience: 0
-                          }));
-                        }}
-                        className="text-[10px] font-bold text-brand hover:opacity-70 uppercase tracking-widest transition-opacity"
-                     >
-                        Show All {activeType === 'church' ? 'Churches' : 'Pastors'}
-                     </button>
-                     <div className="w-1 h-1 rounded-full bg-slate-200"></div>
-                     <button 
-                        onClick={showAllGlobally}
-                        className="text-[10px] font-bold text-slate-400 hover:text-brand transition-colors uppercase tracking-widest"
-                     >
-                        Show All Globally
-                     </button>
+                <div className="flex items-center justify-between mb-4 sticky top-0 bg-white/95 backdrop-blur-md py-4 z-10 border-b border-slate-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-brand animate-pulse"></div>
+                    <span className="text-xs font-medium text-slate-500 uppercase tracking-widest">
+                      Showing {results.length} of {total} {activeType === 'church' ? 'Churches' : 'Pastors'}
+                    </span>
                   </div>
                 </div>
 

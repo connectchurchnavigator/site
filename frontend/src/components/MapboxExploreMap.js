@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import Map, { Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl';
+import { Map, Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Church, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -165,7 +165,7 @@ const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, 
                 maxLng: b.getEast()
             });
         }}
-        mapStyle="mapbox://styles/mapbox/light-v11"
+        mapStyle="mapbox://styles/mapbox/streets-v12"
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
       >

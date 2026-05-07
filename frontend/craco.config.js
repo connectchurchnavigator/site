@@ -61,19 +61,6 @@ const webpackConfig = {
         ],
       };
 
-      // Fix for Mapbox GL JS workers in production
-      webpackConfig.module.rules.push({
-        test: /\.js$/,
-        include: /node_modules\/mapbox-gl/,
-        use: {
-          loader: 'babel-loader',
-          options: {
-            presets: ['@babel/preset-env'],
-            plugins: ['@babel/plugin-proposal-optional-chaining']
-          }
-        }
-      });
-
       // Add health check plugin to webpack if enabled
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);
