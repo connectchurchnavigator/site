@@ -2932,27 +2932,17 @@ async def log_requests(request: Request, call_next):
     print(f"DEBUG: Request finished: {request.method} {request.url.path} - {response.status_code}")
     return response
 
+# Flexible CORS for production to prevent "CORS Block"
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(',') if os.environ.get('CORS_ORIGINS') else ["*"] if not os.environ.get('CORS_ORIGINS') and os.environ.get('NODE_ENV') == 'development' else [],
+    allow_origins=["*"] if os.environ.get('NODE_ENV') == 'development' else [
+        "https://site-production-46c8.up.railway.app",
+        "https://site-production-bd88.up.railway.app"
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
-
-# Note: If credentials are True, allow_origins cannot be ["*"] in Starlette/FastAPI.
-# This logic ensures we don't crash on production if CORS_ORIGINS is missing.
-if not os.environ.get('CORS_ORIGINS') and os.environ.get('NODE_ENV') != 'development':
-    # In production, if no origins are specified, we should at least allow the app's own domain
-    # or print a warning. For now, we'll revert to a safer check.
-    app.user_middleware.pop()
-    app.add_middleware(
-        CORSMiddleware,
-        allow_credentials=True,
-        allow_origins=["*"] if os.environ.get('NODE_ENV') == 'development' else [os.environ.get('FRONTEND_URL', '*')],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
 # Mount static files for uploads under /api/uploads path for proper routing
 app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
