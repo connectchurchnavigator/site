@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import Map, { Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl/mapbox';
+import Map, { Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Church, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
