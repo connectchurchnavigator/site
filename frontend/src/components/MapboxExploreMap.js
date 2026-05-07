@@ -1,17 +1,21 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Map, Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl/mapbox';
+import Map, { Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl';
+// eslint-disable-next-line import/no-webpack-loader-syntax
+import mapboxgl from '!mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin, Church, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
 import { toast } from 'sonner';
-import mapboxgl from 'mapbox-gl';
 
 // Fix for Mapbox GL JS workers in production
-// eslint-disable-next-line import/no-webpack-loader-syntax
-mapboxgl.workerClass = require('worker-loader!mapbox-gl/dist/mapbox-gl-csp-worker').default;
+// @ts-ignore
+mapboxgl.workerClass = require('mapbox-gl/dist/mapbox-gl-csp-worker').default;
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
+if (MAPBOX_TOKEN) {
+  mapboxgl.accessToken = MAPBOX_TOKEN;
+}
 
 const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, onBoundsChange, center }) => {
   const navigate = useNavigate();

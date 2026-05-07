@@ -242,14 +242,17 @@ export default function Explore2() {
         };
       }
 
+      console.log("SEARCH_TRACE: Params being sent:", params);
       const res = activeType === 'church' 
         ? await churchAPI.getAll(params)
         : await pastorAPI.getAll(params);
       
+      console.log("SEARCH_TRACE: API Response:", res.data);
       setResults(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch (error) {
-      console.error('Error fetching results:', error);
+      console.error('SEARCH_TRACE: Error fetching results:', error);
+      console.error('SEARCH_TRACE: Full Error:', error.response?.data || error.message);
       toast.error('Failed to load results');
     } finally {
       setLoading(false);
