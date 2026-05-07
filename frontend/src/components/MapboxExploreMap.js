@@ -165,7 +165,7 @@ const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, 
                 maxLng: b.getEast()
             });
         }}
-        mapStyle="mapbox://styles/mapbox/streets-v12"
+        mapStyle="mapbox://styles/mapbox/light-v11"
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
       >
