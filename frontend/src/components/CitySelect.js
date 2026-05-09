@@ -16,6 +16,8 @@ import {
 } from "./ui/popover";
 import axios from 'axios';
 
+const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
+
 export function CitySelect({ value, onChange, placeholder = "Search City...", className, variant = "border-bottom" }) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value || "");
@@ -35,22 +37,23 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
     }
     setLoading(true);
     try {
-      const baseUrl = process.env.REACT_APP_BACKEND_URL || '';
-      // Smart path handling: check if baseUrl already includes /api
-      const apiPath = baseUrl.endsWith('/api') ? '/cities/search' : '/api/cities/search';
-      const response = await axios.get(`${baseUrl}${apiPath}?q=${searchQuery}`);
+      // Using Mapbox Geocoding API for reliable city search
+      const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${MAPBOX_TOKEN}&types=place&limit=5`;
+      const response = await axios.get(endpoint);
       
-      if (Array.isArray(response.data)) {
-        setCities(response.data);
-        if (response.data.length > 0) setOpen(true);
-        else setOpen(false);
-      } else {
-        console.warn("City search API returned non-array data:", response.data);
-        setCities([]);
-        setOpen(false);
-      }
+      const matches = response.data.features.map(f => ({
+        name: f.text,
+        display: f.place_name,
+        country: f.context?.find(c => c.id.startsWith('country'))?.text || "",
+        lat: f.center[1],
+        lng: f.center[0]
+      }));
+
+      setCities(matches);
+      if (matches.length > 0) setOpen(true);
+      else setOpen(false);
     } catch (error) {
-      console.error("City search failed:", error);
+      console.error("Mapbox search failed:", error);
       setCities([]);
       setOpen(false);
     } finally {
@@ -62,19 +65,12 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
     const val = e.target.value;
     setInputValue(val);
     
-    // Clear existing city if user is typing a new one but hasn't selected yet
-    // Only clear if the new text doesn't match the selected value exactly
-    if (val !== value) {
-        // We don't call onChange here to avoid clearing filters immediately, 
-        // unless you want real-time filtering by text.
-    }
-
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     
     if (val.length >= 2) {
       debounceTimer.current = setTimeout(() => {
         fetchCities(val);
-      }, 300);
+      }, 400);
     } else {
       setCities([]);
       setOpen(false);
@@ -136,17 +132,6 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
         >
           <Command shouldFilter={false} className="bg-white">
             <CommandList className="max-h-[300px] overflow-y-auto custom-scrollbar">
-              {loading ? (
-                <div className="p-8 text-center text-xs text-slate-400">
-                  <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2 text-brand" />
-                  Connecting to cities database...
-                </div>
-              ) : cities.length === 0 && inputValue.length >= 2 ? (
-                <div className="p-8 text-center text-xs text-slate-400">
-                  <p>No cities found for "{inputValue}"</p>
-                  <p className="mt-2 opacity-50">Checking: {process.env.REACT_APP_BACKEND_URL || 'Local API'}</p>
-                </div>
-              ) : null}
               <CommandGroup>
                 {cities.map((city) => (
                   <CommandItem
@@ -164,7 +149,7 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
                     </div>
                     <div className="flex flex-col min-w-0">
                        <span className="text-sm font-semibold text-slate-900 truncate">{city.name}</span>
-                       <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold truncate opacity-60">{city.country}</span>
+                       <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold truncate opacity-60">{city.display.split(',').slice(1).join(',').trim()}</span>
                     </div>
                     {value === city.name && (
                       <Check className="ml-auto h-4 w-4 text-brand" />
