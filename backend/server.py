@@ -584,8 +584,28 @@ async def get_super_admin(current_user: Dict = Depends(get_current_user)) -> Dic
         raise HTTPException(status_code=403, detail="Super admin access required")
     return current_user
 
-def create_slug(name: str) -> str:
-    return name.lower().replace(' ', '-').replace('/', '-')
+async def create_unique_slug(name: str, collection_name: str) -> str:
+    """Generate a unique slug for a given name in a collection"""
+    import re
+    # Convert to lowercase, replace spaces and slashes with hyphens
+    base_slug = name.lower().replace(' ', '-').replace('/', '-')
+    # Remove any other non-alphanumeric characters except hyphens
+    base_slug = re.sub(r'[^a-z0-9-]', '', base_slug)
+    # Remove double hyphens
+    base_slug = re.sub(r'-+', '-', base_slug).strip('-')
+    
+    if not base_slug:
+        base_slug = "untitled"
+        
+    slug = base_slug
+    counter = 1
+    
+    while True:
+        existing = await db[collection_name].find_one({'slug': slug})
+        if not existing:
+            return slug
+        slug = f"{base_slug}-{counter}"
+        counter += 1
 
 # ===== AUTH ROUTES =====
 
@@ -673,7 +693,7 @@ async def get_all_taxonomies():
 async def create_church(church_data: ChurchBase, current_user: Dict = Depends(get_current_user)):
     church_dict = church_data.model_dump()
     church_dict['owner_id'] = current_user['id']
-    church_dict['slug'] = create_slug(church_data.name)
+    church_dict['slug'] = await create_unique_slug(church_data.name, 'churches')
     
     church_obj = Church(**church_dict)
     doc = church_obj.model_dump()
@@ -985,7 +1005,7 @@ async def delete_church(
 async def create_pastor(pastor_data: PastorBase, current_user: Dict = Depends(get_current_user)):
     pastor_dict = pastor_data.model_dump()
     pastor_dict['owner_id'] = current_user['id']
-    pastor_dict['slug'] = create_slug(pastor_data.name)
+    pastor_dict['slug'] = await create_unique_slug(pastor_data.name, 'pastors')
     
     pastor_obj = Pastor(**pastor_dict)
     doc = pastor_obj.model_dump()
