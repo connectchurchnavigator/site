@@ -1206,7 +1206,7 @@ const PastorCreationFlow2 = () => {
          </main>
 
          {/* Quick Church Dialog */}
-         <Dialog open={showQuickChurchDialog} onOpenChange={setShowQuickChurchDialog}>
+                  <Dialog open={showQuickChurchDialog} onOpenChange={setShowQuickChurchDialog}>
             <DialogContent className="sm:max-w-xl rounded-3xl border-none p-8 max-h-[90vh] overflow-y-auto custom-scrollbar">
                <DialogHeader className="space-y-3">
                   <DialogTitle className="text-2xl font-extrabold tracking-tight">Quick Church Profile</DialogTitle>
@@ -1237,9 +1237,6 @@ const PastorCreationFlow2 = () => {
                            />
                         </GMBRow>
                      </div>
-                  </div>
-
-                  
                   </div>
 
                   <div className="space-y-4">
@@ -1281,25 +1278,26 @@ const PastorCreationFlow2 = () => {
                            </div>
                         )}
                      </div>
-                     <div className="space-y-2">
-                                          <div className="space-y-2">
-                     <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Operating Timezone</Label>
-                     <div className="flex items-center gap-2 px-4 h-11 bg-gray-50 rounded-xl text-[13px] text-gray-600">
-                        <Globe size={14} className="text-gray-400" />
-                        <Select value={quickChurch.timezone} onValueChange={(val) => setQuickChurch({ ...quickChurch, timezone: val })}>
-                           <SelectTrigger className="bg-transparent border-none p-0 h-auto focus:ring-0">
-                              <SelectValue placeholder="Select timezone" />
-                           </SelectTrigger>
-                           <SelectContent className="z-[130]">
-                              {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York'].map(tz => (
-                                 <SelectItem key={tz} value={tz}>{tz}</SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
-                     </div>
-                  </div>
 
-                  <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">How are you related to this listing? (Optional)</Label>
+                     <div className="space-y-2">
+                        <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Operating Timezone</Label>
+                        <div className="flex items-center gap-2 px-4 h-11 bg-gray-50 rounded-xl text-[13px] text-gray-600">
+                           <Globe size={14} className="text-gray-400" />
+                           <Select value={quickChurch.timezone} onValueChange={(val) => setQuickChurch({ ...quickChurch, timezone: val })}>
+                              <SelectTrigger className="bg-transparent border-none p-0 h-auto focus:ring-0">
+                                 <SelectValue placeholder="Select timezone" />
+                              </SelectTrigger>
+                              <SelectContent className="z-[130]">
+                                 {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York'].map(tz => (
+                                    <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+                                 ))}
+                              </SelectContent>
+                           </Select>
+                        </div>
+                     </div>
+
+                     <div className="space-y-2">
+                        <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">How are you related to this listing? (Optional)</Label>
                         <Input placeholder="e.g. Lead Pastor, Admin, Founder..." value={quickChurch.relationship_to_listing} onChange={(e) => setQuickChurch({ ...quickChurch, relationship_to_listing: e.target.value })} className={inputStyle} />
                      </div>
                   </div>

@@ -2498,7 +2498,7 @@ const ChurchCreationFlow = () => {
          </main>
 
          {/* Quick Pastor Creation Dialog */}
-         <Dialog open={showQuickPastorDialog} onOpenChange={setShowQuickPastorDialog}>
+                  <Dialog open={showQuickPastorDialog} onOpenChange={setShowQuickPastorDialog}>
             <DialogContent className="max-w-2xl p-0 border-none rounded-[32px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
                <div className="flex-1 p-10 space-y-10 bg-white overflow-y-auto custom-scrollbar min-h-0">
                   <DialogHeader className="space-y-3">
@@ -2648,7 +2648,7 @@ const ChurchCreationFlow = () => {
                                  draggable
                                  onDragEnd={handleQuickPastorMarkerDrag}
                                  anchor="bottom"
-                                  style={{ zIndex: 1000 }}
+                                 style={{ zIndex: 1000 }}
                               >
                                  <div className="cursor-grab active:cursor-grabbing">
                                     <div className="w-12 h-12 bg-[#6c1cff] rounded-full flex items-center justify-center shadow-2xl border-4 border-white transform hover:scale-110 transition-transform">
@@ -2673,7 +2673,7 @@ const ChurchCreationFlow = () => {
                                        google_maps_link: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
                                     }));
                                     setQuickPastorViewport(prev => ({ ...prev, latitude, longitude, zoom: 15 }));
-                                     detectCity(latitude, longitude);
+                                    detectCity(latitude, longitude);
                                     detectTimezone(latitude, longitude).then(tz => {
                                        if (tz) setQuickPastor(prev => ({ ...prev, timezone: tz }));
                                     });
@@ -2718,7 +2718,7 @@ const ChurchCreationFlow = () => {
                            />
                         </div>
 
-                         <div className="space-y-2">
+                        <div className="space-y-2">
                            <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">City *</Label>
                            <p className="text-[10px] font-bold text-gray-400 -mt-1 mb-1 uppercase tracking-tighter">The city where people will search for you in the directory</p>
                            <CitySelect
@@ -2744,7 +2744,7 @@ const ChurchCreationFlow = () => {
                            />
                         </div>
 
-                         <div className="space-y-3">
+                        <div className="space-y-3">
                            <Label className="text-[12px] font-bold tracking-widest uppercase text-gray-500 block">Operating Timezone</Label>
                            <div className="relative group">
                               <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors z-10" />
@@ -2759,25 +2759,26 @@ const ChurchCreationFlow = () => {
                                  </SelectContent>
                               </Select>
                            </div>
+                        </div>
                      </div>
                   </div>
+               </div>
 
-                  <div className="flex gap-4 pt-10 pb-6">
-                     <Button
-                        onClick={() => setShowQuickPastorDialog(false)}
-                        variant="ghost"
-                        className="flex-1 h-12 text-[13px] font-bold tracking-widest uppercase text-slate-400 hover:text-slate-600 transition-colors"
-                     >
-                        Cancel
-                     </Button>
-                     <Button
-                        onClick={handleQuickPastorCreate}
-                        disabled={quickPastorLoading}
-                        className="flex-1 h-12 bg-[#6c1cff] hover:bg-[#5b17d6] text-white text-[13px] font-bold tracking-widest uppercase shadow-lg shadow-purple-100 rounded-[16px] hover:scale-[1.02] active:scale-95 transition-all"
-                     >
-                        {quickPastorLoading ? 'Creating...' : 'Create & Link'}
-                     </Button>
-                  </div>
+               <div className="flex gap-4 p-10 bg-gray-50/50 border-t border-gray-100">
+                  <Button
+                     onClick={() => setShowQuickPastorDialog(false)}
+                     variant="ghost"
+                     className="flex-1 h-12 text-[13px] font-bold tracking-widest uppercase text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                     Cancel
+                  </Button>
+                  <Button
+                     onClick={handleQuickPastorCreate}
+                     disabled={quickPastorLoading}
+                     className="flex-1 h-12 bg-[#6c1cff] hover:bg-[#5b17d6] text-white text-[13px] font-bold tracking-widest uppercase shadow-lg shadow-purple-100 rounded-[16px] hover:scale-[1.02] active:scale-95 transition-all"
+                  >
+                     {quickPastorLoading ? 'Creating...' : 'Create & Link'}
+                  </Button>
                </div>
             </DialogContent>
          </Dialog>
