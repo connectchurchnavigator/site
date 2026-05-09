@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Home2 from './pages/Home2';
 import Home4 from './pages/Home4';
 import About2 from './pages/About2';
 import AuthPage from './pages/AuthPage';
@@ -50,12 +49,8 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/" element={<Home2 />} />
-      <Route path="/home2" element={<Home2 />} />
-      <Route path="/home4" element={<Home4 />} />
+      <Route path="/" element={<Home4 />} />
       <Route path="/about" element={<About2 />} />
-      <Route path="/about2" element={<About2 />} />
-      <Route path="/aboutus" element={<About2 />} />
       <Route path="/explore" element={<Explore2 />} />
       <Route path="/church/:slug" element={<ChurchDetailPage />} />
       <Route path="/pastor/:slug" element={<PastorDetailPage />} />
