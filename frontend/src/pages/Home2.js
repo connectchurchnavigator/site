@@ -130,7 +130,7 @@ const Home2 = () => {
                 </TabsList>
 
                 <div className="flex flex-col lg:flex-row items-stretch gap-4">
-                  <div className="flex-[1.5] flex items-center px-5 bg-white/10 rounded-2xl border border-white/10 focus-within:border-brand/40 transition-all">
+                  <div className="flex-1 flex items-center px-5 bg-white/10 rounded-2xl border border-white/10 focus-within:border-brand/40 transition-all">
                     <Search className="h-4 w-4 text-brand mr-3" />
                     <input 
                       type="text" 
@@ -141,7 +141,7 @@ const Home2 = () => {
                     />
                   </div>
                   
-                  <div className="flex-1 flex items-center bg-white/10 rounded-2xl border border-white/10 group/city overflow-hidden">
+                  <div className="flex-[1.5] flex items-center bg-white/10 rounded-2xl border border-white/10 group/city overflow-hidden">
                     <CitySelect 
                       placeholder="Near city..." 
                       variant="transparent-glass"
