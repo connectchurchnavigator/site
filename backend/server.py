@@ -695,6 +695,14 @@ async def create_church(church_data: ChurchBase, current_user: Dict = Depends(ge
     church_dict['owner_id'] = current_user['id']
     church_dict['slug'] = await create_unique_slug(church_data.name, 'churches')
     
+    # Ensure coordinates are floats for search
+    if church_dict.get('latitude'):
+        try: church_dict['latitude'] = float(church_dict['latitude'])
+        except: pass
+    if church_dict.get('longitude'):
+        try: church_dict['longitude'] = float(church_dict['longitude'])
+        except: pass
+    
     church_obj = Church(**church_dict)
     doc = church_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
@@ -884,6 +892,14 @@ async def update_church(
         raise HTTPException(status_code=403, detail="Not authorized")
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    # Ensure coordinates are floats for search
+    if 'latitude' in update_data and update_data['latitude']:
+        try: update_data['latitude'] = float(update_data['latitude'])
+        except: pass
+    if 'longitude' in update_data and update_data['longitude']:
+        try: update_data['longitude'] = float(update_data['longitude'])
+        except: pass
     
     # Handle Trashed At logic
     if update_data.get('status') == 'trash':
@@ -3001,6 +3017,28 @@ async def seed_data():
         doc['created_at'] = doc['created_at'].isoformat()
         await db.users.insert_one(doc)
         logger.info("Super admin created")
+    
+    # Data Cleanup: Convert String Lat/Lng to Floats
+    logger.info("Starting coordinate cleanup...")
+    cursor = db.churches.find({
+        '$or': [
+            {'latitude': {'$type': 'string'}},
+            {'longitude': {'$type': 'string'}}
+        ]
+    })
+    async for church in cursor:
+        updates = {}
+        try:
+            if isinstance(church.get('latitude'), str):
+                updates['latitude'] = float(church['latitude'])
+            if isinstance(church.get('longitude'), str):
+                updates['longitude'] = float(church['longitude'])
+            
+            if updates:
+                await db.churches.update_one({'id': church['id']}, {'$set': updates})
+        except:
+            continue
+    logger.info("Coordinate cleanup complete")
     
     # Seed taxonomies
     taxonomy_count = await db.taxonomies.count_documents({})
