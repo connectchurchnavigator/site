@@ -357,6 +357,8 @@ const PastorCreationFlow2 = () => {
       updateFormData('city', suggestion.text);
       updateFormData('latitude', lat.toString());
       updateFormData('longitude', lng.toString());
+       detectTimezone(lat, lng);
+       detectTimezone(lat, lng);
       setCitySuggestions([]);
    };
 
@@ -382,7 +384,7 @@ const PastorCreationFlow2 = () => {
       }
    };
 
-   const handleQuickCitySelect = (suggestion) => {
+   const handleQuickCitySelect = async (suggestion) => {
       const [lng, lat] = suggestion.center;
       setQuickChurch(prev => ({
          ...prev,
@@ -393,7 +395,35 @@ const PastorCreationFlow2 = () => {
       setQuickCitySuggestions([]);
    };
 
-   const updateFormData = (field, value) => {
+       const detectCity = async (lat, lng) => {
+       if (!lat || !lng || !MAPBOX_TOKEN) return;
+       try {
+          const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN}&types=place`);
+          const data = await res.json();
+          const cityName = data.features?.[0]?.text;
+          if (cityName) {
+             updateFormData('city', cityName);
+          }
+       } catch (e) {
+          console.warn('City detection failed:', e.message);
+       }
+    };
+
+    const detectTimezone = async (lat, lng) => {
+       if (!lat || !lng) return null;
+       try {
+          const res = await utilityAPI.getTimezone(lat, lng);
+          if (res.data.timezone) {
+             updateFormData('timezone', res.data.timezone);
+             return res.data.timezone;
+          }
+       } catch (e) {
+          console.warn('Timezone detection failed:', e.message);
+       }
+       return null;
+    };
+
+    const updateFormData = (field, value) => {
       setFormData(prev => ({ ...prev, [field]: value }));
    };
 
@@ -1209,21 +1239,7 @@ const PastorCreationFlow2 = () => {
                      </div>
                   </div>
 
-                  <div className="space-y-2">
-                     <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Operating Timezone</Label>
-                     <div className="flex items-center gap-2 px-4 h-11 bg-gray-50 rounded-xl text-[13px] text-gray-600">
-                        <Globe size={14} className="text-gray-400" />
-                        <Select value={quickChurch.timezone} onValueChange={(val) => setQuickChurch({ ...quickChurch, timezone: val })}>
-                           <SelectTrigger className="bg-transparent border-none p-0 h-auto focus:ring-0">
-                              <SelectValue placeholder="Select timezone" />
-                           </SelectTrigger>
-                           <SelectContent className="z-[130]">
-                              {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York'].map(tz => (
-                                 <SelectItem key={tz} value={tz}>{tz}</SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
-                     </div>
+                  
                   </div>
 
                   <div className="space-y-4">
@@ -1266,7 +1282,24 @@ const PastorCreationFlow2 = () => {
                         )}
                      </div>
                      <div className="space-y-2">
-                        <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">How are you related to this listing? (Optional)</Label>
+                                          <div className="space-y-2">
+                     <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Operating Timezone</Label>
+                     <div className="flex items-center gap-2 px-4 h-11 bg-gray-50 rounded-xl text-[13px] text-gray-600">
+                        <Globe size={14} className="text-gray-400" />
+                        <Select value={quickChurch.timezone} onValueChange={(val) => setQuickChurch({ ...quickChurch, timezone: val })}>
+                           <SelectTrigger className="bg-transparent border-none p-0 h-auto focus:ring-0">
+                              <SelectValue placeholder="Select timezone" />
+                           </SelectTrigger>
+                           <SelectContent className="z-[130]">
+                              {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York'].map(tz => (
+                                 <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                     </div>
+                  </div>
+
+                  <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">How are you related to this listing? (Optional)</Label>
                         <Input placeholder="e.g. Lead Pastor, Admin, Founder..." value={quickChurch.relationship_to_listing} onChange={(e) => setQuickChurch({ ...quickChurch, relationship_to_listing: e.target.value })} className={inputStyle} />
                      </div>
                   </div>

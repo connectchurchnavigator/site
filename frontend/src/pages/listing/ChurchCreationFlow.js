@@ -950,6 +950,8 @@ const ChurchCreationFlow = () => {
          longitude: lng.toString(),
          google_maps_link: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
       }));
+      detectQuickCity(lat, lng);
+      detectQuickCity(lat, lng);
       detectTimezone(lat, lng).then(tz => {
          if (tz) setQuickChurch(prev => ({ ...prev, timezone: tz }));
       });
@@ -982,6 +984,8 @@ const ChurchCreationFlow = () => {
 
       setQuickChurchViewport(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: 15 }));
       setQuickSearchSuggestions([]);
+      detectCity(lat, lng);
+      detectCity(lat, lng);
       detectTimezone(lat, lng).then(tz => {
          if (tz) setQuickChurch(prev => ({ ...prev, timezone: tz }));
       });
@@ -1034,6 +1038,7 @@ const ChurchCreationFlow = () => {
          longitude: lng.toString(),
          google_maps_link: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
       }));
+      detectCity(lat, lng);
       detectTimezone(lat, lng).then(tz => {
          if (tz) setQuickPastor(prev => ({ ...prev, timezone: tz }));
       });
@@ -1050,12 +1055,41 @@ const ChurchCreationFlow = () => {
       }));
       setQuickPastorViewport(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: 15 }));
       setQuickPastorSearchSuggestions([]);
+      detectCity(lat, lng);
       detectTimezone(lat, lng).then(tz => {
          if (tz) setQuickPastor(prev => ({ ...prev, timezone: tz }));
       });
    };
 
-   const detectTimezone = async (lat, lng) => {
+           const detectQuickCity = async (lat, lng) => {
+       if (!lat || !lng || !MAPBOX_TOKEN) return;
+       try {
+          const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN}&types=place`);
+          const data = await res.json();
+          const cityName = data.features?.[0]?.text;
+          if (cityName) {
+             setQuickPastor(prev => ({ ...prev, city: cityName }));
+          }
+       } catch (e) {
+          console.warn('Quick City detection failed:', e.message);
+       }
+    };
+
+    const detectCity = async (lat, lng) => {
+       if (!lat || !lng || !MAPBOX_TOKEN) return;
+       try {
+          const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN}&types=place`);
+          const data = await res.json();
+          const cityName = data.features?.[0]?.text;
+          if (cityName) {
+             updateFormData('city', cityName);
+          }
+       } catch (e) {
+          console.warn('City detection failed:', e.message);
+       }
+    };
+
+    const detectTimezone = async (lat, lng) => {
       if (!lat || !lng) return null;
       try {
          const res = await utilityAPI.getTimezone(lat, lng);
@@ -1156,6 +1190,9 @@ const ChurchCreationFlow = () => {
       }));
 
       detectTimezone(lat, lng);
+            detectCity(lat, lng);
+      detectCity(lat, lng);
+      detectCity(lat, lng);
       setMapViewport(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: 15 }));
       setSearchSuggestions([]);
       toast.success('Location updated');
@@ -1167,6 +1204,9 @@ const ChurchCreationFlow = () => {
       updateFormData('longitude', lng.toString());
       updateFormData('google_maps_link', `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
       detectTimezone(lat, lng);
+            detectCity(lat, lng);
+      detectCity(lat, lng);
+      detectCity(lat, lng);
    };
 
    const addService = () => {
@@ -1451,6 +1491,7 @@ const ChurchCreationFlow = () => {
                                                 updateFormData('longitude', longitude.toString());
                                                 updateFormData('google_maps_link', `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
                                                 detectTimezone(latitude, longitude);
+                                                 detectQuickCity(latitude, longitude);
                                                 setMapViewport(prev => ({ ...prev, latitude, longitude, zoom: 15 }));
                                                 toast.success("Location coordinates updated");
                                              }}
@@ -1488,7 +1529,42 @@ const ChurchCreationFlow = () => {
                                        </div>
                                     </div>
 
-                                    <GMBRow label="Operating Timezone" hint="Auto-detected from location">
+                                    
+
+                                 </div>
+                              </GMBRow>
+
+                              <GMBRow label="Full Address *" error={isFieldEmpty('address_line1')}>
+                                 <Input
+                                    value={formData.address_line1}
+                                    onChange={(e) => updateFormData('address_line1', e.target.value)}
+                                    placeholder="Full Address (Building, Street, Area, City, State, Zip)"
+                                    className={inputStyle}
+                                 />
+                              </GMBRow>
+
+                              <GMBRow label="City *" error={isFieldEmpty('city')} hint="The primary city where seekers will search for your church.">
+                                 <CitySelect
+                                    value={formData.city}
+                                    onChange={(cityName, cityData) => {
+                                       updateFormData('city', cityName);
+                                       if (cityData) {
+                                          updateFormData('latitude', cityData.lat.toString());
+                                          updateFormData('longitude', cityData.lng.toString());
+                                          setMapViewport(prev => ({
+                                             ...prev,
+                                             latitude: cityData.lat,
+                                             longitude: cityData.lng,
+                                             zoom: 12
+                                          }));
+                                       }
+                                    }}
+                                    placeholder="e.g. Hyderabad, Dallas, etc."
+                                    variant="outline"
+                                 />
+                              </GMBRow>
+
+                              <GMBRow label="Operating Timezone" hint="Auto-detected from location">
                                        <div className="relative group">
                                           <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors z-10" />
                                           <Select value={formData.timezone} onValueChange={(v) => updateFormData('timezone', v)}>
@@ -1509,39 +1585,6 @@ const ChurchCreationFlow = () => {
                                           </Select>
                                        </div>
                                     </GMBRow>
-
-                                 </div>
-                              </GMBRow>
-
-                              <GMBRow label="Full Address *" error={isFieldEmpty('address_line1')}>
-                                 <Input
-                                    value={formData.address_line1}
-                                    onChange={(e) => updateFormData('address_line1', e.target.value)}
-                                    placeholder="Full Address (Building, Street, Area, City, State, Zip)"
-                                    className={inputStyle}
-                                 />
-                              </GMBRow>
-
-                              <GMBRow label="Search City *" error={isFieldEmpty('city')} hint="The primary city where seekers will search for your church.">
-                                 <CitySelect
-                                    value={formData.city}
-                                    onChange={(cityName, cityData) => {
-                                       updateFormData('city', cityName);
-                                       if (cityData) {
-                                          updateFormData('latitude', cityData.lat.toString());
-                                          updateFormData('longitude', cityData.lng.toString());
-                                          setMapViewport(prev => ({
-                                             ...prev,
-                                             latitude: cityData.lat,
-                                             longitude: cityData.lng,
-                                             zoom: 12
-                                          }));
-                                       }
-                                    }}
-                                    placeholder="e.g. Hyderabad, Dallas, etc."
-                                    variant="outline"
-                                 />
-                              </GMBRow>
                            </div>
                         )}
 
@@ -2630,6 +2673,7 @@ const ChurchCreationFlow = () => {
                                        google_maps_link: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
                                     }));
                                     setQuickPastorViewport(prev => ({ ...prev, latitude, longitude, zoom: 15 }));
+                                     detectCity(latitude, longitude);
                                     detectTimezone(latitude, longitude).then(tz => {
                                        if (tz) setQuickPastor(prev => ({ ...prev, timezone: tz }));
                                     });
@@ -2664,23 +2708,6 @@ const ChurchCreationFlow = () => {
                            </div>
                         </div>
 
-                        <div className="space-y-3">
-                           <Label className="text-[12px] font-bold tracking-widest uppercase text-gray-500 block">Operating Timezone</Label>
-                           <div className="relative group">
-                              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors z-10" />
-                              <Select value={quickPastor.timezone} onValueChange={(v) => setQuickPastor(prev => ({ ...prev, timezone: v }))}>
-                                 <SelectTrigger className={cn(selectStyle, "pl-10 h-12 bg-gray-50/50")}>
-                                    <SelectValue placeholder="Select timezone" />
-                                 </SelectTrigger>
-                                 <SelectContent position="popper" side="bottom" className="z-[130] max-h-[300px] rounded-2xl border-none shadow-2xl">
-                                    {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo'].map(tz => (
-                                       <SelectItem key={tz} value={tz}>{tz}</SelectItem>
-                                    ))}
-                                 </SelectContent>
-                              </Select>
-                           </div>
-                        </div>
-
                         <div className="space-y-2">
                            <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Full Address</Label>
                            <Input
@@ -2691,8 +2718,8 @@ const ChurchCreationFlow = () => {
                            />
                         </div>
 
-                        <div className="space-y-2">
-                           <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Search City *</Label>
+                         <div className="space-y-2">
+                           <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">City *</Label>
                            <p className="text-[10px] font-bold text-gray-400 -mt-1 mb-1 uppercase tracking-tighter">The city where people will search for you in the directory</p>
                            <CitySelect
                               value={quickPastor.city}
@@ -2716,6 +2743,22 @@ const ChurchCreationFlow = () => {
                               variant="outline"
                            />
                         </div>
+
+                         <div className="space-y-3">
+                           <Label className="text-[12px] font-bold tracking-widest uppercase text-gray-500 block">Operating Timezone</Label>
+                           <div className="relative group">
+                              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors z-10" />
+                              <Select value={quickPastor.timezone} onValueChange={(v) => setQuickPastor(prev => ({ ...prev, timezone: v }))}>
+                                 <SelectTrigger className={cn(selectStyle, "pl-10 h-12 bg-gray-50/50")}>
+                                    <SelectValue placeholder="Select timezone" />
+                                 </SelectTrigger>
+                                 <SelectContent position="popper" side="bottom" className="z-[130] max-h-[300px] rounded-2xl border-none shadow-2xl">
+                                    {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo'].map(tz => (
+                                       <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+                                    ))}
+                                 </SelectContent>
+                              </Select>
+                           </div>
                      </div>
                   </div>
 
