@@ -18,13 +18,14 @@ import { Footer } from '../components/Footer';
 import { ChurchCard } from '../components/ChurchCard';
 import { PastorCard } from '../components/PastorCard';
 import { taxonomyAPI, homepageAPI } from '../lib/api';
+import { CitySelect } from '../components/CitySelect';
 import './Home2.css';
 
 const Home2 = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState('churches');
-  const [searchData, setSearchData] = useState({ name: '', location: '', denomination: '' });
+  const [searchData, setSearchData] = useState({ name: '', location: '', coords: null, denomination: '' });
   const [data, setData] = useState({
     featuredChurches: [],
     openChurches: [],
@@ -79,8 +80,12 @@ const Home2 = () => {
 
   const handleSearch = () => {
     const queryParams = new URLSearchParams();
-    if (searchData.name) queryParams.set('search', searchData.name);
-    if (searchData.location) queryParams.set('city', searchData.location);
+    if (searchData.name) queryParams.set('q', searchData.name);
+    if (searchData.location) queryParams.set('location', searchData.location);
+    if (searchData.coords) {
+      queryParams.set('lat', searchData.coords.lat);
+      queryParams.set('lng', searchData.coords.lng);
+    }
     if (searchData.denomination) queryParams.set('denomination', searchData.denomination);
     navigate(`/explore?type=${activeTab === 'churches' ? 'church' : 'pastor'}&${queryParams.toString()}`);
   };
@@ -136,14 +141,17 @@ const Home2 = () => {
                     />
                   </div>
                   
-                  <div className="flex-1 flex items-center px-4 bg-white/10 rounded-2xl border border-white/10">
-                    <MapPin className="h-4 w-4 text-brand mr-3" />
-                    <input 
-                      type="text" 
+                  <div className="flex-1 flex items-center bg-white/10 rounded-2xl border border-white/10 group/city overflow-hidden">
+                    <CitySelect 
                       placeholder="Near city..." 
-                      className="bg-transparent border-none focus:ring-0 w-full h-14 text-sm text-white font-medium placeholder:text-white/60"
+                      variant="transparent-glass"
                       value={searchData.location}
-                      onChange={(e) => setSearchData({...searchData, location: e.target.value})}
+                      onChange={(cityName, cityData) => setSearchData({
+                        ...searchData, 
+                        location: cityName,
+                        coords: cityData ? { lat: cityData.lat, lng: cityData.lng } : null
+                      })}
+                      className="home2-city-select"
                     />
                   </div>
 

@@ -79,6 +79,8 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
 
   const inputStyles = variant === "outline" 
     ? "bg-white border-slate-200 rounded-xl border h-11 px-4 pl-10" 
+    : variant === "transparent-glass"
+    ? "bg-transparent border-none focus:ring-0 text-white placeholder:text-white/60 h-14 pl-10"
     : "border-0 border-b border-slate-200 bg-transparent rounded-none h-14 pl-10";
 
   return (

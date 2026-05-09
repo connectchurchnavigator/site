@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Home4 from './pages/Home4';
+import Home2 from './pages/Home2';
 import About2 from './pages/About2';
 import AuthPage from './pages/AuthPage';
 import Explore2 from './pages/Explore2';
@@ -49,7 +49,7 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/" element={<Home4 />} />
+      <Route path="/" element={<Home2 />} />
       <Route path="/about" element={<About2 />} />
       <Route path="/explore" element={<Explore2 />} />
       <Route path="/church/:slug" element={<ChurchDetailPage />} />
