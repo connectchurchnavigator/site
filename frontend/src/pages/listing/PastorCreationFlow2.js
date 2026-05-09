@@ -720,7 +720,7 @@ const PastorCreationFlow2 = () => {
                                  <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                     <Input 
-                                       placeholder="Enter city or pincode" 
+                                       placeholder="e.g. London, Dallas, etc." 
                                        value={formData.city} 
                                        onChange={(e) => {
                                           updateFormData('city', e.target.value);
@@ -1249,7 +1249,7 @@ const PastorCreationFlow2 = () => {
                         <div className="relative">
                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                            <Input 
-                              placeholder="Enter city or pincode" 
+                              placeholder="e.g. London, Dallas, etc." 
                               value={quickChurch.city} 
                               onChange={(e) => {
                                  setQuickChurch({ ...quickChurch, city: e.target.value });

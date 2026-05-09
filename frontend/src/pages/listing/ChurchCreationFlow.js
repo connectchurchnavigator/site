@@ -1559,7 +1559,7 @@ const ChurchCreationFlow = () => {
                                           }));
                                        }
                                     }}
-                                    placeholder="e.g. Hyderabad, Dallas, etc."
+                                    placeholder="e.g. London, Dallas, etc."
                                     variant="outline"
                                  />
                               </GMBRow>
@@ -1983,10 +1983,18 @@ const ChurchCreationFlow = () => {
                                                       <div className="absolute left-[15px] top-1/2 -translate-y-1/2 w-4 h-[2px] bg-slate-200" />
                                                       <div className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", isHidden ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-slate-200 shadow-sm")}>
                                                          <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-[10px]">MAIN</div>
+                                                            <div className="w-10 h-10 rounded-full bg-white border border-[#6c1cff]/10 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                                                               {main.logo ? (
+                                                                  <img src={getImageUrl(main.logo)} alt={main.name} className="w-full h-full object-cover" />
+                                                               ) : (
+                                                                  <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-[10px]">MAIN</div>
+                                                               )}
+                                                            </div>
                                                             <div>
                                                                <div className="text-[13px] font-semibold text-slate-700">{main.name}</div>
-                                                               <div className="text-[10px] text-slate-400">Main Branch / Parent</div>
+                                                               <div className="text-[10px] text-slate-400">
+                                                                  {main.city ? `${main.city} • ` : ''}Main Branch / Parent
+                                                               </div>
                                                             </div>
                                                          </div>
                                                          <button
@@ -2004,12 +2012,18 @@ const ChurchCreationFlow = () => {
 
                                              {/* Current Church Node */}
                                              <div className="flex items-center gap-3 p-4 rounded-xl bg-purple-50 border border-purple-100 ring-2 ring-purple-100/50">
-                                                <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white">
-                                                   <Sparkles className="h-5 w-5" />
+                                                <div className="w-12 h-12 rounded-xl bg-purple-600 flex items-center justify-center text-white overflow-hidden shadow-lg">
+                                                   {formData.logo ? (
+                                                      <img src={getImageUrl(formData.logo)} alt={formData.name} className="w-full h-full object-cover" />
+                                                   ) : (
+                                                      <Sparkles className="h-6 w-6" />
+                                                   )}
                                                 </div>
                                                 <div>
                                                    <div className="text-[14px] font-bold text-purple-900">{formData.name || 'Your Church'}</div>
-                                                   <div className="text-[11px] text-purple-600 font-medium">Currently Editing</div>
+                                                   <div className="text-[11px] text-purple-600 font-medium">
+                                                      {formData.city ? `${formData.city} • ` : ''}Currently Editing
+                                                   </div>
                                                 </div>
                                              </div>
 
@@ -2070,10 +2084,16 @@ const ChurchCreationFlow = () => {
                                                          <div className="absolute left-[15px] top-1/2 -translate-y-1/2 w-4 h-[2px] bg-slate-200" />
                                                          <div className={cn("flex items-center justify-between p-3 rounded-xl border transition-all", isHidden ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-slate-200 shadow-sm")}>
                                                             <div className="flex items-center gap-3">
-                                                               <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-400 font-bold text-[10px]">BRANCH</div>
+                                                               <div className="w-10 h-10 rounded-full bg-white border border-purple-100 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                                                                  {s.logo ? (
+                                                                     <img src={getImageUrl(s.logo)} alt={s.name} className="w-full h-full object-cover" />
+                                                                  ) : (
+                                                                     <div className="w-full h-full bg-purple-50 flex items-center justify-center text-purple-400 font-bold text-[10px]">BRANCH</div>
+                                                                  )}
+                                                               </div>
                                                                <div>
                                                                   <div className="text-[13px] font-semibold text-slate-700">{s.name}</div>
-                                                                  <div className="text-[10px] text-slate-400">{s.city}, {s.state}</div>
+                                                                  <div className="text-[10px] text-slate-400">{s.city ? `${s.city}` : ''}{s.state ? `, ${s.state}` : ''}</div>
                                                                </div>
                                                             </div>
                                                             <div className="flex items-center gap-1">
@@ -2739,7 +2759,7 @@ const ChurchCreationFlow = () => {
                                     }));
                                  }
                               }}
-                              placeholder="e.g. Hyderabad, Dallas..."
+                              placeholder="e.g. London, Dallas, etc."
                               variant="outline"
                            />
                         </div>
@@ -2861,7 +2881,7 @@ const ChurchCreationFlow = () => {
                                     }));
                                  }
                               }}
-                              placeholder="e.g. Hyderabad, Dallas..."
+                              placeholder="e.g. London, Dallas, etc."
                               variant="outline"
                            />
                         </div>
