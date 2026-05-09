@@ -7,6 +7,7 @@ import {
 import { Button } from '../components/ui/button';
 import { NavbarPremium } from '../components/NavbarPremium';
 import { taxonomyAPI } from '../lib/api';
+import { CitySelect } from '../components/CitySelect';
 import './Home4.css';
 
 const Home4 = () => {
@@ -16,6 +17,7 @@ const Home4 = () => {
   const [searchData, setSearchData] = useState({
     name: '',
     location: '',
+    coords: null,
     denomination: '',
     openNow: 'all'
   });
@@ -64,8 +66,12 @@ const Home4 = () => {
   const handleSearch = (e) => {
     e.preventDefault();
     const query = new URLSearchParams();
-    if (searchData.name) query.append('name', searchData.name);
+    if (searchData.name) query.append('q', searchData.name);
     if (searchData.location) query.append('location', searchData.location);
+    if (searchData.coords) {
+      query.append('lat', searchData.coords.lat);
+      query.append('lng', searchData.coords.lng);
+    }
     if (searchData.denomination) query.append('denomination', searchData.denomination);
     if (searchData.openNow !== 'all') query.append('openNow', 'true');
     
@@ -117,13 +123,16 @@ const Home4 = () => {
                   />
                 </div>
                 
-                <div className="search-field">
-                  <MapPin className="field-icon" />
-                  <input 
-                    type="text" 
+                <div className="search-field location-field">
+                  <CitySelect 
                     placeholder="Location"
                     value={searchData.location}
-                    onChange={(e) => setSearchData({...searchData, location: e.target.value})}
+                    onChange={(cityName, cityData) => setSearchData({
+                      ...searchData, 
+                      location: cityName,
+                      coords: cityData ? { lat: cityData.lat, lng: cityData.lng } : null
+                    })}
+                    className="home-city-select"
                   />
                 </div>
 

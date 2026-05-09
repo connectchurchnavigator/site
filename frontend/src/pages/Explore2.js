@@ -115,23 +115,27 @@ export default function Explore2() {
     zoom: 2 // Wide World View initially
   });
   const [filters, setFilters] = useState({
-    search: searchParams.get('search') || '',
-    location: '',
-    denomination: [],
+    search: searchParams.get('search') || searchParams.get('q') || '',
+    location: searchParams.get('location') || searchParams.get('city') || '',
+    denomination: searchParams.get('denomination') ? [searchParams.get('denomination')] : [],
     language: [],
     worshipStyle: [],
     ministry: [],
     qualification: '',
     designation: '',
     experience: 0,
-    openNow: searchParams.get('open_now') === 'true',
+    openNow: searchParams.get('open_now') === 'true' || searchParams.get('openNow') === 'true',
     useCustomTime: false,
     customDate: new Date().toISOString().split('T')[0], // Default to today's date
     startTime: '14:00',
     endTime: '15:00',
-    orderBy: 'a-z',
-    radius: 25,
-    userCoords: null
+    orderBy: (searchParams.get('lat') || searchParams.get('latitude')) ? 'nearby' : 'a-z',
+    radius: parseInt(searchParams.get('radius')) || 25,
+    userCoords: (searchParams.get('lat') && searchParams.get('lng')) 
+      ? { lat: parseFloat(searchParams.get('lat')), lng: parseFloat(searchParams.get('lng')) }
+      : (searchParams.get('latitude') && searchParams.get('longitude'))
+        ? { lat: parseFloat(searchParams.get('latitude')), lng: parseFloat(searchParams.get('longitude')) }
+        : null
   });
   const [mapBounds, setMapBounds] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
@@ -140,7 +144,10 @@ export default function Explore2() {
 
   useEffect(() => {
     fetchTaxonomies();
-    detectLocation();
+    // Only detect location if no coordinates were passed in URL
+    if (!searchParams.get('lat') && !searchParams.get('latitude')) {
+      detectLocation();
+    }
   }, []);
 
   const detectLocation = () => {
