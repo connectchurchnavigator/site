@@ -136,6 +136,17 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
         >
           <Command shouldFilter={false} className="bg-white">
             <CommandList className="max-h-[300px] overflow-y-auto custom-scrollbar">
+              {loading ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2 text-brand" />
+                  Connecting to cities database...
+                </div>
+              ) : cities.length === 0 && inputValue.length >= 2 ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  <p>No cities found for "{inputValue}"</p>
+                  <p className="mt-2 opacity-50">Checking: {process.env.REACT_APP_BACKEND_URL || 'Local API'}</p>
+                </div>
+              ) : null}
               <CommandGroup>
                 {cities.map((city) => (
                   <CommandItem
