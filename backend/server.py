@@ -839,19 +839,18 @@ async def get_churches(
         current_day = now.strftime('%A')
         query['services'] = { '$elemMatch': { 'day': current_day } }
         
-    # Map Bounds Filtering
-    if min_lat is not None and max_lat is not None and min_lng is not None and max_lng is not None:
-        query['latitude'] = {'$gte': min_lat, '$lte': max_lat}
-        query['longitude'] = {'$gte': min_lng, '$lte': max_lng}
-    elif latitude is not None and longitude is not None and radius is not None:
-        # Simple circular radius filtering (approximate)
-        # For production, use $nearSphere with 2dsphere index
+    # Geolocation Filtering
+    if latitude is not None and longitude is not None and radius is not None:
+        # Proximity takes priority if provided
         # 1 degree lat is ~111km. 1 degree lng is ~111km * cos(lat)
-        # For 50km radius: lat +/- 0.45, lng +/- 0.45
         lat_range = radius / 111.0
         lng_range = radius / (111.0 * math.cos(math.radians(latitude)))
         query['latitude'] = {'$gte': latitude - lat_range, '$lte': latitude + lat_range}
         query['longitude'] = {'$gte': longitude - lng_range, '$lte': longitude + lng_range}
+    elif min_lat is not None and max_lat is not None and min_lng is not None and max_lng is not None:
+        # Map Bounds as fallback
+        query['latitude'] = {'$gte': min_lat, '$lte': max_lat}
+        query['longitude'] = {'$gte': min_lng, '$lte': max_lng}
 
     # Execution
     try:

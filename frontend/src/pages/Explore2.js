@@ -218,7 +218,7 @@ export default function Explore2() {
     try {
       let params = {
         search: filters.search || undefined,
-        city: (filters.location && filters.location !== 'Current Map View' && filters.location !== 'Current Location') ? filters.location : undefined,
+        city: (filters.location && filters.location !== 'Current Map View' && filters.location !== 'Current Location' && !filters.userCoords) ? filters.location : undefined,
         denomination: filters.denomination.length > 0 ? filters.denomination : undefined,
         language: filters.language.length > 0 ? filters.language : undefined,
         order_by: filters.orderBy,
