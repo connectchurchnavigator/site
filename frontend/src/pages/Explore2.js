@@ -322,12 +322,6 @@ export default function Explore2() {
             }}
           />
         </div>
-        <button 
-          onClick={showAllGlobally}
-          className="text-[10px] font-bold text-brand hover:text-brand/80 transition-colors border border-brand/20 hover:border-brand/40 px-3 py-1.5 rounded-xl uppercase tracking-widest bg-brand/5 whitespace-nowrap"
-        >
-          Global View
-        </button>
       </div>
 
       {/* 3. Opening Status (Church Only) */}
@@ -686,6 +680,12 @@ export default function Explore2() {
                       Showing {results.length} of {total} {activeType === 'church' ? 'Churches' : 'Pastors'}
                     </span>
                   </div>
+                  <button 
+                    onClick={showAllGlobally}
+                    className="text-[10px] font-bold text-brand hover:text-white hover:bg-brand transition-all border border-brand/20 px-4 py-2 rounded-full uppercase tracking-widest bg-brand/5 whitespace-nowrap"
+                  >
+                    Show all {activeType === 'church' ? 'churches' : 'pastors'}
+                  </button>
                 </div>
 
                 {/* Results List */}
