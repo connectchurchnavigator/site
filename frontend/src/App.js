@@ -51,6 +51,8 @@ function AppRoutes() {
       {/* Public Routes */}
       <Route path="/" element={<Home2 />} />
       <Route path="/about" element={<About2 />} />
+      <Route path="/about-us" element={<About2 />} />
+      <Route path="/aboutus" element={<About2 />} />
       <Route path="/explore" element={<Explore2 />} />
       <Route path="/church/:slug" element={<ChurchDetailPage />} />
       <Route path="/pastor/:slug" element={<PastorDetailPage />} />
