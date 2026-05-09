@@ -2933,13 +2933,14 @@ async def log_requests(request: Request, call_next):
     return response
 
 # Flexible CORS for production
-frontend_url = os.environ.get('FRONTEND_URL')
+frontend_url = os.environ.get('FRONTEND_URL', '*')
 allowed_origins = ["*"]
-if os.environ.get('NODE_ENV') == 'production' and frontend_url:
-    # Split by comma if multiple URLs are provided
-    allowed_origins = [origin.strip() for origin in frontend_url.split(',')]
-elif os.environ.get('NODE_ENV') == 'development':
-    allowed_origins = ["*"]
+if os.environ.get('NODE_ENV') == 'production' and frontend_url != '*':
+    # Clean up origins: remove spaces and trailing slashes
+    allowed_origins = [origin.strip().rstrip('/') for origin in frontend_url.split(',')]
+    print(f"CORS: Production mode enabled. Allowing: {allowed_origins}")
+else:
+    print("CORS: Development/Default mode. Allowing all origins (*)")
 
 app.add_middleware(
     CORSMiddleware,
