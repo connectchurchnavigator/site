@@ -145,6 +145,34 @@ const FACILITIES_LIST = [
    'Wheelchair Accessible',
 ];
 
+const COUNTRY_TIMEZONE_MAP = {
+   'IN': 'Asia/Kolkata',
+   'US': 'America/New_York',
+   'GB': 'Europe/London',
+   'CA': 'America/Toronto',
+   'AU': 'Australia/Sydney',
+   'AE': 'Asia/Dubai',
+   'SG': 'Asia/Singapore',
+   'FR': 'Europe/Paris',
+   'NG': 'Africa/Lagos',
+   'JP': 'Asia/Tokyo',
+   'DE': 'Europe/Berlin',
+   'CH': 'Europe/Zurich',
+   'NZ': 'Pacific/Auckland',
+   'ZA': 'Africa/Johannesburg',
+   'BR': 'America/Sao_Paulo',
+   'PH': 'Asia/Manila',
+   'MY': 'Asia/Kuala_Lumpur',
+   'KR': 'Asia/Seoul',
+   'RU': 'Europe/Moscow',
+   'IT': 'Europe/Rome',
+   'ES': 'Europe/Madrid',
+   'NL': 'Europe/Amsterdam',
+   'SE': 'Europe/Stockholm',
+   'NO': 'Europe/Oslo',
+   'IE': 'Europe/Dublin',
+};
+
 // --- Internal Helper Components Moved Outside to Prevent Focus Loss ---
 
 const GMBRow = ({ label, children, className, hint, error }) => (
@@ -2428,10 +2456,10 @@ const ChurchCreationFlow = () => {
          <Dialog open={showQuickPastorDialog} onOpenChange={setShowQuickPastorDialog}>
             <DialogContent className="max-w-2xl p-0 border-none rounded-[32px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
                <div className="flex-1 p-10 space-y-10 bg-white overflow-y-auto custom-scrollbar min-h-0">
-                  <div className="space-y-3">
-                     <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Quick Pastor Profile</h2>
+                  <DialogHeader className="space-y-3">
+                     <DialogTitle className="text-3xl font-bold text-slate-900 tracking-tight">Quick Pastor Profile</DialogTitle>
                      <p className="text-[15px] text-slate-500 font-medium leading-relaxed">Complete your leadership profile with location and contact details.</p>
-                  </div>
+                  </DialogHeader>
 
                   <div className="space-y-12">
                      <div className="flex justify-center">
@@ -2452,6 +2480,7 @@ const ChurchCreationFlow = () => {
                         <div className="space-y-3">
                            <Label className="text-[13px] font-bold text-gray-500 uppercase tracking-widest text-left block">Full Name *</Label>
                            <Input
+                              autoFocus
                               name="qp-fullname-unique"
                               autoComplete="new-password"
                               value={quickPastor.name}
@@ -2491,6 +2520,10 @@ const ChurchCreationFlow = () => {
                         <PhoneInputPremium
                            value={quickPastor.phone}
                            onChange={(val) => setQuickPastor(prev => ({ ...prev, phone: val }))}
+                           onCountryChange={(code) => {
+                              const tz = COUNTRY_TIMEZONE_MAP[code];
+                              if (tz) setQuickPastor(prev => ({ ...prev, timezone: tz }));
+                           }}
                            placeholder="Phone number"
                         />
                      </div>
@@ -2706,10 +2739,10 @@ const ChurchCreationFlow = () => {
          <Dialog open={showQuickChurchDialog} onOpenChange={setShowQuickChurchDialog}>
             <DialogContent className="max-w-2xl p-0 border-none overflow-hidden rounded-3xl shadow-2xl">
                <div className="p-10 space-y-8 bg-white max-h-[90vh] overflow-y-auto custom-scrollbar">
-                  <div className="space-y-3">
-                     <h2 className="text-2xl font-semibold text-[#202124] tracking-tight">Quick Church Profile</h2>
+                  <DialogHeader className="space-y-3">
+                     <DialogTitle className="text-2xl font-semibold text-[#202124] tracking-tight">Quick Church Profile</DialogTitle>
                      <p className="text-[15px] text-[#5f6368]">Add basic details to link this {quickChurchTrigger === 'main' ? 'main branch' : 'branch'} to your profile.</p>
-                  </div>
+                  </DialogHeader>
 
                   <div className="space-y-6">
                      <div className="flex justify-center mb-6">
@@ -2727,7 +2760,15 @@ const ChurchCreationFlow = () => {
                      </div>
                      <div className="space-y-2">
                         <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-500">Church Name *</Label>
-                        <Input name="qc-church-name-secure" autoComplete="new-password" placeholder="Enter church name" value={quickChurch.name} onChange={(e) => setQuickChurch({ ...quickChurch, name: e.target.value })} className={inputStyle} />
+                        <Input 
+                           autoFocus
+                           name="qc-church-name-secure" 
+                           autoComplete="new-password" 
+                           placeholder="Enter church name" 
+                           value={quickChurch.name} 
+                           onChange={(e) => setQuickChurch({ ...quickChurch, name: e.target.value })} 
+                           className={inputStyle} 
+                        />
                      </div>
                      <div className="grid grid-cols-2 gap-8">
                         <div className="space-y-2">
@@ -2739,6 +2780,10 @@ const ChurchCreationFlow = () => {
                            <PhoneInputPremium
                               value={quickChurch.phone}
                               onChange={(val) => setQuickChurch({ ...quickChurch, phone: val })}
+                              onCountryChange={(code) => {
+                                 const tz = COUNTRY_TIMEZONE_MAP[code];
+                                 if (tz) setQuickChurch(prev => ({ ...prev, timezone: tz }));
+                              }}
                               placeholder="Phone number"
                            />
                         </div>

@@ -164,8 +164,8 @@ export default function Explore2() {
           toast.success("Location detected!");
         },
         (error) => {
-          console.warn("Geolocation failed or denied, staying in Global view:", error.message);
-          // Default to Global if denied or failed
+          // Only log the message to avoid serialization issues with GeolocationPositionError
+          console.warn("Geolocation failed or denied:", error?.message || "Unknown error");
           setFilters(prev => ({ 
             ...prev, 
             location: 'Global',
@@ -219,12 +219,11 @@ export default function Explore2() {
         language: filters.language.length > 0 ? filters.language : undefined,
         order_by: filters.orderBy,
         skip: 0,
-        limit: 100, // Increased limit for better map experience
-        limit: globalSearch ? 500 : 100, // Show more in global mode
-        min_lat: globalSearch ? undefined : mapBounds?.minLat,
-        max_lat: globalSearch ? undefined : mapBounds?.maxLat,
-        min_lng: globalSearch ? undefined : mapBounds?.minLng,
-        max_lng: globalSearch ? undefined : mapBounds?.maxLng,
+        limit: globalSearch ? 500 : 100, 
+        min_lat: (globalSearch || activeType === 'pastor') ? undefined : mapBounds?.minLat,
+        max_lat: (globalSearch || activeType === 'pastor') ? undefined : mapBounds?.maxLat,
+        min_lng: (globalSearch || activeType === 'pastor') ? undefined : mapBounds?.minLng,
+        max_lng: (globalSearch || activeType === 'pastor') ? undefined : mapBounds?.maxLng,
         open_now: filters.openNow || undefined,
         start_time: filters.useCustomTime ? filters.startTime : undefined,
         end_time: filters.useCustomTime ? filters.endTime : undefined,
@@ -234,6 +233,9 @@ export default function Explore2() {
       if (activeType === 'pastor') {
         params = {
             ...params,
+            city: (!globalSearch && filters.location !== 'Global') ? filters.location : undefined,
+            latitude: (!globalSearch && filters.userCoords?.lat) ? filters.userCoords.lat : undefined,
+            longitude: (!globalSearch && filters.userCoords?.lng) ? filters.userCoords.lng : undefined,
             qualification: filters.qualification || undefined,
             designation: filters.designation || undefined,
             min_experience: filters.experience > 0 ? filters.experience : undefined
@@ -253,7 +255,7 @@ export default function Explore2() {
       setResults(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch (error) {
-      console.error('Error fetching results:', error);
+      console.error('Error fetching results:', error?.message || error);
       toast.error('Failed to load results');
     } finally {
       setLoading(false);
@@ -671,7 +673,7 @@ export default function Explore2() {
             {/* 2. Results Column (Middle) */}
             <div className={`
                 ${mobileView === 'list' ? 'flex' : 'hidden'} 
-                lg:flex lg:w-[500px] border-r border-slate-100 bg-white overflow-y-auto custom-scrollbar flex-col
+                lg:flex ${activeType === 'church' ? 'lg:w-[500px]' : 'flex-1'} border-r border-slate-100 bg-white overflow-y-auto custom-scrollbar flex-col
             `}>
               <div className="p-6 space-y-6">
                 {/* Stats Bar */}
@@ -682,6 +684,7 @@ export default function Explore2() {
                       Showing {results.length} of {total} {activeType === 'church' ? 'Churches' : 'Pastors'}
                     </span>
                   </div>
+                  
                   <Tabs 
                     value={globalSearch ? 'global' : 'nearby'} 
                     onValueChange={(v) => {
@@ -723,10 +726,10 @@ export default function Explore2() {
                 </div>
 
                 {/* Results List */}
-                <div className="space-y-6">
+                <div className={activeType === 'pastor' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-6"}>
                   {loading ? (
-                    [...Array(5)].map((_, i) => (
-                      <div key={i} className="h-64 bg-white rounded-3xl border border-slate-100 shimmer"></div>
+                    [...Array(6)].map((_, i) => (
+                      <div key={i} className={`h-64 bg-white rounded-3xl border border-slate-100 shimmer ${activeType === 'pastor' ? '' : 'w-full'}`}></div>
                     ))
                   ) : results.length > 0 ? (
                     results.map((item) => (
@@ -768,40 +771,44 @@ export default function Explore2() {
             </div>
 
             {/* 3. Map View (Right) */}
-            <div className={`
-                ${mobileView === 'map' ? 'block' : 'hidden'} 
-                lg:block flex-1 bg-slate-100 relative overflow-hidden h-full
-            `}>
-                <MapboxExploreMap 
-                  results={results} 
-                  type={activeType} 
-                  hoveredId={hoveredId} 
-                  onMarkerHover={setHoveredId}
-                  center={filters.userCoords}
-                  onBoundsChange={(bounds) => {
-                    setFilters(prev => ({ 
-                      ...prev, 
-                      location: 'Current Map View'
-                    }));
-                    setMapBounds(bounds);
-                  }}
-                />
-            </div>
+            {activeType === 'church' && (
+              <div className={`
+                  ${mobileView === 'map' ? 'block' : 'hidden'} 
+                  lg:block flex-1 bg-slate-100 relative overflow-hidden h-full
+              `}>
+                  <MapboxExploreMap 
+                    results={results} 
+                    type={activeType} 
+                    hoveredId={hoveredId} 
+                    onMarkerHover={setHoveredId}
+                    center={filters.userCoords}
+                    onBoundsChange={(bounds) => {
+                      setFilters(prev => ({ 
+                        ...prev, 
+                        location: 'Current Map View'
+                      }));
+                      setMapBounds(bounds);
+                    }}
+                  />
+              </div>
+            )}
           </div>
 
           {/* Mobile Floating Toggle Button (Visible only on mobile) */}
-          <div className="lg:hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
-             <Button 
-                onClick={() => setMobileView(mobileView === 'list' ? 'map' : 'list')}
-                className="rounded-full h-12 px-6 bg-slate-900 text-white shadow-2xl hover:bg-slate-800 transition-all border border-white/20 backdrop-blur-md"
-             >
-                {mobileView === 'list' ? (
-                    <><MapIcon className="w-4 h-4 mr-2" /> Show Map</>
-                ) : (
-                    <><List className="w-4 h-4 mr-2" /> Show List</>
-                )}
-             </Button>
-          </div>
+          {activeType === 'church' && (
+            <div className="lg:hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
+               <Button 
+                  onClick={() => setMobileView(mobileView === 'list' ? 'map' : 'list')}
+                  className="rounded-full h-12 px-6 bg-slate-900 text-white shadow-2xl hover:bg-slate-800 transition-all border border-white/20 backdrop-blur-md"
+               >
+                  {mobileView === 'list' ? (
+                      <><MapIcon className="w-4 h-4 mr-2" /> Show Map</>
+                  ) : (
+                      <><List className="w-4 h-4 mr-2" /> Show List</>
+                  )}
+               </Button>
+            </div>
+          )}
         </div>
       </section>
 

@@ -8,7 +8,6 @@ import {
   ChevronLeft, X, User, Languages, Briefcase, GraduationCap, Award, Video, Clock, QrCode, ShieldCheck, Navigation
 } from 'lucide-react';
 import ClaimListingModal from '../components/ClaimListingModal';
-import GoogleMap from '../components/GoogleMap';
 import { motion, AnimatePresence } from 'framer-motion';
 import { NavbarPremium } from '../components/NavbarPremium';
 import { Footer } from '../components/Footer';
@@ -640,19 +639,6 @@ const PastorDetailPage = () => {
             <SectionCard className="overflow-hidden p-5">
               <SectionHeading icon={MapPin} title="Location" />
               
-              {/* Map */}
-              {(pastor.address_line1 || (pastor.latitude && pastor.longitude)) && (
-                <div className="h-48 relative rounded-[5px] overflow-hidden mb-5 border border-slate-100 shadow-inner">
-                  <GoogleMap 
-                    address={pastor.address_line1}
-                    city={pastor.city}
-                    state={pastor.state}
-                    latitude={pastor.latitude}
-                    longitude={pastor.longitude}
-                    churchName={pastor.name}
-                  />
-                </div>
-              )}
 
               <div className="space-y-3">
                 {[

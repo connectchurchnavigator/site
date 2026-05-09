@@ -12,8 +12,6 @@ import { Badge } from '../../components/ui/badge';
 import { Progress } from '../../components/ui/progress';
 import { PhoneInputPremium } from '../../components/PhoneInputPremium';
 import { pastorAPI, taxonomyAPI, churchAPI, utilityAPI } from '../../lib/api';
-import MapGL, { Marker, NavigationControl, GeolocateControl } from 'react-map-gl/mapbox';
-import 'mapbox-gl/dist/mapbox-gl.css';
 import {
    Command,
    CommandEmpty,
@@ -114,6 +112,34 @@ const ROLES_INTERESTED_OPTIONS = [
    'Chaplain',
 ];
 
+const COUNTRY_TIMEZONE_MAP = {
+   'IN': 'Asia/Kolkata',
+   'US': 'America/New_York',
+   'GB': 'Europe/London',
+   'CA': 'America/Toronto',
+   'AU': 'Australia/Sydney',
+   'AE': 'Asia/Dubai',
+   'SG': 'Asia/Singapore',
+   'FR': 'Europe/Paris',
+   'NG': 'Africa/Lagos',
+   'JP': 'Asia/Tokyo',
+   'DE': 'Europe/Berlin',
+   'CH': 'Europe/Zurich',
+   'NZ': 'Pacific/Auckland',
+   'ZA': 'Africa/Johannesburg',
+   'BR': 'America/Sao_Paulo',
+   'PH': 'Asia/Manila',
+   'MY': 'Asia/Kuala_Lumpur',
+   'KR': 'Asia/Seoul',
+   'RU': 'Europe/Moscow',
+   'IT': 'Europe/Rome',
+   'ES': 'Europe/Madrid',
+   'NL': 'Europe/Amsterdam',
+   'SE': 'Europe/Stockholm',
+   'NO': 'Europe/Oslo',
+   'IE': 'Europe/Dublin',
+};
+
 // --- Internal Helper Components ---
 
 const GMBRow = ({ label, children, className, hint }) => (
@@ -142,7 +168,7 @@ const PastorCreationFlow2 = () => {
    const [churchPopoverOpen, setChurchPopoverOpen] = useState(false);
    const [quickChurch, setQuickChurch] = useState({ 
       name: '', email: '', phone: '', denomination: '',
-      latitude: '', longitude: '', timezone: 'UTC', google_maps_link: '',
+      latitude: '', longitude: '', timezone: 'Europe/London', google_maps_link: '',
       address_line1: '',
       city: '',
       relationship_to_listing: ''
@@ -155,6 +181,10 @@ const PastorCreationFlow2 = () => {
    });
    const [quickChurchSearchSuggestions, setQuickChurchSearchSuggestions] = useState([]);
    const [quickChurchSearchLoading, setQuickChurchSearchLoading] = useState(false);
+   const [citySuggestions, setCitySuggestions] = useState([]);
+   const [cityLoading, setCityLoading] = useState(false);
+   const [quickCitySuggestions, setQuickCitySuggestions] = useState([]);
+   const [quickCityLoading, setQuickCityLoading] = useState(false);
    const [passionInput, setPassionInput] = useState('');
    const [citiesInput, setCitiesInput] = useState('');
 
@@ -200,7 +230,7 @@ const PastorCreationFlow2 = () => {
       google_maps_link: '',
       latitude: null,
       longitude: null,
-      timezone: 'UTC',
+      timezone: 'Europe/London',
       profile_picture: '',
       current_designation: '',
       church_associated_to: [],
@@ -248,25 +278,9 @@ const PastorCreationFlow2 = () => {
       fetchTaxonomies();
       fetchChurches();
       if (id) fetchExistingPastor();
-      else detectUserInitialLocation();
+      if (id) fetchExistingPastor();
    }, [id]);
 
-   const detectUserInitialLocation = async () => {
-      try {
-         const response = await fetch('https://ipapi.co/json/');
-         const data = await response.json();
-         if (data.latitude && data.longitude) {
-            setMapViewport(prev => ({
-               ...prev,
-               latitude: data.latitude,
-               longitude: data.longitude,
-               zoom: 12
-            }));
-         }
-      } catch (e) {
-         console.warn('Initial location detection failed:', e.message);
-      }
-   };
 
    useEffect(() => {
       window.scrollTo(0, 0);
@@ -316,99 +330,73 @@ const PastorCreationFlow2 = () => {
       } catch (error) { }
    };
 
+   const handleCitySearch = async (query) => {
+      if (!query || query.length < 3) {
+         setCitySuggestions([]);
+         return;
+      }
+      if (!MAPBOX_TOKEN) {
+         console.warn("Mapbox token missing, skipping city search");
+         return;
+      }
+      setCityLoading(true);
+      try {
+         const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&types=place,postcode&limit=5`);
+         if (!res.ok) throw new Error(`Search failed with status: ${res.status}`);
+         const data = await res.json();
+         setCitySuggestions(data.features || []);
+      } catch (e) {
+         console.error("City search failed:", e?.message || "Unknown error");
+      } finally {
+         setCityLoading(false);
+      }
+   };
+
+   const handleCitySelect = (suggestion) => {
+      const [lng, lat] = suggestion.center;
+      updateFormData('city', suggestion.text);
+      updateFormData('latitude', lat.toString());
+      updateFormData('longitude', lng.toString());
+      setCitySuggestions([]);
+   };
+
+   const handleQuickCitySearch = async (query) => {
+      if (!query || query.length < 3) {
+         setQuickCitySuggestions([]);
+         return;
+      }
+      if (!MAPBOX_TOKEN) {
+         console.warn("Mapbox token missing, skipping quick city search");
+         return;
+      }
+      setQuickCityLoading(true);
+      try {
+         const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&types=place,postcode&limit=5`);
+         if (!res.ok) throw new Error(`Quick search failed with status: ${res.status}`);
+         const data = await res.json();
+         setQuickCitySuggestions(data.features || []);
+      } catch (e) {
+         console.error("Quick City search failed:", e?.message || "Unknown error");
+      } finally {
+         setQuickCityLoading(false);
+      }
+   };
+
+   const handleQuickCitySelect = (suggestion) => {
+      const [lng, lat] = suggestion.center;
+      setQuickChurch(prev => ({
+         ...prev,
+         city: suggestion.text,
+         latitude: lat.toString(),
+         longitude: lng.toString()
+      }));
+      setQuickCitySuggestions([]);
+   };
+
    const updateFormData = (field, value) => {
       setFormData(prev => ({ ...prev, [field]: value }));
    };
 
-   const detectTimezone = async (lat, lng) => {
-      if (!lat || !lng) return;
-      try {
-         const res = await utilityAPI.getTimezone(lat, lng);
-         if (res.data.timezone) {
-            updateFormData('timezone', res.data.timezone);
-         }
-      } catch (e) {
-         console.warn('Timezone detection failed:', e.message);
-      }
-   };
-
-   const parseGoogleMapsUrl = (url) => {
-      if (!url) return null;
-      const atPattern = /@(-?\d+\.?\d*),(-?\d+\.?\d*)/;
-      const dPattern = /!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/;
-      const qPattern = /[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/;
-      const placePattern = /place\/[^@]*@(-?\d+\.?\d*),(-?\d+\.?\d*)/;
-
-      let match = url.match(atPattern) || url.match(dPattern) || url.match(qPattern) || url.match(placePattern);
-      if (match) return { lat: parseFloat(match[1]), lng: parseFloat(match[2] ) };
-      return null;
-   };
-
-   const handleGoogleMapsLinkChange = async (url) => {
-      updateFormData('google_maps_link', url);
-      let coords = parseGoogleMapsUrl(url);
-      
-      if (!coords && url && url.startsWith('http')) {
-         setResolvingMap(true);
-         const loadingToast = toast.loading('Expanding Maps link...');
-         try {
-            const res = await utilityAPI.resolveMap(url);
-            if (res.data.latitude && res.data.longitude) {
-               coords = { lat: res.data.latitude, lng: res.data.longitude };
-               toast.success('Link expanded successfully', { id: loadingToast });
-            } else {
-               toast.error('Could not extract coordinates from this link', { id: loadingToast });
-            }
-         } catch (e) {
-            toast.error('Failed to resolve Maps link', { id: loadingToast });
-         } finally {
-            setResolvingMap(false);
-         }
-      }
-
-      if (coords) {
-         updateFormData('latitude', coords.lat.toString());
-         updateFormData('longitude', coords.lng.toString());
-         detectTimezone(coords.lat, coords.lng);
-         setMapViewport(prev => ({ ...prev, latitude: coords.lat, longitude: coords.lng, zoom: 15 }));
-         if (!resolvingMap) toast.info('Coordinates extracted.');
-      } else if (url && !url.includes('http')) {
-         handleMapboxSearch(url);
-      }
-   };
-
-   const handleMapboxSearch = async (query) => {
-      if (!query || query.length < 3) return;
-      setSearchLoading(true);
-      try {
-         const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&limit=5`);
-         const data = await res.json();
-         setSearchSuggestions(data.features || []);
-      } catch (e) {
-         console.error('Search failed', e);
-      } finally {
-         setSearchLoading(false);
-      }
-   };
-
-   const handleSuggestionSelect = (suggestion) => {
-      const [lng, lat] = suggestion.center;
-      updateFormData('latitude', lat.toString());
-      updateFormData('longitude', lng.toString());
-      updateFormData('google_maps_link', `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
-      detectTimezone(lat, lng);
-      setMapViewport(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: 15 }));
-      setSearchSuggestions([]);
-      toast.success('Location updated');
-   };
-
-   const handleMarkerDrag = async (e) => {
-      const { lng, lat } = e.lngLat;
-      updateFormData('latitude', lat.toString());
-      updateFormData('longitude', lng.toString());
-      updateFormData('google_maps_link', `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
-      detectTimezone(lat, lng);
-   };
 
    const toggleArrayItem = (field, item) => {
       const current = formData[field] || [];
@@ -419,115 +407,6 @@ const PastorCreationFlow2 = () => {
       }
    };
 
-   // --- Quick Church Map Handlers ---
-   const detectQuickTimezone = async (lat, lng) => {
-      if (!lat || !lng) return;
-      try {
-         const res = await utilityAPI.getTimezone(lat, lng);
-         if (res.data.timezone) {
-            setQuickChurch(prev => ({ ...prev, timezone: res.data.timezone }));
-         }
-      } catch (e) { }
-   };
-
-   const handleQuickGoogleMapsLinkChange = async (url) => {
-      setQuickChurch(prev => ({ ...prev, google_maps_link: url }));
-      let coords = parseGoogleMapsUrl(url);
-      
-      if (!coords && url && url.startsWith('http')) {
-         const loadingToast = toast.loading('Expanding Maps link...');
-         try {
-            const res = await utilityAPI.resolveMap(url);
-            if (res.data.latitude && res.data.longitude) {
-               coords = { lat: res.data.latitude, lng: res.data.longitude };
-               toast.success('Link expanded successfully', { id: loadingToast });
-            } else {
-               toast.error('Could not extract coordinates from this link', { id: loadingToast });
-            }
-         } catch (e) {
-            toast.error('Failed to resolve Maps link', { id: loadingToast });
-         }
-      }
-
-      if (coords) {
-         setQuickChurch(prev => ({ 
-            ...prev, 
-            latitude: coords.lat.toString(), 
-            longitude: coords.lng.toString() 
-         }));
-         detectQuickTimezone(coords.lat, coords.lng);
-         setQuickChurchMapViewport(prev => ({ ...prev, latitude: coords.lat, longitude: coords.lng, zoom: 15 }));
-      } else if (url && !url.includes('http')) {
-         handleQuickMapboxSearch(url);
-      }
-   };
-
-   const handleQuickMapboxSearch = async (query) => {
-      if (!query || query.length < 3) return;
-      setQuickChurchSearchLoading(true);
-      try {
-         const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&limit=5`);
-         const data = await res.json();
-         setQuickChurchSearchSuggestions(data.features || []);
-      } catch (e) { } finally {
-         setQuickChurchSearchLoading(false);
-      }
-   };
-
-   const handleQuickSuggestionSelect = (suggestion) => {
-      const [lng, lat] = suggestion.center;
-      setQuickChurch(prev => ({
-         ...prev,
-         latitude: lat.toString(),
-         longitude: lng.toString(),
-         google_maps_link: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-      }));
-      detectQuickTimezone(lat, lng);
-      setQuickChurchMapViewport(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: 15 }));
-      setQuickChurchSearchSuggestions([]);
-   };
-
-   const handleQuickMarkerDrag = (e) => {
-      const { lng, lat } = e.lngLat;
-      setQuickChurch(prev => ({
-         ...prev,
-         latitude: lat.toString(),
-         longitude: lng.toString(),
-         google_maps_link: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-      }));
-      detectQuickTimezone(lat, lng);
-   };
-
-   const handleQuickDetectLocation = () => {
-      if (!navigator.geolocation) {
-         return toast.error("Geolocation is not supported by your browser");
-      }
-
-      const toastId = toast.loading("Detecting your location...");
-      navigator.geolocation.getCurrentPosition(
-         async (position) => {
-            const { latitude, longitude } = position.coords;
-            setQuickChurch(prev => ({
-               ...prev,
-               latitude: latitude.toString(),
-               longitude: longitude.toString(),
-               google_maps_link: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
-            }));
-            detectQuickTimezone(latitude, longitude);
-            setQuickChurchMapViewport(prev => ({
-               ...prev,
-               latitude,
-               longitude,
-               zoom: 15
-            }));
-            toast.success("Location detected!", { id: toastId });
-         },
-         (error) => {
-            toast.error("Failed to detect location. Please search manually.", { id: toastId });
-         },
-         { enableHighAccuracy: true }
-      );
-   };
 
    const handleQuickChurchCreate = async () => {
       if (!quickChurch.name || !quickChurch.email || !quickChurch.phone || !quickChurch.denomination || !quickChurch.city) {
@@ -559,6 +438,13 @@ const PastorCreationFlow2 = () => {
          toast.error('Failed to create church');
       } finally {
          setQuickChurchLoading(false);
+      }
+   };
+
+   const handlePhoneCountryChange = (countryCode) => {
+      const tz = COUNTRY_TIMEZONE_MAP[countryCode];
+      if (tz) {
+         updateFormData('timezone', tz);
       }
    };
 
@@ -759,153 +645,34 @@ const PastorCreationFlow2 = () => {
                                     <Input value={formData.email} onChange={(e) => updateFormData('email', e.target.value)} placeholder="pastor@email.com" className={inputStyle} />
                                  </GMBRow>
                                  <GMBRow label="Phone *">
-                                    <PhoneInputPremium value={formData.phone} onChange={(val) => updateFormData('phone', val)} placeholder="Phone number" />
+                                    <PhoneInputPremium 
+                                       value={formData.phone} 
+                                       onChange={(val) => updateFormData('phone', val)} 
+                                       onCountryChange={handlePhoneCountryChange}
+                                       placeholder="Phone number" 
+                                    />
                                  </GMBRow>
                               </div>
 
 
-                              <GMBRow label="Map location">
-                                 <div className="space-y-6">
-                                    <div className="relative">
-                                       <div className="flex gap-4">
-                                          <div className="relative flex-1 group">
-                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors" />
-                                             <Input 
-                                                value={formData.google_maps_link} 
-                                                onChange={(e) => handleGoogleMapsLinkChange(e.target.value)} 
-                                                placeholder="Search address or paste Google Maps URL..." 
-                                                className={cn(inputStyle, "flex-1 pl-10")} 
-                                             />
-                                          </div>
-                                          <Button
-                                             onClick={() => handleGoogleMapsLinkChange(formData.google_maps_link)}
-                                             variant="outline"
-                                             className="h-11 px-6 border-[#6c1cff] text-[#6c1cff] font-medium text-[13px] tracking-wide hover:bg-[#6c1cff]/5 rounded-xl transition-all"
-                                          >
-                                             {searchLoading ? "..." : "Fetch"}
-                                          </Button>
-                                       </div>
-
-                                       {/* Search Suggestions Dropdown */}
-                                       {searchSuggestions.length > 0 && (
-                                          <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                                             {searchSuggestions.map((s, idx) => (
-                                                <button
-                                                   key={idx}
-                                                   onClick={() => handleSuggestionSelect(s)}
-                                                   className="w-full px-5 py-3.5 text-left hover:bg-gray-50 flex items-start gap-3 transition-colors border-b border-gray-50 last:border-none"
-                                                >
-                                                   <MapPin className="h-4 w-4 text-[#6c1cff] mt-0.5" />
-                                                   <div>
-                                                      <p className="text-[14px] font-semibold text-gray-800">{s.text}</p>
-                                                      <p className="text-[12px] text-gray-500 line-clamp-1">{s.place_name}</p>
-                                                   </div>
-                                                </button>
-                                             ))}
-                                          </div>
-                                       )}
-                                    </div>
-
-                                    {/* Mini Map Picker */}
-                                    <div className="h-[280px] w-full rounded-2xl overflow-hidden border border-gray-100 shadow-inner relative group">
-                                       <MapGL
-                                          {...mapViewport}
-                                          latitude={safeParse(mapViewport.latitude, 20.5937)}
-                                          longitude={safeParse(mapViewport.longitude, 78.9629)}
-                                          onMove={evt => setMapViewport(evt.viewState)}
-                                          mapStyle="mapbox://styles/mapbox/streets-v12"
-                                          mapboxAccessToken={MAPBOX_TOKEN}
-                                          style={{ width: '100%', height: '100%' }}
-                                       >
-                                          <Marker
-                                             latitude={safeParse(formData.latitude, mapViewport.latitude)}
-                                             longitude={safeParse(formData.longitude, mapViewport.longitude)}
-                                             draggable
-                                             onDragEnd={handleMarkerDrag}
-                                             anchor="bottom"
-                                          >
-                                             <div className="cursor-grab active:cursor-grabbing">
-                                                <div className="relative group/pin">
-                                                   <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-[#6c1cff] text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg opacity-0 group-hover/pin:opacity-100 transition-opacity whitespace-nowrap">
-                                                      Drag to adjust
-                                                   </div>
-                                                   <div className="w-10 h-10 bg-[#6c1cff] rounded-full flex items-center justify-center shadow-xl border-4 border-white transform hover:scale-110 transition-transform">
-                                                      <User size={18} className="text-white" />
-                                                   </div>
-                                                   <div className="w-1 h-3 bg-[#6c1cff] mx-auto -mt-1 rounded-full shadow-lg"></div>
-                                                </div>
-                                             </div>
-                                          </Marker>
-                                          <NavigationControl position="top-right" />
-                                          <GeolocateControl 
-                                             position="top-right" 
-                                             positionOptions={{ enableHighAccuracy: true }}
-                                             trackUserLocation={true}
-                                             style={{ marginRight: 0, marginTop: 40 }} 
-                                             onGeolocate={async (pos) => {
-                                                const { latitude, longitude } = pos.coords;
-                                                updateFormData('latitude', latitude.toString());
-                                                updateFormData('longitude', longitude.toString());
-                                                updateFormData('google_maps_link', `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
-                                                detectTimezone(latitude, longitude);
-                                                setMapViewport(prev => ({ ...prev, latitude, longitude, zoom: 15 }));
-                                                toast.success("Location coordinates updated");
-                                             }}
-                                          />
-                                       </MapGL>
-                                       
-                                       <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                                          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                                          Interactive Map Picker Active
-                                       </div>
-                                    </div>
-
-                                    <p className="text-[12px] text-[#5f6368] leading-relaxed">
-                                       <span className="font-semibold text-[#6c1cff]">Pro Tip:</span> You can type your current address in the search box above, or simply <span className="text-[#6c1cff] font-medium">drag the purple pin</span> on the map to your exact location.
-                                    </p>
-
-                                    <div className="grid grid-cols-2 gap-8">
-                                       <div className="space-y-3">
-                                          <Label className="text-[11px] font-medium tracking-wide text-gray-500 uppercase">Latitude</Label>
-                                          <Input
-                                             value={formData.latitude}
-                                             onChange={(e) => updateFormData('latitude', e.target.value)}
-                                             placeholder="e.g. 17.3850"
-                                             className="h-10 bg-white border-gray-200 focus:border-[#6c1cff] focus:ring-0 text-[14px] font-normal rounded-lg transition-all"
-                                          />
-                                       </div>
-                                       <div className="space-y-3">
-                                          <Label className="text-[11px] font-medium tracking-wide text-gray-500 uppercase">Longitude</Label>
-                                          <Input
-                                             value={formData.longitude}
-                                             onChange={(e) => updateFormData('longitude', e.target.value)}
-                                             placeholder="e.g. 78.4867"
-                                             className="h-10 bg-white border-gray-200 focus:border-[#6c1cff] focus:ring-0 text-[14px] font-normal rounded-lg transition-all"
-                                          />
-                                       </div>
-                                    </div>
-
-                                    <GMBRow label="Operating Timezone" hint="Auto-detected from location">
-                                       <div className="relative group">
-                                          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors z-10" />
-                                          <Select value={formData.timezone} onValueChange={(v) => updateFormData('timezone', v)}>
-                                             <SelectTrigger className={cn(selectStyle, "pl-10")}>
-                                                <SelectValue placeholder="Select timezone" />
-                                             </SelectTrigger>
-                                             <SelectContent position="popper" side="bottom" className="z-[110] max-h-[300px]">
-                                                {[
-                                                   'UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 
-                                                   'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-                                                   'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo', 
-                                                   formData.timezone
-                                                ].filter((v, i, a) => v && a.indexOf(v) === i).sort().map(tz => (
-                                                   <SelectItem key={tz} value={tz}>{tz}</SelectItem>
-                                                ))}
-                                             </SelectContent>
-                                          </Select>
-                                       </div>
-                                    </GMBRow>
-
+                              <GMBRow label="Operating Timezone">
+                                 <div className="relative group">
+                                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-[#6c1cff] transition-colors z-10" />
+                                    <Select value={formData.timezone} onValueChange={(v) => updateFormData('timezone', v)}>
+                                       <SelectTrigger className={cn(selectStyle, "pl-10")}>
+                                          <SelectValue placeholder="Select timezone" />
+                                       </SelectTrigger>
+                                       <SelectContent position="popper" side="bottom" className="z-[110] max-h-[300px]">
+                                          {[
+                                             'UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 
+                                             'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+                                             'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo', 
+                                             formData.timezone
+                                          ].filter((v, i, a) => v && a.indexOf(v) === i).sort().map(tz => (
+                                             <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+                                          ))}
+                                       </SelectContent>
+                                    </Select>
                                  </div>
                               </GMBRow>
 
@@ -918,14 +685,40 @@ const PastorCreationFlow2 = () => {
                                  />
                               </GMBRow>
 
-                              <GMBRow label="Search City *" hint="The primary city where seekers will search for you.">
-                                 <Input 
-                                    value={formData.city} 
-                                    onChange={(e) => updateFormData('city', e.target.value)} 
-                                    placeholder="e.g. Hyderabad" 
-                                    className={inputStyle} 
-                                 />
-                              </GMBRow>
+                              <div className="space-y-2 relative">
+                                 <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">City *</Label>
+                                 <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                    <Input 
+                                       placeholder="Enter city or pincode" 
+                                       value={formData.city} 
+                                       onChange={(e) => {
+                                          updateFormData('city', e.target.value);
+                                          handleCitySearch(e.target.value);
+                                       }} 
+                                       className={cn(inputStyle, "pl-10")} 
+                                    />
+                                    {cityLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 border-2 border-[#6c1cff] border-t-transparent rounded-full animate-spin" />}
+                                 </div>
+                                 
+                                 {citySuggestions.length > 0 && (
+                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-[110] overflow-hidden">
+                                       {citySuggestions.map((s, idx) => (
+                                          <button
+                                             key={idx}
+                                             onClick={() => handleCitySelect(s)}
+                                             className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-start gap-2 border-b border-gray-50 last:border-none"
+                                          >
+                                             <MapPin className="h-4 w-4 text-[#6c1cff] mt-0.5" />
+                                             <div className="min-w-0">
+                                                <p className="text-[13px] font-semibold text-gray-800 truncate">{s.text}</p>
+                                                <p className="text-[11px] text-gray-500 truncate">{s.place_name}</p>
+                                             </div>
+                                          </button>
+                                       ))}
+                                    </div>
+                                 )}
+                              </div>
                                  <GMBRow label="Denomination *">
                                     <Select value={formData.denomination} onValueChange={(v) => updateFormData('denomination', v)}>
                                        <SelectTrigger className={selectStyle}><SelectValue placeholder="Select denomination" /></SelectTrigger>
@@ -1402,116 +1195,34 @@ const PastorCreationFlow2 = () => {
                         <Input placeholder="Official email" value={quickChurch.email} onChange={(e) => setQuickChurch({ ...quickChurch, email: e.target.value })} className={inputStyle} />
                      </div>
                      <div className="space-y-2">
-                        <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Phone *</Label>
-                        <PhoneInputPremium value={quickChurch.phone} onChange={(val) => setQuickChurch({ ...quickChurch, phone: val })} placeholder="Phone number" />
+                        <GMBRow label="Phone *">
+                           <PhoneInputPremium 
+                              value={quickChurch.phone} 
+                              onChange={(val) => setQuickChurch(prev => ({ ...prev, phone: val }))} 
+                              onCountryChange={(code) => {
+                                 const tz = COUNTRY_TIMEZONE_MAP[code];
+                                 if (tz) setQuickChurch(prev => ({ ...prev, timezone: tz }));
+                              }}
+                              placeholder="Phone number" 
+                           />
+                        </GMBRow>
                      </div>
                   </div>
 
-                  {/* Map Section */}
-                  <div className="space-y-4 pt-2">
-                     <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Map location</Label>
-                     <div className="flex gap-4">
-                        <div className="relative flex-1">
-                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                           <Input 
-                              value={quickChurch.google_maps_link} 
-                              onChange={(e) => handleQuickGoogleMapsLinkChange(e.target.value)} 
-                              placeholder="Search address or paste Google Maps URL..." 
-                              className={cn(inputStyle, "pl-10")} 
-                           />
-                           
-                           {quickChurchSearchSuggestions.length > 0 && (
-                              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-[110] overflow-hidden">
-                                 {quickChurchSearchSuggestions.map((s, idx) => (
-                                    <button
-                                       key={idx}
-                                       onClick={() => handleQuickSuggestionSelect(s)}
-                                       className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-start gap-2 border-b border-gray-50 last:border-none"
-                                    >
-                                       <MapPin className="h-4 w-4 text-[#6c1cff] mt-0.5" />
-                                       <div className="min-w-0">
-                                          <p className="text-[13px] font-semibold text-gray-800 truncate">{s.text}</p>
-                                          <p className="text-[11px] text-gray-500 truncate">{s.place_name}</p>
-                                       </div>
-                                    </button>
-                                 ))}
-                              </div>
-                           )}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                           <Button
-                              onClick={handleQuickDetectLocation}
-                              variant="outline"
-                              className="h-11 px-4 border-gray-200 text-gray-500 hover:text-[#6c1cff] hover:border-[#6c1cff] rounded-xl transition-all flex items-center gap-2"
-                           >
-                              <Navigation className="h-4 w-4" />
-                              <span className="text-[13px] font-medium whitespace-nowrap">Detect My Location</span>
-                           </Button>
-                           <Button
-                              onClick={() => handleQuickGoogleMapsLinkChange(quickChurch.google_maps_link)}
-                              variant="outline"
-                              className="h-11 px-6 border-[#6c1cff] text-[#6c1cff] font-medium text-[13px] rounded-xl hover:bg-[#6c1cff]/5 flex-1"
-                           >
-                              {quickChurchSearchLoading ? "..." : "Fetch"}
-                           </Button>
-                        </div>
-                     </div>
-
-                     <div className="h-[240px] w-full rounded-2xl overflow-hidden border border-gray-100 shadow-inner relative">
-                        <MapGL
-                           {...quickChurchMapViewport}
-                           onMove={evt => setQuickChurchMapViewport(evt.viewState)}
-                           mapStyle="mapbox://styles/mapbox/streets-v12"
-                           mapboxAccessToken={MAPBOX_TOKEN}
-                           style={{ width: '100%', height: '100%' }}
-                        >
-                           <Marker
-                              latitude={safeParse(quickChurch.latitude, quickChurchMapViewport.latitude)}
-                              longitude={safeParse(quickChurch.longitude, quickChurchMapViewport.longitude)}
-                              draggable
-                              onDragEnd={handleQuickMarkerDrag}
-                              anchor="bottom"
-                           >
-                              <div className="w-8 h-8 bg-[#6c1cff] rounded-full flex items-center justify-center shadow-xl border-4 border-white">
-                                 <Plus size={14} className="text-white" />
-                              </div>
-                           </Marker>
-                           <NavigationControl position="top-right" />
-                        </MapGL>
-                     </div>
-
-                     <p className="text-[11px] text-gray-500 leading-relaxed">
-                        <span className="font-medium text-[#6c1cff]">Pro Tip:</span> You can type your current address in the search box above, or simply <span className="text-[#6c1cff] font-medium">drag the purple pin</span> on the map to your exact location.
-                     </p>
-
-                     <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                           <Label className="text-[10px] font-medium tracking-widest uppercase text-gray-400">Latitude</Label>
-                           <Input
-                              value={quickChurch.latitude}
-                              onChange={(e) => setQuickChurch(prev => ({ ...prev, latitude: e.target.value }))}
-                              placeholder="e.g. 17.3850"
-                              className="h-10 bg-gray-50 border-none text-[13px] rounded-lg"
-                           />
-                        </div>
-                        <div className="space-y-2">
-                           <Label className="text-[10px] font-medium tracking-widest uppercase text-gray-400">Longitude</Label>
-                           <Input
-                              value={quickChurch.longitude}
-                              onChange={(e) => setQuickChurch(prev => ({ ...prev, longitude: e.target.value }))}
-                              placeholder="e.g. 78.4867"
-                              className="h-10 bg-gray-50 border-none text-[13px] rounded-lg"
-                           />
-                        </div>
-                     </div>
-
-                     <div className="space-y-2">
-                        <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Operating Timezone</Label>
-                        <div className="flex items-center gap-2 px-4 h-11 bg-gray-50 rounded-xl text-[13px] text-gray-600">
-                           <Globe size={14} className="text-gray-400" />
-                           <span>{quickChurch.timezone}</span>
-                           <span className="ml-auto text-[10px] font-medium text-gray-400">Auto-detected</span>
-                        </div>
+                  <div className="space-y-2">
+                     <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Operating Timezone</Label>
+                     <div className="flex items-center gap-2 px-4 h-11 bg-gray-50 rounded-xl text-[13px] text-gray-600">
+                        <Globe size={14} className="text-gray-400" />
+                        <Select value={quickChurch.timezone} onValueChange={(val) => setQuickChurch({ ...quickChurch, timezone: val })}>
+                           <SelectTrigger className="bg-transparent border-none p-0 h-auto focus:ring-0">
+                              <SelectValue placeholder="Select timezone" />
+                           </SelectTrigger>
+                           <SelectContent className="z-[130]">
+                              {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York'].map(tz => (
+                                 <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
                      </div>
                   </div>
 
@@ -1520,10 +1231,39 @@ const PastorCreationFlow2 = () => {
                         <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Full Address *</Label>
                         <Input placeholder="Building No, Street Name, Area, City, State, Country, Zip" value={quickChurch.address_line1} onChange={(e) => setQuickChurch({ ...quickChurch, address_line1: e.target.value })} className={inputStyle} />
                      </div>
-                     <div className="space-y-2">
-                        <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Search City *</Label>
-                        <p className="text-[11px] text-gray-400 -mt-1">The primary city where seekers will search for your church.</p>
-                        <Input placeholder="e.g. Hyderabad" value={quickChurch.city} onChange={(e) => setQuickChurch({ ...quickChurch, city: e.target.value })} className={inputStyle} />
+                     <div className="space-y-2 relative">
+                        <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">City *</Label>
+                        <div className="relative">
+                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                           <Input 
+                              placeholder="Enter city or pincode" 
+                              value={quickChurch.city} 
+                              onChange={(e) => {
+                                 setQuickChurch({ ...quickChurch, city: e.target.value });
+                                 handleQuickCitySearch(e.target.value);
+                              }} 
+                              className={cn(inputStyle, "pl-10")} 
+                           />
+                           {quickCityLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 border-2 border-[#6c1cff] border-t-transparent rounded-full animate-spin" />}
+                        </div>
+                        
+                        {quickCitySuggestions.length > 0 && (
+                           <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-[110] overflow-hidden">
+                              {quickCitySuggestions.map((s, idx) => (
+                                 <button
+                                    key={idx}
+                                    onClick={() => handleQuickCitySelect(s)}
+                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-start gap-2 border-b border-gray-50 last:border-none"
+                                 >
+                                    <MapPin className="h-4 w-4 text-[#6c1cff] mt-0.5" />
+                                    <div className="min-w-0">
+                                       <p className="text-[13px] font-semibold text-gray-800 truncate">{s.text}</p>
+                                       <p className="text-[11px] text-gray-500 truncate">{s.place_name}</p>
+                                    </div>
+                                 </button>
+                              ))}
+                           </div>
+                        )}
                      </div>
                      <div className="space-y-2">
                         <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">How are you related to this listing? (Optional)</Label>

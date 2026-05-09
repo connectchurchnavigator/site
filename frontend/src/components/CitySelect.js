@@ -53,7 +53,7 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
       if (matches.length > 0) setOpen(true);
       else setOpen(false);
     } catch (error) {
-      console.error("Mapbox search failed:", error);
+      console.error("Mapbox search failed:", error?.message || "Unknown error");
       setCities([]);
       setOpen(false);
     } finally {

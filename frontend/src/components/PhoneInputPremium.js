@@ -18,13 +18,13 @@ import {
 import { Input } from './ui/input';
 import { countries, popularCountries } from '../lib/countries';
 
-export function PhoneInputPremium({ value = '', onChange, className, placeholder = "Phone number" }) {
+export function PhoneInputPremium({ value = '', onChange, onCountryChange, className, placeholder = "Phone number" }) {
   const [open, setOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
 
   // Parse initial value to find country
   const initialCountry = useMemo(() => {
-    if (!value || !value.startsWith('+')) return countries.find(c => c.code === 'IN') || countries[0];
+    if (!value || !value.startsWith('+')) return countries.find(c => c.code === 'GB') || countries[0];
     
     // Sort countries by dial code length descending to match longest first (e.g. +1-268 vs +1)
     const sortedCountries = [...countries].sort((a, b) => b.dial.length - a.dial.length);
@@ -33,7 +33,7 @@ export function PhoneInputPremium({ value = '', onChange, className, placeholder
         return country;
       }
     }
-    return countries.find(c => c.code === 'IN') || countries[0];
+    return countries.find(c => c.code === 'GB') || countries[0];
   }, [value]);
 
   const [selectedCountry, setSelectedCountry] = useState(initialCountry);
@@ -53,6 +53,7 @@ export function PhoneInputPremium({ value = '', onChange, className, placeholder
     setOpen(false);
     // Notify parent with new combination
     onChange(country.dial + numberValue);
+    if (onCountryChange) onCountryChange(country.code);
   };
 
   const handleNumberChange = (e) => {
@@ -114,7 +115,7 @@ export function PhoneInputPremium({ value = '', onChange, className, placeholder
                         {popularOnes.map((country) => (
                         <CommandItem
                             key={country.code}
-                            value={country.name}
+                            value={`${country.name} ${country.dial} ${country.code}`}
                             onSelect={() => handleCountrySelect(country)}
                             className="rounded-xl px-2 py-2 mb-1 cursor-pointer hover:bg-[#6c1cff]/5 group aria-selected:bg-[#6c1cff]/5"
                         >
@@ -148,7 +149,7 @@ export function PhoneInputPremium({ value = '', onChange, className, placeholder
                   {filteredCountries.map((country) => (
                     <CommandItem
                       key={country.code}
-                      value={country.name}
+                      value={`${country.name} ${country.dial} ${country.code}`}
                       onSelect={() => handleCountrySelect(country)}
                       className="rounded-xl px-2 py-2 mb-1 cursor-pointer hover:bg-[#6c1cff]/5 group aria-selected:bg-[#6c1cff]/5"
                     >
