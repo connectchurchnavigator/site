@@ -133,6 +133,7 @@ export default function Explore2() {
     userCoords: null
   });
   const [mapBounds, setMapBounds] = useState(null);
+  const [globalSearch, setGlobalSearch] = useState(false);
   const [hoveredId, setHoveredId] = useState(null);
   const [mobileView, setMobileView] = useState('list'); // 'list' or 'map'
   const [showMobileFilters, setShowMobileFilters] = useState(false);
@@ -190,7 +191,7 @@ export default function Explore2() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [activeType, filters, mapBounds]);
+  }, [activeType, filters, mapBounds, globalSearch]);
 
   const fetchTaxonomies = async () => {
     try {
@@ -218,10 +219,11 @@ export default function Explore2() {
         order_by: filters.orderBy,
         skip: 0,
         limit: 100, // Increased limit for better map experience
-        min_lat: mapBounds?.minLat,
-        max_lat: mapBounds?.maxLat,
-        min_lng: mapBounds?.minLng,
-        max_lng: mapBounds?.maxLng,
+        limit: globalSearch ? 500 : 100, // Show more in global mode
+        min_lat: globalSearch ? undefined : mapBounds?.minLat,
+        max_lat: globalSearch ? undefined : mapBounds?.maxLat,
+        min_lng: globalSearch ? undefined : mapBounds?.minLng,
+        max_lng: globalSearch ? undefined : mapBounds?.maxLng,
         open_now: filters.openNow || undefined,
         start_time: filters.useCustomTime ? filters.startTime : undefined,
         end_time: filters.useCustomTime ? filters.endTime : undefined,
@@ -283,14 +285,23 @@ export default function Explore2() {
   };
 
   const showAllGlobally = () => {
-    resetFilters();
-    setMapBounds(null);
-    setViewport({
-      latitude: 20,
-      longitude: 0,
-      zoom: 2
-    });
-    toast.info(`Showing all ${activeType === 'church' ? 'churches' : 'pastors'} globally`);
+    if (globalSearch) {
+      // Switch back to Nearby mode
+      setGlobalSearch(false);
+      setFilters(prev => ({ ...prev, location: 'Current Map View' }));
+      toast.info("Switched to Nearby mode");
+    } else {
+      // Switch to Global mode
+      resetFilters();
+      setGlobalSearch(true);
+      setMapBounds(null);
+      setViewport({
+        latitude: 20,
+        longitude: 0,
+        zoom: 2
+      });
+      toast.info(`Showing all ${activeType === 'church' ? 'churches' : 'pastors'} globally`);
+    }
   };
 
   const renderFilters = () => (
@@ -313,6 +324,7 @@ export default function Explore2() {
             placeholder="Search City or Pincode" 
             value={filters.location}
             onChange={(cityName, cityData) => {
+              setGlobalSearch(false); // Entering a city always switches back to local mode
               setFilters(prev => ({
                 ...prev, 
                 location: cityName,
@@ -671,9 +683,13 @@ export default function Explore2() {
                   </div>
                   <button 
                     onClick={showAllGlobally}
-                    className="text-[10px] font-bold text-brand hover:text-white hover:bg-brand transition-all border border-brand/20 px-4 py-2 rounded-full uppercase tracking-widest bg-brand/5 whitespace-nowrap"
+                    className={`text-[10px] font-bold transition-all px-4 py-2 rounded-full uppercase tracking-widest whitespace-nowrap border ${
+                      globalSearch 
+                        ? 'bg-brand text-white border-brand shadow-lg shadow-brand/20' 
+                        : 'bg-brand/5 text-brand border-brand/20 hover:bg-brand hover:text-white'
+                    }`}
                   >
-                    Show all {activeType === 'church' ? 'churches' : 'pastors'}
+                    {globalSearch ? 'Show Nearby' : `All ${activeType === 'church' ? 'Churches' : 'Pastors'}`}
                   </button>
                 </div>
 
