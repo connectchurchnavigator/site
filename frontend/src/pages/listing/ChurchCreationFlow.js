@@ -1509,7 +1509,7 @@ const ChurchCreationFlow = () => {
                                        }
                                     }}
                                     placeholder="e.g. Hyderabad, Dallas, etc."
-                                    className="h-11 rounded-xl"
+                                    variant="outline"
                                  />
                               </GMBRow>
                            </div>
@@ -2676,7 +2676,7 @@ const ChurchCreationFlow = () => {
                                  }
                               }}
                               placeholder="e.g. Hyderabad, Dallas..."
-                              className="h-12"
+                              variant="outline"
                            />
                         </div>
                      </div>
@@ -2769,7 +2769,7 @@ const ChurchCreationFlow = () => {
                                  }
                               }}
                               placeholder="e.g. Hyderabad, Dallas..."
-                              className="h-12"
+                              variant="outline"
                            />
                         </div>
                         <div className="space-y-2">

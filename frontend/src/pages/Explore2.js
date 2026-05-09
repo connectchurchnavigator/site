@@ -320,9 +320,7 @@ export default function Explore2() {
                 setMapBounds(null); // Clear bounds to allow jumping to new city
               }
             }}
-            className="pl-8 border-0 border-b border-slate-200 bg-transparent rounded-none h-14 text-sm font-medium text-slate-500 focus:ring-0 shadow-none hover:bg-transparent" 
           />
-          <MapPin className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
         </div>
         <button 
           onClick={showAllGlobally}
