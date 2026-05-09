@@ -180,6 +180,10 @@ export default function Explore2() {
 
   // Consolidated search effect with debounce
   useEffect(() => {
+    // Prevent global fetch if we are expecting map bounds for a specific location but don't have them yet.
+    // This avoids the "flash" of global results before the map zooms to the user's area.
+    if (filters.location && !mapBounds && filters.location !== 'Global') return;
+
     const timer = setTimeout(() => {
       fetchResults();
     }, 400);

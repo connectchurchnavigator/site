@@ -2932,13 +2932,18 @@ async def log_requests(request: Request, call_next):
     print(f"DEBUG: Request finished: {request.method} {request.url.path} - {response.status_code}")
     return response
 
-# Flexible CORS for production to prevent "CORS Block"
+# Flexible CORS for production
+frontend_url = os.environ.get('FRONTEND_URL')
+allowed_origins = ["*"]
+if os.environ.get('NODE_ENV') == 'production' and frontend_url:
+    # Split by comma if multiple URLs are provided
+    allowed_origins = [origin.strip() for origin in frontend_url.split(',')]
+elif os.environ.get('NODE_ENV') == 'development':
+    allowed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if os.environ.get('NODE_ENV') == 'development' else [
-        "https://site-production-46c8.up.railway.app",
-        "https://site-production-bd88.up.railway.app"
-    ],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,

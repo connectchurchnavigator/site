@@ -139,6 +139,7 @@ const Lightbox = ({ isOpen, onClose, images, currentIndex, onNext, onPrev }) => 
 
 const TeamCard = ({ team, i, onImageClick }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isVideosExpanded, setIsVideosExpanded] = useState(false);
   const description = team.details?.description || "";
   const isLong = description.length > 180;
   const hasImages = team.details?.images?.length > 0;
@@ -210,6 +211,8 @@ const TeamCard = ({ team, i, onImageClick }) => {
         const urls = team.details?.video_urls?.filter(Boolean) || (team.details?.video_url ? [team.details.video_url] : []);
         if (urls.length === 0) return null;
 
+        const displayedUrls = isVideosExpanded ? urls : urls.slice(0, 2);
+
         return (
           <div className={cn(
             "pb-2",
@@ -217,7 +220,7 @@ const TeamCard = ({ team, i, onImageClick }) => {
           )}>
             <h4 className="text-[16px] font-semibold text-slate-800 mb-4">Highlights</h4>
             <div className="grid grid-cols-1 gap-4">
-              {urls.map((url, idx) => (
+              {displayedUrls.map((url, idx) => (
                 <div key={idx} className="rounded-[5px] overflow-hidden aspect-video border border-slate-100 shadow-sm relative">
                   <iframe
                     className="w-full h-full border-0"
@@ -229,6 +232,19 @@ const TeamCard = ({ team, i, onImageClick }) => {
                 </div>
               ))}
             </div>
+            
+            {urls.length > 2 && (
+              <button 
+                onClick={() => setIsVideosExpanded(!isVideosExpanded)}
+                className="text-[#6c1cff] text-xs font-bold mt-4 hover:underline flex items-center gap-1 w-full justify-center py-2 bg-slate-50 rounded-[5px] border border-slate-100"
+              >
+                {isVideosExpanded ? (
+                  <>Show Less <ChevronUp size={14} /></>
+                ) : (
+                  <>View More (+{urls.length - 2}) <ChevronDown size={14} /></>
+                )}
+              </button>
+            )}
           </div>
         );
       })()}
