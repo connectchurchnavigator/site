@@ -12,6 +12,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Checkbox } from '../components/ui/checkbox';
 import { churchAPI, pastorAPI, taxonomyAPI } from '../lib/api';
@@ -681,16 +682,44 @@ export default function Explore2() {
                       Showing {results.length} of {total} {activeType === 'church' ? 'Churches' : 'Pastors'}
                     </span>
                   </div>
-                  <button 
-                    onClick={showAllGlobally}
-                    className={`text-[10px] font-bold transition-all px-4 py-2 rounded-full uppercase tracking-widest whitespace-nowrap border ${
-                      globalSearch 
-                        ? 'bg-brand text-white border-brand shadow-lg shadow-brand/20' 
-                        : 'bg-brand/5 text-brand border-brand/20 hover:bg-brand hover:text-white'
-                    }`}
+                  <Tabs 
+                    value={globalSearch ? 'global' : 'nearby'} 
+                    onValueChange={(v) => {
+                      if (v === 'global') {
+                        // Switch to Global mode
+                        resetFilters();
+                        setGlobalSearch(true);
+                        setMapBounds(null);
+                        setViewport({
+                          latitude: 20,
+                          longitude: 0,
+                          zoom: 2
+                        });
+                        toast.info(`Showing all ${activeType === 'church' ? 'churches' : 'pastors'} globally`);
+                      } else {
+                        // Switch back to Nearby mode
+                        setGlobalSearch(false);
+                        setFilters(prev => ({ ...prev, location: 'Current Map View' }));
+                        toast.info("Switched to Nearby mode");
+                      }
+                    }}
+                    className="h-9"
                   >
-                    {globalSearch ? 'Show Nearby' : `All ${activeType === 'church' ? 'Churches' : 'Pastors'}`}
-                  </button>
+                    <TabsList className="bg-slate-100/80 p-1 rounded-full border border-slate-200/50">
+                      <TabsTrigger 
+                        value="nearby" 
+                        className="rounded-full px-4 py-1 text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-brand data-[state=active]:shadow-sm transition-all"
+                      >
+                        Nearby
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="global" 
+                        className="rounded-full px-4 py-1 text-[10px] font-bold uppercase tracking-widest data-[state=active]:bg-brand data-[state=active]:text-white data-[state=active]:shadow-md transition-all"
+                      >
+                        Global
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </div>
 
                 {/* Results List */}
