@@ -37,8 +37,8 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
     }
     setLoading(true);
     try {
-      // Using Mapbox Geocoding API for reliable city search
-      const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${MAPBOX_TOKEN}&types=place&limit=5`;
+      // Using Mapbox Geocoding API for reliable city and pincode search
+      const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${MAPBOX_TOKEN}&types=place,postcode&limit=5`;
       const response = await axios.get(endpoint);
       
       const matches = response.data.features.map(f => ({
