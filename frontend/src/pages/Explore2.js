@@ -129,13 +129,8 @@ export default function Explore2() {
     customDate: new Date().toISOString().split('T')[0], // Default to today's date
     startTime: '14:00',
     endTime: '15:00',
-    orderBy: (searchParams.get('lat') || searchParams.get('latitude')) ? 'nearby' : 'a-z',
-    radius: parseInt(searchParams.get('radius')) || 25,
-    userCoords: (searchParams.get('lat') && searchParams.get('lng')) 
-      ? { lat: parseFloat(searchParams.get('lat')), lng: parseFloat(searchParams.get('lng')) }
-      : (searchParams.get('latitude') && searchParams.get('longitude'))
-        ? { lat: parseFloat(searchParams.get('latitude')), lng: parseFloat(searchParams.get('longitude')) }
-        : null
+    orderBy: 'a-z',
+    userCoords: null
   });
   const [mapBounds, setMapBounds] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
@@ -162,7 +157,7 @@ export default function Explore2() {
             ...prev, 
             userCoords: { lat: latitude, lng: longitude },
             location: 'Current Location',
-            orderBy: 'nearby'
+            orderBy: 'a-z'
           }));
           toast.success("Location detected!");
         },
@@ -218,12 +213,11 @@ export default function Explore2() {
     try {
       let params = {
         search: filters.search || undefined,
-        city: (filters.location && filters.location !== 'Current Map View' && filters.location !== 'Current Location' && !filters.userCoords) ? filters.location : undefined,
         denomination: filters.denomination.length > 0 ? filters.denomination : undefined,
         language: filters.language.length > 0 ? filters.language : undefined,
         order_by: filters.orderBy,
         skip: 0,
-        limit: 50,
+        limit: 100, // Increased limit for better map experience
         min_lat: mapBounds?.minLat,
         max_lat: mapBounds?.maxLat,
         min_lng: mapBounds?.minLng,
@@ -245,10 +239,7 @@ export default function Explore2() {
         params = {
             ...params,
             worship_style: filters.worshipStyle.length > 0 ? filters.worshipStyle : undefined,
-            ministry: filters.ministry.length > 0 ? filters.ministry : undefined,
-            latitude: filters.userCoords?.lat || undefined,
-            longitude: filters.userCoords?.lng || undefined,
-            radius: (filters.location || filters.userCoords) && filters.radius > 0 ? filters.radius : undefined
+            ministry: filters.ministry.length > 0 ? filters.ministry : undefined
         };
       }
 
@@ -282,8 +273,7 @@ export default function Explore2() {
       customDate: new Date().toISOString().split('T')[0],
       startTime: '14:00',
       endTime: '15:00',
-      orderBy: 'nearby',
-      radius: 25,
+      orderBy: 'a-z',
       userCoords: filters.userCoords // Keep user coordinates if detected
     });
   };
@@ -295,6 +285,11 @@ export default function Explore2() {
   const showAllGlobally = () => {
     resetFilters();
     setMapBounds(null);
+    setViewport({
+      latitude: 20,
+      longitude: 0,
+      zoom: 2
+    });
     toast.info(`Showing all ${activeType === 'church' ? 'churches' : 'pastors'} globally`);
   };
 
@@ -315,16 +310,23 @@ export default function Explore2() {
       <div className="relative group flex items-center gap-2">
         <div className="relative flex-1">
           <CitySelect 
-            placeholder="Search City" 
+            placeholder="Search City or Pincode" 
             value={filters.location}
             onChange={(cityName, cityData) => {
               setFilters(prev => ({
                 ...prev, 
                 location: cityName,
-                userCoords: cityData ? { lat: cityData.lat, lng: cityData.lng } : prev.userCoords
+                userCoords: cityData ? { lat: cityData.lat, lng: cityData.lng } : null
               }));
+              
               if (cityData) {
-                setMapBounds(null); // Clear bounds to allow jumping to new city
+                // Manually trigger map move for city selection
+                setViewport({
+                  latitude: cityData.lat,
+                  longitude: cityData.lng,
+                  zoom: 12,
+                  transitionDuration: 1000
+                });
               }
             }}
           />
@@ -392,26 +394,6 @@ export default function Explore2() {
         </div>
       )}
 
-      {/* Proximity Radius */}
-      {filters.location && (
-        <div className="space-y-4 pt-2">
-          <div className="flex justify-between items-center">
-            <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">Proximity</label>
-            <div className="flex items-center gap-1">
-              <span className="text-sm font-semibold text-brand">{filters.radius}</span>
-              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">km</span>
-            </div>
-          </div>
-          <Slider
-            value={[filters.radius]}
-            max={100}
-            min={5}
-            step={5}
-            onValueChange={(v) => setFilters({...filters, radius: v[0]})}
-            className="py-2"
-          />
-        </div>
-      )}
 
       {/* Denomination */}
       <FilterMultiSelect 
