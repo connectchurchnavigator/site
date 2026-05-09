@@ -157,23 +157,23 @@ export default function Explore2() {
           toast.success("Location detected!");
         },
         (error) => {
-          console.warn("Geolocation failed or denied, using London as default:", error.message);
-          // Default to London if denied or failed
+          console.warn("Geolocation failed or denied, staying in Global view:", error.message);
+          // Default to Global if denied or failed
           setFilters(prev => ({ 
             ...prev, 
-            location: 'London',
-            userCoords: { lat: 51.5074, lng: -0.1278 },
-            orderBy: 'a-z' // Keep a-z if location was denied
+            location: 'Global',
+            userCoords: null,
+            orderBy: 'a-z' 
           }));
         },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
     } else {
-       // Fallback to London if geolocation not supported
+       // Fallback to Global if geolocation not supported
        setFilters(prev => ({ 
           ...prev, 
-          location: 'London',
-          userCoords: { lat: 51.5074, lng: -0.1278 }
+          location: 'Global',
+          userCoords: null
        }));
     }
   };
