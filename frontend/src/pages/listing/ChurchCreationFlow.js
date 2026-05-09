@@ -316,7 +316,7 @@ const ChurchCreationFlow = () => {
       worship_team: { description: '', images: [], video_urls: [''] },
       it_media_team: { description: '', images: [], video_urls: [''] },
       outreach_team: { description: '', images: [], video_urls: [''] },
-      services: [{ day: '', start_time: '::PM', end_time: '::PM', event_name: '', ends_next_day: false }],
+      services: [{ day: '', start_time: '::AM', end_time: '::AM', event_name: '', ends_next_day: false }],
       timezone: 'UTC',
       relationship_to_listing: ''
    });
@@ -392,8 +392,8 @@ const ChurchCreationFlow = () => {
             ...churchData,
             services: (churchData.services || []).map(s => ({
                day: s?.day || '',
-               start_time: s?.start_time || '::PM',
-               end_time: s?.end_time || '::PM',
+               start_time: s?.start_time || '::AM',
+               end_time: s?.end_time || '::AM',
                event_name: s?.event_name || '',
                ends_next_day: !!s?.ends_next_day
             })),
@@ -416,7 +416,7 @@ const ChurchCreationFlow = () => {
 
          // If no services, add one empty entry
          if (normalizedChurch.services.length === 0) {
-            normalizedChurch.services = [{ day: '', start_time: '::PM', end_time: '::PM', event_name: '', ends_next_day: false }];
+            normalizedChurch.services = [{ day: '', start_time: '::AM', end_time: '::AM', event_name: '', ends_next_day: false }];
          }
 
          setFormData(prev => ({
@@ -1424,6 +1424,7 @@ const ChurchCreationFlow = () => {
                                              draggable
                                              onDragEnd={handleMarkerDrag}
                                              anchor="bottom"
+                                             style={{ zIndex: 1000 }}
                                           >
                                              <div className="cursor-grab active:cursor-grabbing">
                                                 <div className="relative group/pin">
@@ -1441,7 +1442,8 @@ const ChurchCreationFlow = () => {
                                           <GeolocateControl
                                              position="top-right"
                                              positionOptions={{ enableHighAccuracy: true }}
-                                             trackUserLocation={true}
+                                             trackUserLocation={false}
+                                             showUserLocation={false}
                                              style={{ marginRight: 0, marginTop: 40 }}
                                              onGeolocate={async (pos) => {
                                                 const { latitude, longitude } = pos.coords;
@@ -2603,6 +2605,7 @@ const ChurchCreationFlow = () => {
                                  draggable
                                  onDragEnd={handleQuickPastorMarkerDrag}
                                  anchor="bottom"
+                                  style={{ zIndex: 1000 }}
                               >
                                  <div className="cursor-grab active:cursor-grabbing">
                                     <div className="w-12 h-12 bg-[#6c1cff] rounded-full flex items-center justify-center shadow-2xl border-4 border-white transform hover:scale-110 transition-transform">
@@ -2615,7 +2618,8 @@ const ChurchCreationFlow = () => {
                               <GeolocateControl
                                  position="top-right"
                                  positionOptions={{ enableHighAccuracy: true }}
-                                 trackUserLocation={true}
+                                 trackUserLocation={false}
+                                 showUserLocation={false}
                                  style={{ marginRight: 0, marginTop: 40 }}
                                  onGeolocate={async (pos) => {
                                     const { latitude, longitude } = pos.coords;
@@ -2881,6 +2885,7 @@ const ChurchCreationFlow = () => {
                                     draggable
                                     onDragEnd={handleQuickMarkerDrag}
                                     anchor="bottom"
+                                  style={{ zIndex: 1000 }}
                                  >
                                     <div className="cursor-grab active:cursor-grabbing">
                                        <div className="w-10 h-10 bg-[#6c1cff] rounded-full flex items-center justify-center shadow-xl border-4 border-white transform hover:scale-110 transition-transform">
@@ -2893,7 +2898,8 @@ const ChurchCreationFlow = () => {
                                  <GeolocateControl
                                     position="top-right"
                                     positionOptions={{ enableHighAccuracy: true }}
-                                    trackUserLocation={true}
+                                    trackUserLocation={false}
+                                    showUserLocation={false}
                                     style={{ marginRight: 0, marginTop: 40 }}
                                     onGeolocate={async (pos) => {
                                        const { latitude, longitude } = pos.coords;
