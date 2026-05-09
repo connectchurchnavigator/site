@@ -6,6 +6,7 @@ import {
   Zap, Calendar, Star, Navigation, Plus, List, Check
 } from 'lucide-react';
 import { NavbarPremium } from '../components/NavbarPremium';
+import { CitySelect } from '../components/CitySelect';
 
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -290,12 +291,272 @@ export default function Explore2() {
     toast.info(`Showing all ${activeType === 'church' ? 'churches' : 'pastors'} globally`);
   };
 
+  const renderFilters = () => (
+    <div className="space-y-4">
+      {/* 1. Search (Universal) */}
+      <div className="relative group">
+        <Search className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-brand transition-colors" />
+        <Input 
+          placeholder={activeType === 'church' ? "Church name..." : "Pastor name..."} 
+          value={filters.search}
+          onChange={(e) => setFilters({...filters, search: e.target.value})}
+          className="pl-8 border-0 border-b border-slate-200 bg-transparent rounded-none h-14 text-sm font-medium text-slate-500 focus-visible:ring-0 focus-visible:border-brand transition-all placeholder:text-slate-400" 
+        />
+      </div>
+
+      {/* 2. Location (Universal) */}
+      <div className="relative group flex items-center gap-2">
+        <div className="relative flex-1">
+          <CitySelect 
+            placeholder="Search City" 
+            value={filters.location}
+            onChange={(cityName, cityData) => {
+              setFilters(prev => ({
+                ...prev, 
+                location: cityName,
+                userCoords: cityData ? { lat: cityData.lat, lng: cityData.lng } : prev.userCoords
+              }));
+              if (cityData) {
+                setMapBounds(null); // Clear bounds to allow jumping to new city
+              }
+            }}
+            className="pl-8 border-0 border-b border-slate-200 bg-transparent rounded-none h-14 text-sm font-medium text-slate-500 focus:ring-0 shadow-none hover:bg-transparent" 
+          />
+          <MapPin className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+        </div>
+        <button 
+          onClick={showAllGlobally}
+          className="text-[10px] font-bold text-brand hover:text-brand/80 transition-colors border border-brand/20 hover:border-brand/40 px-3 py-1.5 rounded-xl uppercase tracking-widest bg-brand/5 whitespace-nowrap"
+        >
+          Global View
+        </button>
+      </div>
+
+      {/* 3. Opening Status (Church Only) */}
+      {activeType === 'church' && (
+        <div className="space-y-4">
+          <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 mb-2 block">Opening Status</label>
+          <div className="p-1 rounded-xl border border-slate-100 flex shadow-sm bg-white">
+            <button 
+              onClick={() => setFilters({...filters, openNow: false, useCustomTime: false})}
+              className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium uppercase tracking-wider ${!filters.openNow && !filters.useCustomTime ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              All
+            </button>
+            <button 
+              onClick={() => setFilters({...filters, openNow: true, useCustomTime: false})}
+              className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium uppercase tracking-wider ${filters.openNow && !filters.useCustomTime ? 'bg-brand text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              Open Now
+            </button>
+            <button 
+              onClick={() => setFilters({...filters, openNow: false, useCustomTime: true})}
+              className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium uppercase tracking-wider ${filters.useCustomTime ? 'bg-brand text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              Custom
+            </button>
+          </div>
+
+          {filters.useCustomTime && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-400 uppercase">Date</label>
+                <input 
+                  type="date" 
+                  value={filters.customDate}
+                  onChange={(e) => setFilters({...filters, customDate: e.target.value})}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand bg-slate-50/50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                 <div className="space-y-1">
+                   <label className="text-[9px] font-bold text-slate-400 uppercase">From</label>
+                   <input 
+                     type="time" 
+                     value={filters.startTime}
+                     onChange={(e) => setFilters({...filters, startTime: e.target.value})}
+                     className="w-full px-2 py-2 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand bg-slate-50/50"
+                   />
+                 </div>
+                 <div className="space-y-1">
+                   <label className="text-[9px] font-bold text-slate-400 uppercase">To</label>
+                   <input 
+                     type="time" 
+                     value={filters.endTime}
+                     onChange={(e) => setFilters({...filters, endTime: e.target.value})}
+                     className="w-full px-2 py-2 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand bg-slate-50/50"
+                   />
+                 </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Proximity Radius */}
+      {filters.location && (
+        <div className="space-y-4 pt-2">
+          <div className="flex justify-between items-center">
+            <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">Proximity</label>
+            <div className="flex items-center gap-1">
+              <span className="text-sm font-semibold text-brand">{filters.radius}</span>
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">km</span>
+            </div>
+          </div>
+          <Slider
+            value={[filters.radius]}
+            max={100}
+            min={5}
+            step={5}
+            onValueChange={(v) => setFilters({...filters, radius: v[0]})}
+            className="py-2"
+          />
+        </div>
+      )}
+
+      {/* Denomination */}
+      <FilterMultiSelect 
+        icon={Filter}
+        label="Denomination"
+        placeholder="All Denominations"
+        options={taxonomies.denomination || []}
+        selected={filters.denomination}
+        onUpdate={(v) => setFilters({ ...filters, denomination: v })}
+      />
+
+      {/* Languages */}
+      <FilterMultiSelect 
+        icon={Globe}
+        label="Languages"
+        placeholder="All Languages"
+        options={taxonomies.language || taxonomies.languages_known || []}
+        selected={filters.language}
+        onUpdate={(v) => setFilters({ ...filters, language: v })}
+      />
+
+      {/* CHURCH SPECIFIC FILTERS */}
+      {activeType === 'church' && (
+        <>
+          <FilterMultiSelect 
+            icon={Zap}
+            label="Worship Styles"
+            placeholder="All Worship Styles"
+            options={taxonomies.worship_style || []}
+            selected={filters.worshipStyle}
+            onUpdate={(v) => setFilters({ ...filters, worshipStyle: v })}
+          />
+          <FilterMultiSelect 
+            icon={Heart}
+            label="Ministries"
+            placeholder="All Ministries"
+            options={taxonomies.ministry || []}
+            selected={filters.ministry}
+            onUpdate={(v) => setFilters({ ...filters, ministry: v })}
+          />
+        </>
+      )}
+
+      {/* PASTOR SPECIFIC FILTERS */}
+      {activeType === 'pastor' && (
+        <>
+          <div className="space-y-4 pt-2">
+            <div className="flex justify-between items-center">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Experience</label>
+              <div className="flex items-center gap-1">
+                <Input 
+                  type="number" 
+                  min="0" max="50"
+                  value={filters.experience}
+                  onChange={(e) => setFilters({...filters, experience: Math.min(50, Math.max(0, parseInt(e.target.value) || 0))})}
+                  className="w-[52px] h-7 px-2 border border-slate-200 rounded-lg bg-slate-50/50 text-right text-sm font-bold text-brand focus-visible:ring-1 focus-visible:ring-brand" 
+                />
+                <span className="text-xs font-bold text-brand">Years</span>
+              </div>
+            </div>
+            <Slider
+              value={[filters.experience]}
+              max={50}
+              step={1}
+              onValueChange={(v) => setFilters({...filters, experience: v[0]})}
+              className="py-2"
+            />
+          </div>
+
+          <div className="relative">
+            <Select
+              value={filters.qualification || 'all'}
+              onValueChange={(v) => setFilters({ ...filters, qualification: v === 'all' ? '' : v })}
+            >
+              <SelectTrigger className="border-0 border-b border-slate-200 rounded-none bg-transparent h-14 px-0 focus:ring-0 focus:border-brand shadow-none text-sm font-medium text-slate-500">
+                <div className="flex items-center gap-3">
+                  <Shield className="h-5 w-5 text-slate-400" />
+                  <SelectValue placeholder="Qualification" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[150]">
+                <SelectItem value="all">Qualification</SelectItem>
+                {(taxonomies.qualification || []).map(q => (
+                  <SelectItem key={q} value={q}>{q}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="relative">
+            <Select
+              value={filters.designation || 'all'}
+              onValueChange={(v) => setFilters({ ...filters, designation: v === 'all' ? '' : v })}
+            >
+              <SelectTrigger className="border-0 border-b border-slate-200 rounded-none bg-transparent h-14 px-0 focus:ring-0 focus:border-brand shadow-none text-sm font-medium text-slate-500">
+                <div className="flex items-center gap-3">
+                  <Zap className="h-5 w-5 text-slate-400" />
+                  <SelectValue placeholder="Designation" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[150]">
+                <SelectItem value="all">Designation</SelectItem>
+                {(taxonomies.designation || taxonomies.current_designation || []).map(d => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+
+      {/* 5. Sort By (Universal) */}
+      <div className="relative">
+        <Select
+          value={filters.orderBy || 'nearby'}
+          onValueChange={(v) => setFilters({...filters, orderBy: v})}
+        >
+          <SelectTrigger className="border-0 border-b border-slate-200 rounded-none bg-transparent h-14 px-0 focus:ring-0 focus:border-brand shadow-none text-sm font-medium text-slate-500">
+            <div className="flex items-center gap-3">
+              <List className="h-5 w-5 text-slate-400" />
+              <SelectValue placeholder="Sort By" />
+            </div>
+          </SelectTrigger>
+          <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[150]">
+             {[
+               { label: 'Name A-Z', value: 'a-z' },
+               { label: 'Name Z-A', value: 'z-a' },
+               { label: 'Nearby', value: 'nearby' },
+               { label: 'Latest', value: 'latest' }
+             ].map(sort => (
+                <SelectItem key={sort.value} value={sort.value}>{sort.label}</SelectItem>
+             ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white pt-[52px]">
       <NavbarPremium variant="light" />
 
       {/* Type Selection Strip - Premium Icons */}
-      <div className="pt-[52px] bg-white sticky top-0 z-40 border-b border-slate-100">
+      <div className="pt-0 bg-white sticky top-[52px] z-40 border-b border-slate-100">
         <div className="max-w-[1800px] mx-auto px-6 lg:px-12 pt-0 pb-0 flex items-start justify-center relative z-50">
           <div className="flex items-center gap-12">
             <span className="text-slate-900 font-semibold text-sm tracking-tight hidden md:block">
@@ -361,279 +622,55 @@ export default function Explore2() {
             </div>
 
             {/* 1. Sidebar - Filters (Left) */}
-            <div className={`
-                ${showMobileFilters ? 'fixed inset-0 z-[100] flex flex-col' : 'hidden'} 
-                lg:flex lg:relative lg:inset-auto lg:w-[320px] lg:z-auto
-                border-r border-slate-100 bg-white overflow-y-auto custom-scrollbar
-            `}>
+            <AnimatePresence>
+                {showMobileFilters && (
+                    <motion.div 
+                        initial={{ x: '-100%' }}
+                        animate={{ x: 0 }}
+                        exit={{ x: '-100%' }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                        className="fixed inset-0 z-[100] flex"
+                    >
+                        {/* Backdrop */}
+                        <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowMobileFilters(false)}
+                            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                        />
+                        
+                        {/* Drawer Content */}
+                        <div className="relative w-[85%] max-w-[320px] h-full bg-white shadow-2xl flex flex-col overflow-hidden">
+                            <div className="p-6 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-lg font-semibold text-slate-950">Filters</h3>
+                                    <div className="flex items-center gap-4">
+                                        <button onClick={resetFilters} className="text-brand text-xs font-medium uppercase tracking-widest hover:opacity-70">Reset</button>
+                                        <button onClick={() => setShowMobileFilters(false)} className="text-slate-400 p-1"><X className="w-5 h-5" /></button>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    {renderFilters()}
+                                </div>
+                            </div>
+                            <div className="p-4 border-t border-slate-100 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+                                <Button onClick={() => setShowMobileFilters(false)} className="w-full bg-brand h-12 rounded-2xl font-bold">Apply Filters</Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Desktop Sidebar (Visible only on LG+) */}
+            <div className="hidden lg:flex lg:w-[320px] border-r border-slate-100 bg-white overflow-y-auto custom-scrollbar flex-col">
               <div className="p-6 space-y-6 flex-1">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-lg font-semibold text-slate-950">Filters</h3>
-                  <div className="flex items-center gap-4">
-                    <button onClick={resetFilters} className="text-brand text-xs font-medium uppercase tracking-widest hover:opacity-70">Reset</button>
-                    <button onClick={() => setShowMobileFilters(false)} className="lg:hidden text-slate-400 p-1"><X className="w-5 h-5" /></button>
-                  </div>
+                  <button onClick={resetFilters} className="text-brand text-xs font-medium uppercase tracking-widest hover:opacity-70">Reset</button>
                 </div>
 
-                <div className="space-y-4">
-                  {/* 1. Search (Universal) */}
-                  <div className="relative group">
-                    <Search className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-brand transition-colors" />
-                    <Input 
-                      placeholder={activeType === 'church' ? "Church name..." : "Pastor name..."} 
-                      value={filters.search}
-                      onChange={(e) => setFilters({...filters, search: e.target.value})}
-                      className="pl-8 border-0 border-b border-slate-200 bg-transparent rounded-none h-14 text-sm font-medium text-slate-500 focus-visible:ring-0 focus-visible:border-brand transition-all placeholder:text-slate-400" 
-                    />
-                  </div>
-
-                  {/* 2. Location (Universal) */}
-                  <div className="relative group">
-                    <MapPin className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-brand transition-colors" />
-                    <Input 
-                      placeholder="Search City" 
-                      value={filters.location}
-                      onChange={(e) => setFilters({...filters, location: e.target.value})}
-                      className="pl-8 border-0 border-b border-slate-200 bg-transparent rounded-none h-14 text-sm font-medium text-slate-500 focus-visible:ring-0 focus-visible:border-brand transition-all placeholder:text-slate-400" 
-                    />
-                  </div>
-
-                  {/* 3. Opening Status (Church Only) */}
-                  {activeType === 'church' && (
-                    <div className="space-y-4">
-                      <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400 mb-2 block">Opening Status</label>
-                      <div className="p-1 rounded-xl border border-slate-100 flex shadow-sm bg-white">
-                        <button 
-                          onClick={() => setFilters({...filters, openNow: false, useCustomTime: false})}
-                          className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium uppercase tracking-wider ${!filters.openNow && !filters.useCustomTime ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          All
-                        </button>
-                        <button 
-                          onClick={() => setFilters({...filters, openNow: true, useCustomTime: false})}
-                          className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium uppercase tracking-wider ${filters.openNow && !filters.useCustomTime ? 'bg-brand text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          Open Now
-                        </button>
-                        <button 
-                          onClick={() => setFilters({...filters, openNow: false, useCustomTime: true})}
-                          className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium uppercase tracking-wider ${filters.useCustomTime ? 'bg-brand text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          Custom
-                        </button>
-                      </div>
-
-                      {filters.useCustomTime && (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase">Date</label>
-                            <input 
-                              type="date" 
-                              value={filters.customDate}
-                              onChange={(e) => setFilters({...filters, customDate: e.target.value})}
-                              className="w-full px-3 py-2 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand bg-slate-50/50"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                             <div className="space-y-1">
-                               <label className="text-[9px] font-bold text-slate-400 uppercase">From</label>
-                               <input 
-                                 type="time" 
-                                 value={filters.startTime}
-                                 onChange={(e) => setFilters({...filters, startTime: e.target.value})}
-                                 className="w-full px-2 py-2 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand bg-slate-50/50"
-                               />
-                             </div>
-                             <div className="space-y-1">
-                               <label className="text-[9px] font-bold text-slate-400 uppercase">To</label>
-                               <input 
-                                 type="time" 
-                                 value={filters.endTime}
-                                 onChange={(e) => setFilters({...filters, endTime: e.target.value})}
-                                 className="w-full px-2 py-2 rounded-lg border border-slate-100 text-xs font-medium outline-none focus:border-brand bg-slate-50/50"
-                               />
-                             </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Proximity Radius (Only if location is set) */}
-                  {filters.location && (
-                    <div className="space-y-4 pt-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-medium uppercase tracking-widest text-slate-400">Proximity</label>
-                        <div className="flex items-center gap-3">
-                          <button 
-                            onClick={() => setFilters({ ...filters, location: '', userCoords: null })}
-                            className="text-[9px] font-medium text-slate-400 hover:text-brand transition-colors border border-slate-200 hover:border-brand px-2 py-0.5 rounded-full uppercase tracking-tighter"
-                          >
-                            Global Search
-                          </button>
-                          <div className="flex items-center gap-1">
-                            <span className="text-sm font-semibold text-brand">{filters.radius}</span>
-                            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">km</span>
-                          </div>
-                        </div>
-                      </div>
-                      <Slider
-                        value={[filters.radius]}
-                        max={100}
-                        min={5}
-                        step={5}
-                        onValueChange={(v) => setFilters({...filters, radius: v[0]})}
-                        className="py-2"
-                      />
-                    </div>
-                  )}
-
-                  {/* 4. Denomination (Universal) */}
-                  <FilterMultiSelect 
-                    icon={Filter}
-                    label="Denomination"
-                    placeholder="All Denominations"
-                    options={taxonomies.denomination || []}
-                    selected={filters.denomination}
-                    onUpdate={(v) => setFilters({ ...filters, denomination: v })}
-                  />
-
-                  {/* 5. Languages (Universal) */}
-                  <FilterMultiSelect 
-                    icon={Globe}
-                    label="Languages"
-                    placeholder="All Languages"
-                    options={taxonomies.language || taxonomies.languages_known || []}
-                    selected={filters.language}
-                    onUpdate={(v) => setFilters({ ...filters, language: v })}
-                  />
-
-                  {/* CHURCH SPECIFIC FILTERS */}
-                  {activeType === 'church' && (
-                    <>
-                      {/* Worship Style */}
-                      <FilterMultiSelect 
-                        icon={Zap}
-                        label="Worship Styles"
-                        placeholder="All Worship Styles"
-                        options={taxonomies.worship_style || []}
-                        selected={filters.worshipStyle}
-                        onUpdate={(v) => setFilters({ ...filters, worshipStyle: v })}
-                      />
-
-                      {/* Ministry */}
-                      <FilterMultiSelect 
-                        icon={Heart}
-                        label="Ministries"
-                        placeholder="All Ministries"
-                        options={taxonomies.ministry || []}
-                        selected={filters.ministry}
-                        onUpdate={(v) => setFilters({ ...filters, ministry: v })}
-                      />
-                    </>
-                  )}
-
-                  {/* PASTOR SPECIFIC FILTERS */}
-                  {activeType === 'pastor' && (
-                    <>
-                      {/* 6. Experience Slider with Numeric Input */}
-                      <div className="space-y-4 pt-2">
-                        <div className="flex justify-between items-center">
-                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Experience</label>
-                          <div className="flex items-center gap-1">
-                            <Input 
-                              type="number" 
-                              min="0" 
-                              max="50"
-                              value={filters.experience}
-                              onChange={(e) => setFilters({...filters, experience: Math.min(50, Math.max(0, parseInt(e.target.value) || 0))})}
-                              className="w-[52px] h-7 px-2 border border-slate-200 rounded-lg bg-slate-50/50 text-right text-sm font-bold text-brand focus-visible:ring-1 focus-visible:ring-brand focus-visible:border-brand transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                            />
-                            <span className="text-xs font-bold text-brand">Years</span>
-                          </div>
-                        </div>
-                        <Slider
-                          value={[filters.experience]}
-                          max={50}
-                          step={1}
-                          onValueChange={(v) => setFilters({...filters, experience: v[0]})}
-                          className="py-2"
-                        />
-                      </div>
-
-                      {/* 7. Qualification */}
-                      <div className="relative">
-                        <Select
-                          value={filters.qualification || 'all'}
-                          onValueChange={(v) => setFilters({ ...filters, qualification: v === 'all' ? '' : v })}
-                        >
-                          <SelectTrigger className="border-0 border-b border-slate-200 rounded-none bg-transparent h-14 px-0 focus:ring-0 focus:border-brand shadow-none text-sm font-medium text-slate-500">
-                            <div className="flex items-center gap-3">
-                              <Shield className="h-5 w-5 text-slate-400" />
-                              <SelectValue placeholder="Qualification" />
-                            </div>
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[150]">
-                            <SelectItem value="all">Qualification</SelectItem>
-                            {(taxonomies.qualification || []).map(q => (
-                              <SelectItem key={q} value={q}>{q}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* 8. Designation */}
-                      <div className="relative">
-                        <Select
-                          value={filters.designation || 'all'}
-                          onValueChange={(v) => setFilters({ ...filters, designation: v === 'all' ? '' : v })}
-                        >
-                          <SelectTrigger className="border-0 border-b border-slate-200 rounded-none bg-transparent h-14 px-0 focus:ring-0 focus:border-brand shadow-none text-sm font-medium text-slate-500">
-                            <div className="flex items-center gap-3">
-                              <Zap className="h-5 w-5 text-slate-400" />
-                              <SelectValue placeholder="Designation" />
-                            </div>
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[150]">
-                            <SelectItem value="all">Designation</SelectItem>
-                            {(taxonomies.designation || taxonomies.current_designation || []).map(d => (
-                              <SelectItem key={d} value={d}>{d}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
-                  )}
-
-                  {/* 5. Sort By (Universal) */}
-                  <div className="relative">
-                    <Select
-                      value={filters.orderBy || 'nearby'}
-                      onValueChange={(v) => setFilters({...filters, orderBy: v})}
-                    >
-                      <SelectTrigger className="border-0 border-b border-slate-200 rounded-none bg-transparent h-14 px-0 focus:ring-0 focus:border-brand shadow-none text-sm font-medium text-slate-500">
-                        <div className="flex items-center gap-3">
-                          <List className="h-5 w-5 text-slate-400" />
-                          <SelectValue placeholder="Sort By" />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[150]">
-                         {[
-                           { label: 'Name A-Z', value: 'a-z' },
-                           { label: 'Name Z-A', value: 'z-a' },
-                           { label: 'Nearby', value: 'nearby' },
-                           { label: 'Latest', value: 'latest' }
-                         ].map(sort => (
-                            <SelectItem key={sort.value} value={sort.value}>{sort.label}</SelectItem>
-                         ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-              {/* Mobile Apply Button */}
-              <div className="lg:hidden p-4 border-t border-slate-100 bg-white sticky bottom-0">
-                <Button onClick={() => setShowMobileFilters(false)} className="w-full bg-brand h-12 rounded-2xl font-bold">Apply Filters</Button>
+                {renderFilters()}
               </div>
             </div>
 
@@ -733,14 +770,10 @@ export default function Explore2() {
                 )}
              </Button>
           </div>
-          </div>
         </div>
       </section>
 
 
-      <div className="fixed bottom-2 left-2 p-1 bg-black/10 backdrop-blur-sm rounded text-[8px] text-slate-500 z-[9999] pointer-events-none">
-        Build: {new Date().toLocaleTimeString()} | API: {process.env.REACT_APP_BACKEND_URL || 'Local'}
-      </div>
     </div>
   );
 }

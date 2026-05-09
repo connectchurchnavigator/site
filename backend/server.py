@@ -50,6 +50,33 @@ app = FastAPI(title="Church Navigator API")
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+@api_router.get("/cities/search")
+async def search_cities(q: str = Query(..., min_length=2)):
+    # Simple search in the geonamescache
+    # Note: all_cities_list is a dict where keys are geonameids
+    q = q.lower()
+    matches = []
+    
+    # We want to prioritize larger cities or exact matches
+    # But for now, let's just find first 20 matches
+    count = 0
+    for cid, city in all_cities_list.items():
+        if q in city['name'].lower():
+            country_name = all_countries.get(city['countrycode'], {}).get('name', city['countrycode'])
+            matches.append({
+                "name": city['name'],
+                "country": country_name,
+                "country_code": city['countrycode'],
+                "display": f"{city['name']}, {country_name}",
+                "lat": city['latitude'],
+                "lng": city['longitude']
+            })
+            count += 1
+            if count >= 20:
+                break
+                
+    return matches
+
 # Upload directory configuration
 UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -59,6 +86,13 @@ ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 ALLOWED_DOC_EXTENSIONS = {'.pdf', '.doc', '.docx'}
 ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_DOC_EXTENSIONS
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+import geonamescache
+
+# Initialize city cache
+gc = geonamescache.GeonamesCache()
+all_cities_list = gc.get_cities()
+all_countries = gc.get_countries()
 
 # ===== ENUMS =====
 class UserRole(str, Enum):

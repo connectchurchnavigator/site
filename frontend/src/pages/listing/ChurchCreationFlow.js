@@ -81,6 +81,7 @@ import { toast } from 'sonner';
 import FileUpload from '../../components/FileUpload';
 import MapGL, { Marker, NavigationControl, GeolocateControl } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { CitySelect } from '../../components/CitySelect';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
 
@@ -1492,11 +1493,23 @@ const ChurchCreationFlow = () => {
                               </GMBRow>
 
                               <GMBRow label="Search City *" error={isFieldEmpty('city')} hint="The primary city where seekers will search for your church.">
-                                 <Input
+                                 <CitySelect
                                     value={formData.city}
-                                    onChange={(e) => updateFormData('city', e.target.value)}
+                                    onChange={(cityName, cityData) => {
+                                       updateFormData('city', cityName);
+                                       if (cityData) {
+                                          updateFormData('latitude', cityData.lat.toString());
+                                          updateFormData('longitude', cityData.lng.toString());
+                                          setMapViewport(prev => ({
+                                             ...prev,
+                                             latitude: cityData.lat,
+                                             longitude: cityData.lng,
+                                             zoom: 12
+                                          }));
+                                       }
+                                    }}
                                     placeholder="e.g. Hyderabad, Dallas, etc."
-                                    className={inputStyle}
+                                    className="h-11 rounded-xl"
                                  />
                               </GMBRow>
                            </div>
@@ -2643,12 +2656,27 @@ const ChurchCreationFlow = () => {
 
                         <div className="space-y-2">
                            <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Search City *</Label>
-                           <p className="text-[10px] text-gray-400 -mt-1 mb-1">The city where people will search for you in the directory</p>
-                           <Input
-                              placeholder="e.g. Hyderabad, Dallas..."
+                           <p className="text-[10px] font-bold text-gray-400 -mt-1 mb-1 uppercase tracking-tighter">The city where people will search for you in the directory</p>
+                           <CitySelect
                               value={quickPastor.city}
-                              onChange={(e) => setQuickPastor(prev => ({ ...prev, city: e.target.value }))}
-                              className={cn(inputStyle, "h-12")}
+                              onChange={(cityName, cityData) => {
+                                 setQuickPastor(prev => ({ 
+                                    ...prev, 
+                                    city: cityName,
+                                    latitude: cityData?.lat || prev.latitude,
+                                    longitude: cityData?.lng || prev.longitude
+                                 }));
+                                 if (cityData) {
+                                    setQuickPastorViewport(prev => ({
+                                       ...prev,
+                                       latitude: cityData.lat,
+                                       longitude: cityData.lng,
+                                       zoom: 12
+                                    }));
+                                 }
+                              }}
+                              placeholder="e.g. Hyderabad, Dallas..."
+                              className="h-12"
                            />
                         </div>
                      </div>
@@ -2721,9 +2749,28 @@ const ChurchCreationFlow = () => {
                            <Input name="qc-church-addr-secure" autoComplete="new-password" placeholder="Building, Street, Area, City, State, Zip" value={quickChurch.address_line1} onChange={(e) => setQuickChurch({ ...quickChurch, address_line1: e.target.value })} className={inputStyle} />
                         </div>
                         <div className="space-y-2">
-                           <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-500">Search City *</Label>
-                           <p className="text-[10px] text-gray-400 -mt-1 mb-1">The city where seekers will find this church in the directory</p>
-                           <Input placeholder="e.g. Hyderabad, Dallas..." value={quickChurch.city} onChange={(e) => setQuickChurch({ ...quickChurch, city: e.target.value })} className={inputStyle} />
+                           <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-500">City *</Label>
+                           <CitySelect
+                              value={quickChurch.city}
+                              onChange={(cityName, cityData) => {
+                                 setQuickChurch(prev => ({ 
+                                    ...prev, 
+                                    city: cityName,
+                                    latitude: cityData?.lat || prev.latitude,
+                                    longitude: cityData?.lng || prev.longitude
+                                 }));
+                                 if (cityData) {
+                                    setQuickChurchViewport(prev => ({
+                                       ...prev,
+                                       latitude: cityData.lat,
+                                       longitude: cityData.lng,
+                                       zoom: 12
+                                    }));
+                                 }
+                              }}
+                              placeholder="e.g. Hyderabad, Dallas..."
+                              className="h-12"
+                           />
                         </div>
                         <div className="space-y-2">
                            <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-500">How are you related to this listing? (Optional)</Label>
