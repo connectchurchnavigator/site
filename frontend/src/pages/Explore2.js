@@ -134,6 +134,8 @@ export default function Explore2() {
   });
   const [mapBounds, setMapBounds] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
+  const [mobileView, setMobileView] = useState('list'); // 'list' or 'map'
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   useEffect(() => {
     fetchTaxonomies();
@@ -328,16 +330,49 @@ export default function Explore2() {
       </div>
 
       {/* Main Content Area - Full Width Expansion */}
-      <section className="bg-white">
+      <section className="bg-white relative">
         <div className="w-full">
-          <div className="flex flex-col lg:flex-row gap-0 bg-white overflow-hidden h-[calc(100vh-104px)]">
+          <div className="flex flex-col lg:flex-row gap-0 bg-white overflow-hidden h-[calc(100vh-104px)] relative">
             
+            {/* Mobile Filter Toggle (Visible only on mobile) */}
+            <div className="lg:hidden flex items-center gap-2 p-4 border-b border-slate-50 sticky top-0 bg-white/80 backdrop-blur-md z-30">
+                <Button 
+                    variant="outline" 
+                    className="flex-1 rounded-xl h-10 text-xs font-bold border-slate-200"
+                    onClick={() => setShowMobileFilters(true)}
+                >
+                    <Filter className="w-4 h-4 mr-2" />
+                    Filters {Object.values(filters).filter(v => Array.isArray(v) ? v.length > 0 : v).length > 2 && <Badge className="ml-1 bg-brand h-4 w-4 p-0 flex items-center justify-center text-[8px]">{Object.values(filters).filter(v => Array.isArray(v) ? v.length > 0 : v).length - 2}</Badge>}
+                </Button>
+                <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <button 
+                        onClick={() => setMobileView('list')}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${mobileView === 'list' ? 'bg-white text-brand shadow-sm' : 'text-slate-400'}`}
+                    >
+                        List
+                    </button>
+                    <button 
+                        onClick={() => setMobileView('map')}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${mobileView === 'map' ? 'bg-white text-brand shadow-sm' : 'text-slate-400'}`}
+                    >
+                        Map
+                    </button>
+                </div>
+            </div>
+
             {/* 1. Sidebar - Filters (Left) */}
-            <div className="lg:w-[320px] border-r border-slate-100 bg-white overflow-y-auto custom-scrollbar">
-              <div className="p-6 space-y-6">
+            <div className={`
+                ${showMobileFilters ? 'fixed inset-0 z-[100] flex flex-col' : 'hidden'} 
+                lg:flex lg:relative lg:inset-auto lg:w-[320px] lg:z-auto
+                border-r border-slate-100 bg-white overflow-y-auto custom-scrollbar
+            `}>
+              <div className="p-6 space-y-6 flex-1">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-lg font-semibold text-slate-950">Filters</h3>
-                  <button onClick={resetFilters} className="text-brand text-xs font-medium uppercase tracking-widest hover:opacity-70">Reset</button>
+                  <div className="flex items-center gap-4">
+                    <button onClick={resetFilters} className="text-brand text-xs font-medium uppercase tracking-widest hover:opacity-70">Reset</button>
+                    <button onClick={() => setShowMobileFilters(false)} className="lg:hidden text-slate-400 p-1"><X className="w-5 h-5" /></button>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -596,10 +631,17 @@ export default function Explore2() {
                   </div>
                 </div>
               </div>
+              {/* Mobile Apply Button */}
+              <div className="lg:hidden p-4 border-t border-slate-100 bg-white sticky bottom-0">
+                <Button onClick={() => setShowMobileFilters(false)} className="w-full bg-brand h-12 rounded-2xl font-bold">Apply Filters</Button>
+              </div>
             </div>
 
             {/* 2. Results Column (Middle) */}
-            <div className="lg:w-[500px] border-r border-slate-100 bg-white overflow-y-auto custom-scrollbar">
+            <div className={`
+                ${mobileView === 'list' ? 'flex' : 'hidden'} 
+                lg:flex lg:w-[500px] border-r border-slate-100 bg-white overflow-y-auto custom-scrollbar flex-col
+            `}>
               <div className="p-6 space-y-6">
                 {/* Stats Bar */}
                 <div className="flex items-center justify-between mb-4 sticky top-0 bg-white/95 backdrop-blur-md py-4 z-10 border-b border-slate-50">
@@ -657,7 +699,10 @@ export default function Explore2() {
             </div>
 
             {/* 3. Map View (Right) */}
-            <div className="flex-1 bg-slate-100 hidden lg:block relative overflow-hidden">
+            <div className={`
+                ${mobileView === 'map' ? 'block' : 'hidden'} 
+                lg:block flex-1 bg-slate-100 relative overflow-hidden h-full
+            `}>
                 <MapboxExploreMap 
                   results={results} 
                   type={activeType} 
@@ -673,6 +718,21 @@ export default function Explore2() {
                   }}
                 />
             </div>
+          </div>
+
+          {/* Mobile Floating Toggle Button (Visible only on mobile) */}
+          <div className="lg:hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
+             <Button 
+                onClick={() => setMobileView(mobileView === 'list' ? 'map' : 'list')}
+                className="rounded-full h-12 px-6 bg-slate-900 text-white shadow-2xl hover:bg-slate-800 transition-all border border-white/20 backdrop-blur-md"
+             >
+                {mobileView === 'list' ? (
+                    <><MapIcon className="w-4 h-4 mr-2" /> Show Map</>
+                ) : (
+                    <><List className="w-4 h-4 mr-2" /> Show List</>
+                )}
+             </Button>
+          </div>
           </div>
         </div>
       </section>
