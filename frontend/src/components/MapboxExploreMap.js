@@ -62,8 +62,7 @@ const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, 
                 const lat = safeParse(r.latitude);
                 const lng = safeParse(r.longitude);
                 return lat !== null && lng !== null && 
-                       (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001) &&
-                       !(Math.abs(lat - 17.39) < 0.01 && Math.abs(lng - 17.39) < 0.01); 
+                       (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001);
       }) || [];
       
       // ONLY auto-center if the results exist and the user hasn't manually moved yet.
@@ -112,8 +111,7 @@ const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, 
     const lat = parseFloat(r.latitude);
     const lng = parseFloat(r.longitude);
     return r.latitude && r.longitude && 
-           (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001) &&
-           !(Math.abs(lat - 17.39) < 0.01 && Math.abs(lng - 17.39) < 0.01);
+           (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001);
   }).map((item) => {
     const isHovered = hoveredId === item.id;
     return (
@@ -160,6 +158,16 @@ const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, 
         onMove={evt => {
             setViewport(evt.viewState);
             setMapMoved(true);
+        }}
+        onLoad={evt => {
+            const map = evt.target;
+            const b = map.getBounds();
+            onBoundsChange?.({
+                minLat: b.getSouth(),
+                maxLat: b.getNorth(),
+                minLng: b.getWest(),
+                maxLng: b.getEast()
+            });
         }}
         onMoveEnd={evt => {
             const map = evt.target;
