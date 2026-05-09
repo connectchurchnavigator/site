@@ -35,12 +35,24 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
     }
     setLoading(true);
     try {
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL || ''}/api/cities/search?q=${searchQuery}`);
-      setCities(response.data);
-      if (response.data.length > 0) setOpen(true);
-      else setOpen(false);
+      const baseUrl = process.env.REACT_APP_BACKEND_URL || '';
+      // Smart path handling: check if baseUrl already includes /api
+      const apiPath = baseUrl.endsWith('/api') ? '/cities/search' : '/api/cities/search';
+      const response = await axios.get(`${baseUrl}${apiPath}?q=${searchQuery}`);
+      
+      if (Array.isArray(response.data)) {
+        setCities(response.data);
+        if (response.data.length > 0) setOpen(true);
+        else setOpen(false);
+      } else {
+        console.warn("City search API returned non-array data:", response.data);
+        setCities([]);
+        setOpen(false);
+      }
     } catch (error) {
       console.error("City search failed:", error);
+      setCities([]);
+      setOpen(false);
     } finally {
       setLoading(false);
     }
