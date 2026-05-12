@@ -253,7 +253,7 @@ const ChurchCreationFlow = () => {
    const { id } = useParams();
    const [currentStep, setCurrentStep] = useState(1);
    const [churchId, setChurchId] = useState(id || null);
-   const [taxonomies, setTaxonomies] = useState({});
+   const [taxonomies, setTaxonomies] = useState({ relationship: [] });
    const [pastors, setPastors] = useState([]);
    const [churches, setChurches] = useState([]);
    const [loading, setLoading] = useState(false);
@@ -495,7 +495,6 @@ const ChurchCreationFlow = () => {
             pastor_name: 'Lead Pastor',
             email: 'Email',
             phone: 'Phone',
-            city: 'City',
             address_line1: 'Street Address'
          };
 
@@ -532,8 +531,8 @@ const ChurchCreationFlow = () => {
          const activeServices = formData.services.filter(s =>
             s.day?.trim() ||
             s.event_name?.trim() ||
-            (s.start_time && s.start_time !== '::PM') ||
-            (s.end_time && s.end_time !== '::PM')
+            (s.start_time && s.start_time !== '::AM' && s.start_time !== '::PM') ||
+            (s.end_time && s.end_time !== '::AM' && s.end_time !== '::PM')
          );
 
          // If anything is touched, ensure required fields (Day, Title, Start Time) are present
@@ -541,6 +540,7 @@ const ChurchCreationFlow = () => {
             !s.day?.trim() ||
             !s.event_name?.trim() ||
             !s.start_time ||
+            s.start_time === '::AM' ||
             s.start_time === '::PM'
          );
 
@@ -796,8 +796,8 @@ const ChurchCreationFlow = () => {
    const handleQuickPastorCreate = async () => {
       setQuickPastorEmailError('');
 
-      if (!quickPastor.name || !quickPastor.email || !quickPastor.phone || !quickPastor.denomination || !quickPastor.city) {
-         toast.error('Please fill in required fields (Name, Email, Phone, Denomination, City)');
+      if (!quickPastor.name || !quickPastor.email || !quickPastor.phone || !quickPastor.denomination) {
+         toast.error('Please fill in required fields (Name, Email, Phone, Denomination)');
          if (!quickPastor.email) setQuickPastorEmailError('Email is required');
          return;
       }
@@ -1464,7 +1464,7 @@ const ChurchCreationFlow = () => {
                                              draggable
                                              onDragEnd={handleMarkerDrag}
                                              anchor="bottom"
-                                             style={{ zIndex: 1000 }}
+                                             style={{ zIndex: 10 }}
                                           >
                                              <div className="cursor-grab active:cursor-grabbing">
                                                 <div className="relative group/pin">
@@ -1543,26 +1543,7 @@ const ChurchCreationFlow = () => {
                                  />
                               </GMBRow>
 
-                              <GMBRow label="City *" error={isFieldEmpty('city')} hint="The primary city where seekers will search for your church.">
-                                 <CitySelect
-                                    value={formData.city}
-                                    onChange={(cityName, cityData) => {
-                                       updateFormData('city', cityName);
-                                       if (cityData) {
-                                          updateFormData('latitude', cityData.lat.toString());
-                                          updateFormData('longitude', cityData.lng.toString());
-                                          setMapViewport(prev => ({
-                                             ...prev,
-                                             latitude: cityData.lat,
-                                             longitude: cityData.lng,
-                                             zoom: 12
-                                          }));
-                                       }
-                                    }}
-                                    placeholder="e.g. London, Dallas, etc."
-                                    variant="outline"
-                                 />
-                              </GMBRow>
+
 
                               <GMBRow label="Operating Timezone" hint="Auto-detected from location">
                                        <div className="relative group">
@@ -2476,12 +2457,19 @@ const ChurchCreationFlow = () => {
                                              <h4 className="text-base font-semibold text-gray-900">Entity Relationship</h4>
                                           </div>
                                           <GMBRow label="How are you related to this listing? (Optional)">
-                                             <Input
-                                                value={formData.relationship_to_listing}
-                                                onChange={(e) => updateFormData('relationship_to_listing', e.target.value)}
-                                                placeholder="e.g. Lead Pastor, Admin, Founder..."
-                                                className={inputStyle}
-                                             />
+                                             <Select
+                                                 value={formData.relationship_to_listing}
+                                                 onValueChange={(v) => updateFormData('relationship_to_listing', v)}
+                                              >
+                                                 <SelectTrigger className={inputStyle}>
+                                                    <SelectValue placeholder="Select your relationship" />
+                                                 </SelectTrigger>
+                                                 <SelectContent className="z-[110]">
+                                                    {(taxonomies.relationship_church || []).map(r => (
+                                                       <SelectItem key={r} value={r}>{r}</SelectItem>
+                                                    ))}
+                                                 </SelectContent>
+                                              </Select>
                                           </GMBRow>
                                        </div>
                                     </AccordionContent>
@@ -2519,7 +2507,7 @@ const ChurchCreationFlow = () => {
 
          {/* Quick Pastor Creation Dialog */}
                   <Dialog open={showQuickPastorDialog} onOpenChange={setShowQuickPastorDialog}>
-            <DialogContent className="max-w-2xl p-0 border-none rounded-[32px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+            <DialogContent className="max-w-2xl p-0 border-none rounded-[32px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden z-[1001]">
                <div className="flex-1 p-10 space-y-10 bg-white overflow-y-auto custom-scrollbar min-h-0">
                   <DialogHeader className="space-y-3">
                      <DialogTitle className="text-3xl font-bold text-slate-900 tracking-tight">Quick Pastor Profile</DialogTitle>
@@ -2738,30 +2726,23 @@ const ChurchCreationFlow = () => {
                            />
                         </div>
 
-                        <div className="space-y-2">
-                           <Label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">City *</Label>
-                           <p className="text-[10px] font-bold text-gray-400 -mt-1 mb-1 uppercase tracking-tighter">The city where people will search for you in the directory</p>
-                           <CitySelect
-                              value={quickPastor.city}
-                              onChange={(cityName, cityData) => {
-                                 setQuickPastor(prev => ({ 
-                                    ...prev, 
-                                    city: cityName,
-                                    latitude: cityData?.lat || prev.latitude,
-                                    longitude: cityData?.lng || prev.longitude
-                                 }));
-                                 if (cityData) {
-                                    setQuickPastorViewport(prev => ({
-                                       ...prev,
-                                       latitude: cityData.lat,
-                                       longitude: cityData.lng,
-                                       zoom: 12
-                                    }));
-                                 }
-                              }}
-                              placeholder="e.g. London, Dallas, etc."
-                              variant="outline"
-                           />
+
+
+                        <div className="space-y-3">
+                           <Label className="text-[12px] font-bold tracking-widest uppercase text-gray-500 block">How are you related to this listing? (Optional)</Label>
+                           <Select
+                              value={quickPastor.relationship_to_listing}
+                              onValueChange={(v) => setQuickPastor(prev => ({ ...prev, relationship_to_listing: v }))}
+                           >
+                              <SelectTrigger className={cn(selectStyle, "h-12 bg-gray-50/50")}>
+                                 <SelectValue placeholder="Select your relationship" />
+                              </SelectTrigger>
+                              <SelectContent className="z-[130]">
+                                 {(taxonomies.relationship_pastor || []).map(r => (
+                                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                                 ))}
+                              </SelectContent>
+                           </Select>
                         </div>
 
                         <div className="space-y-3">
@@ -2805,7 +2786,7 @@ const ChurchCreationFlow = () => {
 
          {/* Quick Church Creation Dialog (Step 3) */}
          <Dialog open={showQuickChurchDialog} onOpenChange={setShowQuickChurchDialog}>
-            <DialogContent className="max-w-2xl p-0 border-none overflow-hidden rounded-3xl shadow-2xl">
+            <DialogContent className="max-w-2xl p-0 border-none overflow-hidden rounded-3xl shadow-2xl z-[1001]">
                <div className="p-10 space-y-8 bg-white max-h-[90vh] overflow-y-auto custom-scrollbar">
                   <DialogHeader className="space-y-3">
                      <DialogTitle className="text-2xl font-semibold text-[#202124] tracking-tight">Quick Church Profile</DialogTitle>
@@ -2861,33 +2842,22 @@ const ChurchCreationFlow = () => {
                            <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-500">Full Address *</Label>
                            <Input name="qc-church-addr-secure" autoComplete="new-password" placeholder="Building, Street, Area, City, State, Zip" value={quickChurch.address_line1} onChange={(e) => setQuickChurch({ ...quickChurch, address_line1: e.target.value })} className={inputStyle} />
                         </div>
-                        <div className="space-y-2">
-                           <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-500">City *</Label>
-                           <CitySelect
-                              value={quickChurch.city}
-                              onChange={(cityName, cityData) => {
-                                 setQuickChurch(prev => ({ 
-                                    ...prev, 
-                                    city: cityName,
-                                    latitude: cityData?.lat || prev.latitude,
-                                    longitude: cityData?.lng || prev.longitude
-                                 }));
-                                 if (cityData) {
-                                    setQuickChurchViewport(prev => ({
-                                       ...prev,
-                                       latitude: cityData.lat,
-                                       longitude: cityData.lng,
-                                       zoom: 12
-                                    }));
-                                 }
-                              }}
-                              placeholder="e.g. London, Dallas, etc."
-                              variant="outline"
-                           />
-                        </div>
+
                         <div className="space-y-2">
                            <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-500">How are you related to this listing? (Optional)</Label>
-                           <Input placeholder="e.g. Admin, Branch Head..." value={quickChurch.relationship_to_listing} onChange={(e) => setQuickChurch({ ...quickChurch, relationship_to_listing: e.target.value })} className={inputStyle} />
+                           <Select
+                              value={quickChurch.relationship_to_listing}
+                              onValueChange={(v) => setQuickChurch({ ...quickChurch, relationship_to_listing: v })}
+                           >
+                              <SelectTrigger className={inputStyle}>
+                                 <SelectValue placeholder="Select your relationship" />
+                              </SelectTrigger>
+                              <SelectContent className="z-[130]">
+                                 {(taxonomies.relationship_church || []).map(r => (
+                                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                                 ))}
+                              </SelectContent>
+                           </Select>
                         </div>
                      </div>
 

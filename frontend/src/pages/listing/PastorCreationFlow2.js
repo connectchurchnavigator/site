@@ -161,7 +161,7 @@ const PastorCreationFlow2 = () => {
    const { id } = useParams();
    const [currentStep, setCurrentStep] = useState(1);
    const [pastorId, setPastorId] = useState(id || null);
-   const [taxonomies, setTaxonomies] = useState({});
+   const [taxonomies, setTaxonomies] = useState({ relationship: [] });
    const [churches, setChurches] = useState([]);
    const [loading, setLoading] = useState(false);
    const [showQuickChurchDialog, setShowQuickChurchDialog] = useState(false);
@@ -439,8 +439,8 @@ const PastorCreationFlow2 = () => {
 
 
    const handleQuickChurchCreate = async () => {
-      if (!quickChurch.name || !quickChurch.email || !quickChurch.phone || !quickChurch.denomination || !quickChurch.city) {
-         toast.error('Please fill in required fields (Name, Email, Phone, City, Denomination)');
+      if (!quickChurch.name || !quickChurch.email || !quickChurch.phone || !quickChurch.denomination) {
+         toast.error('Please fill in required fields (Name, Email, Phone, Denomination)');
          return;
       }
       setQuickChurchLoading(true);
@@ -484,7 +484,6 @@ const PastorCreationFlow2 = () => {
          if (!formData.name?.trim()) return toast.error('Full Name is mandatory');
          if (!formData.email?.trim()) return toast.error('Email is mandatory');
          if (!formData.phone?.trim()) return toast.error('Phone number is mandatory');
-         if (!formData.city?.trim()) return toast.error('Search City is mandatory');
          if (!formData.denomination) return toast.error('Denomination is mandatory');
          
          // Simple email validation
@@ -715,40 +714,6 @@ const PastorCreationFlow2 = () => {
                                  />
                               </GMBRow>
 
-                              <div className="space-y-2 relative">
-                                 <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">City *</Label>
-                                 <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                    <Input 
-                                       placeholder="e.g. London, Dallas, etc." 
-                                       value={formData.city} 
-                                       onChange={(e) => {
-                                          updateFormData('city', e.target.value);
-                                          handleCitySearch(e.target.value);
-                                       }} 
-                                       className={cn(inputStyle, "pl-10")} 
-                                    />
-                                    {cityLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 border-2 border-[#6c1cff] border-t-transparent rounded-full animate-spin" />}
-                                 </div>
-                                 
-                                 {citySuggestions.length > 0 && (
-                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-[110] overflow-hidden">
-                                       {citySuggestions.map((s, idx) => (
-                                          <button
-                                             key={idx}
-                                             onClick={() => handleCitySelect(s)}
-                                             className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-start gap-2 border-b border-gray-50 last:border-none"
-                                          >
-                                             <MapPin className="h-4 w-4 text-[#6c1cff] mt-0.5" />
-                                             <div className="min-w-0">
-                                                <p className="text-[13px] font-semibold text-gray-800 truncate">{s.text}</p>
-                                                <p className="text-[11px] text-gray-500 truncate">{s.place_name}</p>
-                                             </div>
-                                          </button>
-                                       ))}
-                                    </div>
-                                 )}
-                              </div>
                                  <GMBRow label="Denomination *">
                                     <Select value={formData.denomination} onValueChange={(v) => updateFormData('denomination', v)}>
                                        <SelectTrigger className={selectStyle}><SelectValue placeholder="Select denomination" /></SelectTrigger>
@@ -1165,12 +1130,19 @@ const PastorCreationFlow2 = () => {
                                              <h4 className="text-base font-semibold text-gray-900">Listing Verification</h4>
                                           </div>
                                           <GMBRow label="How are you related to this listing? (Optional)">
-                                             <Input 
-                                                value={formData.relationship_to_listing} 
-                                                onChange={(e) => updateFormData('relationship_to_listing', e.target.value)} 
-                                                placeholder="e.g. Lead Pastor, Admin, Founder..." 
-                                                className={inputStyle} 
-                                             />
+                                             <Select
+                                                 value={formData.relationship_to_listing}
+                                                 onValueChange={(v) => updateFormData('relationship_to_listing', v)}
+                                              >
+                                                 <SelectTrigger className={inputStyle}>
+                                                    <SelectValue placeholder="Select your relationship" />
+                                                 </SelectTrigger>
+                                                 <SelectContent className="z-[110]">
+                                                    {(taxonomies.relationship_pastor || []).map(r => (
+                                                       <SelectItem key={r} value={r}>{r}</SelectItem>
+                                                    ))}
+                                                 </SelectContent>
+                                              </Select>
                                           </GMBRow>
                                        </div>
                                     </AccordionContent>
@@ -1244,40 +1216,7 @@ const PastorCreationFlow2 = () => {
                         <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Full Address *</Label>
                         <Input placeholder="Building No, Street Name, Area, City, State, Country, Zip" value={quickChurch.address_line1} onChange={(e) => setQuickChurch({ ...quickChurch, address_line1: e.target.value })} className={inputStyle} />
                      </div>
-                     <div className="space-y-2 relative">
-                        <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">City *</Label>
-                        <div className="relative">
-                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                           <Input 
-                              placeholder="e.g. London, Dallas, etc." 
-                              value={quickChurch.city} 
-                              onChange={(e) => {
-                                 setQuickChurch({ ...quickChurch, city: e.target.value });
-                                 handleQuickCitySearch(e.target.value);
-                              }} 
-                              className={cn(inputStyle, "pl-10")} 
-                           />
-                           {quickCityLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 border-2 border-[#6c1cff] border-t-transparent rounded-full animate-spin" />}
-                        </div>
-                        
-                        {quickCitySuggestions.length > 0 && (
-                           <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-[110] overflow-hidden">
-                              {quickCitySuggestions.map((s, idx) => (
-                                 <button
-                                    key={idx}
-                                    onClick={() => handleQuickCitySelect(s)}
-                                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-start gap-2 border-b border-gray-50 last:border-none"
-                                 >
-                                    <MapPin className="h-4 w-4 text-[#6c1cff] mt-0.5" />
-                                    <div className="min-w-0">
-                                       <p className="text-[13px] font-semibold text-gray-800 truncate">{s.text}</p>
-                                       <p className="text-[11px] text-gray-500 truncate">{s.place_name}</p>
-                                    </div>
-                                 </button>
-                              ))}
-                           </div>
-                        )}
-                     </div>
+
 
                      <div className="space-y-2">
                         <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Operating Timezone</Label>
@@ -1298,7 +1237,19 @@ const PastorCreationFlow2 = () => {
 
                      <div className="space-y-2">
                         <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">How are you related to this listing? (Optional)</Label>
-                        <Input placeholder="e.g. Lead Pastor, Admin, Founder..." value={quickChurch.relationship_to_listing} onChange={(e) => setQuickChurch({ ...quickChurch, relationship_to_listing: e.target.value })} className={inputStyle} />
+                        <Select
+                                value={quickChurch.relationship_to_listing}
+                                onValueChange={(v) => setQuickChurch({ ...quickChurch, relationship_to_listing: v })}
+                             >
+                                <SelectTrigger className={inputStyle}>
+                                   <SelectValue placeholder="Select your relationship" />
+                                </SelectTrigger>
+                                <SelectContent className="z-[130]">
+                                   {(taxonomies.relationship_church || []).map(r => (
+                                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                                   ))}
+                                </SelectContent>
+                             </Select>
                      </div>
                   </div>
 
