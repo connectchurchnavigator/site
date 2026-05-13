@@ -445,7 +445,7 @@ const AdminChurches = () => {
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 bg-white z-[110]">
+                        <DropdownMenuContent align="end" className="w-48 bg-white z-[1100]">
                           <DropdownMenuItem asChild className="cursor-pointer">
                             <a
                               href={`/church/${church.slug}`}

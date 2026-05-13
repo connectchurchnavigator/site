@@ -49,7 +49,7 @@ const FilterMultiSelect = ({ icon: Icon, label, options, selected, onUpdate, pla
           <ChevronDown className={`h-4 w-4 text-slate-300 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-0 rounded-2xl shadow-2xl border-slate-100 z-[150]" align="start">
+      <PopoverContent className="w-[280px] p-0 rounded-2xl shadow-2xl border-slate-100 z-[1100]" align="start">
         <div className="p-2 border-b border-slate-50 bg-slate-50/50 rounded-t-2xl flex justify-between items-center">
           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-2">{label}</span>
           {selected.length > 0 && (
@@ -493,7 +493,7 @@ export default function Explore2() {
                   <SelectValue placeholder="Qualification" />
                 </div>
               </SelectTrigger>
-              <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[150]">
+              <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[1100]">
                 <SelectItem value="all">Qualification</SelectItem>
                 {(taxonomies.qualification || []).map(q => (
                   <SelectItem key={q} value={q}>{q}</SelectItem>
@@ -513,7 +513,7 @@ export default function Explore2() {
                   <SelectValue placeholder="Designation" />
                 </div>
               </SelectTrigger>
-              <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[150]">
+              <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[1100]">
                 <SelectItem value="all">Designation</SelectItem>
                 {(taxonomies.designation || taxonomies.current_designation || []).map(d => (
                   <SelectItem key={d} value={d}>{d}</SelectItem>
@@ -536,7 +536,7 @@ export default function Explore2() {
               <SelectValue placeholder="Sort By" />
             </div>
           </SelectTrigger>
-          <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[150]">
+          <SelectContent className="rounded-xl border-slate-100 shadow-2xl z-[1100]">
              {[
                { label: 'Name A-Z', value: 'a-z' },
                { label: 'Name Z-A', value: 'z-a' },
@@ -629,7 +629,7 @@ export default function Explore2() {
                         animate={{ x: 0 }}
                         exit={{ x: '-100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="fixed inset-0 z-[100] flex"
+                        className="fixed inset-0 z-[1100] flex"
                     >
                         {/* Backdrop */}
                         <motion.div 

@@ -128,7 +128,7 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
         </PopoverTrigger>
         <PopoverContent 
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="w-[var(--radix-popover-trigger-width)] p-0 z-[500] shadow-2xl border-slate-100 rounded-2xl overflow-hidden animate-in fade-in zoom-in duration-200"
+          className="w-[var(--radix-popover-trigger-width)] p-0 z-[1100] shadow-2xl border-slate-100 rounded-2xl overflow-hidden animate-in fade-in zoom-in duration-200"
           align="start"
           sideOffset={5}
         >

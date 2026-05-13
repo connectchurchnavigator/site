@@ -253,7 +253,15 @@ const ChurchCreationFlow = () => {
    const { id } = useParams();
    const [currentStep, setCurrentStep] = useState(1);
    const [churchId, setChurchId] = useState(id || null);
-   const [taxonomies, setTaxonomies] = useState({ relationship: [] });
+   const [taxonomies, setTaxonomies] = useState({ 
+      denomination: [], 
+      relationship_church: [], 
+      relationship_pastor: [],
+      language: [],
+      worship_style: [],
+      ministry: [],
+      facility: []
+   });
    const [pastors, setPastors] = useState([]);
    const [churches, setChurches] = useState([]);
    const [loading, setLoading] = useState(false);
@@ -1552,7 +1560,7 @@ const ChurchCreationFlow = () => {
                                              <SelectTrigger className={cn(selectStyle, "pl-10")}>
                                                 <SelectValue placeholder="Select timezone" />
                                              </SelectTrigger>
-                                             <SelectContent position="popper" side="bottom" className="z-[110] max-h-[300px]">
+                                             <SelectContent position="popper" side="bottom" className="z-[1100] max-h-[300px]">
                                                 {/* Common Timezones Subset + Currently Selected */}
                                                 {[
                                                    'UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London',
@@ -2150,7 +2158,7 @@ const ChurchCreationFlow = () => {
                                                             <ChevronsUpDown className="h-4 w-4 opacity-50" />
                                                          </button>
                                                       </PopoverTrigger>
-                                                      <PopoverContent side="bottom" align="start" avoidCollisions={false} className="w-[300px] p-0 z-[100] rounded-xl overflow-hidden shadow-2xl border-none">
+                                                      <PopoverContent side="bottom" align="start" avoidCollisions={false} className="w-[300px] p-0 z-[1000] rounded-xl overflow-hidden shadow-2xl border-none">
                                                          <Command>
                                                             <CommandInput placeholder="Search churches..." />
                                                             <CommandList className="max-h-[300px] custom-scrollbar">
@@ -2464,7 +2472,7 @@ const ChurchCreationFlow = () => {
                                                  <SelectTrigger className={inputStyle}>
                                                     <SelectValue placeholder="Select your relationship" />
                                                  </SelectTrigger>
-                                                 <SelectContent className="z-[110]">
+                                                 <SelectContent className="z-[1100]">
                                                     {(taxonomies.relationship_church || []).map(r => (
                                                        <SelectItem key={r} value={r}>{r}</SelectItem>
                                                     ))}
@@ -2590,7 +2598,7 @@ const ChurchCreationFlow = () => {
                            <SelectTrigger className={cn(selectStyle, "h-12 bg-gray-50/50 border-gray-100 rounded-xl")}>
                               <SelectValue placeholder="Select denomination" />
                            </SelectTrigger>
-                           <SelectContent position="popper" side="bottom" className="z-[130] max-h-[300px] rounded-2xl border-none shadow-2xl">
+                           <SelectContent position="popper" side="bottom" className="z-[1100] max-h-[300px] rounded-2xl border-none shadow-2xl">
                               {(taxonomies.denomination || []).sort().map(d => (
                                  <SelectItem key={d} value={d}>{d}</SelectItem>
                               ))}
@@ -2737,7 +2745,7 @@ const ChurchCreationFlow = () => {
                               <SelectTrigger className={cn(selectStyle, "h-12 bg-gray-50/50")}>
                                  <SelectValue placeholder="Select your relationship" />
                               </SelectTrigger>
-                              <SelectContent className="z-[130]">
+                              <SelectContent className="z-[1100]">
                                  {(taxonomies.relationship_pastor || []).map(r => (
                                     <SelectItem key={r} value={r}>{r}</SelectItem>
                                  ))}
@@ -2753,7 +2761,7 @@ const ChurchCreationFlow = () => {
                                  <SelectTrigger className={cn(selectStyle, "pl-10 h-12 bg-gray-50/50")}>
                                     <SelectValue placeholder="Select timezone" />
                                  </SelectTrigger>
-                                 <SelectContent position="popper" side="bottom" className="z-[130] max-h-[300px] rounded-2xl border-none shadow-2xl">
+                                 <SelectContent position="popper" side="bottom" className="z-[1100] max-h-[300px] rounded-2xl border-none shadow-2xl">
                                     {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo'].map(tz => (
                                        <SelectItem key={tz} value={tz}>{tz}</SelectItem>
                                     ))}
@@ -2852,7 +2860,7 @@ const ChurchCreationFlow = () => {
                               <SelectTrigger className={inputStyle}>
                                  <SelectValue placeholder="Select your relationship" />
                               </SelectTrigger>
-                              <SelectContent className="z-[130]">
+                              <SelectContent className="z-[1100]">
                                  {(taxonomies.relationship_church || []).map(r => (
                                     <SelectItem key={r} value={r}>{r}</SelectItem>
                                  ))}
@@ -2885,7 +2893,7 @@ const ChurchCreationFlow = () => {
                               </div>
 
                               {quickSearchSuggestions.length > 0 && (
-                                 <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-[110] overflow-hidden">
+                                 <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-[1100] overflow-hidden">
                                     {quickSearchSuggestions.map((s, idx) => (
                                        <button
                                           key={idx}
@@ -2990,7 +2998,7 @@ const ChurchCreationFlow = () => {
                                     <SelectTrigger className={cn(selectStyle, "pl-10 h-11")}>
                                        <SelectValue placeholder="Select timezone" />
                                     </SelectTrigger>
-                                    <SelectContent position="popper" side="bottom" className="z-[120] max-h-[300px]">
+                                    <SelectContent position="popper" side="bottom" className="z-[1100] max-h-[300px]">
                                        {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo'].map(tz => (
                                           <SelectItem key={tz} value={tz}>{tz}</SelectItem>
                                        ))}
@@ -3006,7 +3014,7 @@ const ChurchCreationFlow = () => {
                         <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-500">Denomination *</Label>
                         <Select value={quickChurch.denomination} onValueChange={(v) => setQuickChurch({ ...quickChurch, denomination: v })}>
                            <SelectTrigger className={selectStyle}><SelectValue placeholder="Select denomination" /></SelectTrigger>
-                           <SelectContent position="popper" side="bottom" sideOffset={8} avoidCollisions={false} className="z-[110] max-h-[300px]">
+                           <SelectContent position="popper" side="bottom" sideOffset={8} avoidCollisions={false} className="z-[1100] max-h-[300px]">
                               {(taxonomies.denomination || []).sort().map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                            </SelectContent>
                         </Select>
