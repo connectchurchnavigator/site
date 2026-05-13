@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger, 
   DropdownMenuSeparator 
 } from '../components/ui/dropdown-menu';
+import { Checkbox } from '../components/ui/checkbox';
 import { 
   LayoutDashboard, 
   ListChecks, 
@@ -43,7 +44,8 @@ import {
   AlertCircle,
   RefreshCw,
   Plus,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { authAPI, churchAPI, pastorAPI, bookmarkAPI, analyticsAPI, adminAPI, claimAPI } from '../lib/api';
 import { toast } from 'sonner';
@@ -510,6 +512,8 @@ const MyListings = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selected, setSelected] = useState([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -518,48 +522,61 @@ const MyListings = () => {
   }, [user]);
 
   const fetchListings = async () => {
-    if (!user) {
-      console.log('LISTING_TRACE: Fetch canceled - user not ready');
-      return;
-    }
-    
+    if (!user) return;
     setLoading(true);
-    setError(null);
-    
+    setSelected([]); // Clear selection on refresh
     try {
       const params = { page: 1, limit: 100, status: 'all' };
-      // Security: Only pass owner_id if not a super admin
-      if (user.role !== 'super_admin' && user.role !== 'superadmin') {
-        params.owner_id = user.id;
-      }
-      
-      console.log('LISTING_TRACE: Fetching with params:', params);
-      
+      if (user.role !== 'super_admin') params.owner_id = user.id;
       const [churchRes, pastorRes] = await Promise.all([
         churchAPI.getAll(params),
         pastorAPI.getAll(params)
       ]);
-      
-      console.log('LISTING_TRACE: API Response:', { churches: churchRes.data, pastors: pastorRes.data });
-      
       const churchesData = churchRes.data?.data || [];
       const pastorsData = pastorRes.data?.data || [];
-      
-      const allListings = [
+      setListings([
         ...churchesData.map(c => ({ ...c, type: 'church' })),
         ...pastorsData.map(p => ({ ...p, type: 'pastor' }))
-      ];
-      
-      setListings(allListings);
+      ]);
     } catch (err) {
-      console.error('LISTING_TRACE: Fetch failed:', err);
-      if (err.response) {
-        console.error('LISTING_TRACE: Response Data:', err.response.data);
-      }
-      setError('Failed to load listings. Please check your connection or try again later.');
-      toast.error('Failed to load listings');
+      setError('Failed to load listings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.length === filteredAndSortedListings.length) {
+      setSelected([]);
+    } else {
+      setSelected(filteredAndSortedListings.map(l => l.id));
+    }
+  };
+
+  const handleBulkAction = async (status) => {
+    const isTrash = status === 'trash';
+    if (isTrash && !window.confirm(`Are you sure you want to move ${selected.length} listings to trash?`)) return;
+
+    setIsBulkProcessing(true);
+    let successCount = 0;
+    try {
+      for (const id of selected) {
+        const listing = listings.find(l => l.id === id);
+        if (!listing) continue;
+        const api = listing.type === 'church' ? churchAPI : pastorAPI;
+        await api.update(id, { status });
+        successCount++;
+      }
+      toast.success(`${successCount} listings updated successfully`);
+      fetchListings();
+    } catch (error) {
+      toast.error('Failed to update some listings');
+    } finally {
+      setIsBulkProcessing(false);
     }
   };
 
@@ -715,7 +732,14 @@ const MyListings = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mr-4">
+          <Checkbox 
+            checked={selected.length === filteredAndSortedListings.length && filteredAndSortedListings.length > 0}
+            onCheckedChange={toggleSelectAll}
+          />
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Select All</span>
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">View:</span>
           <Select value={viewType} onValueChange={setViewType}>
@@ -782,9 +806,14 @@ const MyListings = () => {
             const displayImage = listing.type === 'church' ? (listing.logo || listing.cover_image) : listing.profile_picture;
             
             return (
-              <Card key={listing.id} className="p-5 hover:shadow-md transition-shadow">
+              <Card key={listing.id} className={cn("p-5 hover:shadow-md transition-all border-l-4", selected.includes(listing.id) ? "border-l-brand bg-brand/5" : "border-l-transparent")}>
                 <div className="flex items-center justify-between gap-6">
                   <div className="flex items-center gap-5 flex-1 min-w-0">
+                    <Checkbox 
+                      checked={selected.includes(listing.id)}
+                      onCheckedChange={() => toggleSelect(listing.id)}
+                      className="mr-2"
+                    />
                     <div className="h-16 w-16 rounded-xl bg-slate-50 border border-slate-100 flex-shrink-0 overflow-hidden flex items-center justify-center">
                       {displayImage ? (
                         <img src={getImageUrl(displayImage)} alt={listing.name} className="h-full w-full object-cover" />
@@ -871,6 +900,66 @@ const MyListings = () => {
           </Button>
         </Card>
       )}
+      <BulkActionBar 
+        count={selected.length} 
+        onAction={handleBulkAction} 
+        isProcessing={isBulkProcessing} 
+        onClear={() => setSelected([])} 
+      />
+    </div>
+  );
+};
+
+const BulkActionBar = ({ count, onAction, isProcessing, onClear }) => {
+  if (count === 0) return null;
+  return (
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[2000] animate-in fade-in slide-in-from-bottom-8">
+      <Card className="flex items-center gap-6 px-6 py-4 bg-slate-900 border-none shadow-2xl rounded-2xl ring-1 ring-white/10">
+        <div className="flex items-center gap-3 pr-6 border-r border-slate-700">
+          <span className="bg-brand text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold">{count}</span>
+          <span className="text-white text-sm font-semibold whitespace-nowrap">Selected</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => onAction('published')}
+            disabled={isProcessing}
+            className="text-green-400 hover:text-green-300 hover:bg-green-400/10 font-bold text-xs uppercase tracking-widest gap-2"
+          >
+            <Rocket className="h-4 w-4" />
+            Publish
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => onAction('draft')}
+            disabled={isProcessing}
+            className="text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 font-bold text-xs uppercase tracking-widest gap-2"
+          >
+            <Undo2 className="h-4 w-4" />
+            Draft
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => onAction('trash')}
+            disabled={isProcessing}
+            className="text-red-400 hover:text-red-300 hover:bg-red-400/10 font-bold text-xs uppercase tracking-widest gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Trash
+          </Button>
+        </div>
+
+        <button 
+          onClick={onClear}
+          className="ml-4 text-slate-400 hover:text-white transition-colors"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </Card>
     </div>
   );
 };

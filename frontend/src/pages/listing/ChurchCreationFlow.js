@@ -459,8 +459,11 @@ const ChurchCreationFlow = () => {
    const fetchTaxonomies = async () => {
       try {
          const res = await taxonomyAPI.getAll();
-         setTaxonomies(res.data);
-      } catch (error) { }
+         const data = res.data.data || res.data;
+         setTaxonomies(prev => ({ ...prev, ...data }));
+      } catch (error) {
+         console.error("Taxonomy fetch error:", error);
+      }
    };
 
    const fetchPastors = async () => {
@@ -1330,8 +1333,11 @@ const ChurchCreationFlow = () => {
                                  <GMBRow label="Denomination *" error={isFieldEmpty('denomination')}>
                                     <Select value={formData.denomination} onValueChange={(v) => updateFormData('denomination', v)}>
                                        <SelectTrigger className={selectStyle}><SelectValue placeholder="Select denomination" /></SelectTrigger>
-                                       <SelectContent position="popper" side="bottom" sideOffset={8} avoidCollisions={false} className="z-[100] max-h-[300px]">
-                                          {(taxonomies.denomination || []).sort().map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                                       <SelectContent position="popper" side="bottom" sideOffset={8} avoidCollisions={false} className="z-[1100] max-h-[300px]">
+                                          {(taxonomies.denomination?.length > 0 
+                                             ? taxonomies.denomination 
+                                             : ['Baptist', 'Catholic', 'Pentecostal', 'Methodist', 'Anglican', 'Assemblies of God', 'Lutheran', 'Presbyterian', 'Orthodox', 'Non-Denominational', 'Other']
+                                          ).sort().map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                                        </SelectContent>
                                     </Select>
                                  </GMBRow>
@@ -2479,8 +2485,11 @@ const ChurchCreationFlow = () => {
                                                  <SelectTrigger className={inputStyle}>
                                                     <SelectValue placeholder="Select your relationship" />
                                                  </SelectTrigger>
-                                                 <SelectContent className="z-[1100]">
-                                                    {(taxonomies.relationship_church || []).map(r => (
+                                                 <SelectContent position="popper" side="bottom" sideOffset={8} className="z-[1100]">
+                                                    {(taxonomies.relationship_church?.length > 0 
+                                                       ? taxonomies.relationship_church 
+                                                       : ['Lead Pastor', 'Church Administrator', 'Founder', 'Staff Member', 'Member', 'Volunteer', 'Other']
+                                                    ).map(r => (
                                                        <SelectItem key={r} value={r}>{r}</SelectItem>
                                                     ))}
                                                  </SelectContent>
@@ -2768,7 +2777,7 @@ const ChurchCreationFlow = () => {
                                  <SelectTrigger className={cn(selectStyle, "pl-10 h-12 bg-gray-50/50")}>
                                     <SelectValue placeholder="Select timezone" />
                                  </SelectTrigger>
-                                 <SelectContent position="popper" side="bottom" className="z-[1100] max-h-[300px] rounded-2xl border-none shadow-2xl">
+                                 <SelectContent position="popper" side="bottom" sideOffset={8} className="z-[1100] max-h-[300px] rounded-2xl border-none shadow-2xl">
                                     {['UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Australia/Sydney', 'Europe/Paris', 'Africa/Lagos', 'Asia/Tokyo'].map(tz => (
                                        <SelectItem key={tz} value={tz}>{tz}</SelectItem>
                                     ))}
