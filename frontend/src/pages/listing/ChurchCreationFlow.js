@@ -145,6 +145,13 @@ const FACILITIES_LIST = [
    'Wheelchair Accessible',
 ];
 
+const getImageUrl = (path) => {
+   if (!path) return '';
+   if (path.startsWith('http')) return path;
+   const baseUrl = process.env.REACT_APP_BACKEND_URL || '';
+   return `${baseUrl}${path}`;
+};
+
 const COUNTRY_TIMEZONE_MAP = {
    'IN': 'Asia/Kolkata',
    'US': 'America/New_York',
