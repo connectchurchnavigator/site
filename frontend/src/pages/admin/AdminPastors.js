@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Checkbox } from '../../components/ui/checkbox';
 import { 
   Search, 
   MoreVertical, 
@@ -21,6 +22,13 @@ import {
   Upload,
   Download
 } from 'lucide-react';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from '../../components/ui/dropdown-menu';
 import { adminAPI, taxonomyAPI } from '../../lib/api';
 import { toast } from 'sonner';
 
@@ -33,6 +41,7 @@ const AdminPastors = () => {
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [showActions, setShowActions] = useState(null);
+  const [selected, setSelected] = useState([]);
   const fileInputRef = React.useRef(null);
   const [limit, setLimit] = useState(15);
 
@@ -138,6 +147,38 @@ const AdminPastors = () => {
     setShowActions(null);
   };
 
+  const handleBulkAction = async (action) => {
+    if (selected.length === 0) {
+      toast.error('Please select pastors first');
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to ${action} ${selected.length} pastors?`)) return;
+    
+    try {
+      await adminAPI.bulkPastorAction(action, selected);
+      toast.success(`Successfully ${action}ed ${selected.length} pastors`);
+      setSelected([]);
+      fetchPastors();
+    } catch (error) {
+      toast.error('Bulk action failed');
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.length === pastors.length) {
+      setSelected([]);
+    } else {
+      setSelected(pastors.map(p => p.id));
+    }
+  };
+
   const getStatusBadge = (status) => {
     const configs = {
       published: { variant: 'default', icon: CheckCircle, color: 'text-green-500' },
@@ -224,12 +265,41 @@ const AdminPastors = () => {
         </form>
       </Card>
 
+      {/* Bulk Actions */}
+      {selected.length > 0 && (
+        <Card className="p-4 bg-brand/5 border-brand animate-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between">
+            <p className="font-medium text-brand">{selected.length} pastors selected</p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => handleBulkAction('publish')}>
+                Publish All
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => handleBulkAction('feature')}>
+                Feature All
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => handleBulkAction('delete')}>
+                Delete All
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected([])}>
+                Clear
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Pastors Table */}
       <Card className="border-x-0 sm:border-x rounded-none sm:rounded-xl overflow-visible">
-        <div className="overflow-x-auto pb-48">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[1000px]">
             <thead className="bg-slate-50 border-b">
               <tr>
+                <th className="p-4 w-12">
+                  <Checkbox
+                    checked={selected.length === pastors.length && pastors.length > 0}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </th>
                 <th className="text-left p-4 font-medium text-slate-600">Pastor</th>
                 <th className="text-left p-4 font-medium text-slate-600">Location</th>
                 <th className="text-left p-4 font-medium text-slate-600">Contact</th>
@@ -253,7 +323,13 @@ const AdminPastors = () => {
                 </tr>
               ) : (
                 pastors.map((pastor) => (
-                  <tr key={pastor.id} className="border-b hover:bg-slate-50">
+                  <tr key={pastor.id} className={`border-b hover:bg-slate-50 transition-colors ${selected.includes(pastor.id) ? 'bg-brand/5' : ''}`}>
+                    <td className="p-4">
+                      <Checkbox
+                        checked={selected.includes(pastor.id)}
+                        onCheckedChange={() => toggleSelect(pastor.id)}
+                      />
+                    </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200">
@@ -298,66 +374,50 @@ const AdminPastors = () => {
                         </Badge>
                       )}
                     </td>
-                    <td className="p-4 text-right relative">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowActions(showActions === pastor.id ? null : pastor.id)}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                      
-                      {showActions === pastor.id && (
-                        <div className="absolute right-4 top-12 bg-white border rounded-lg shadow-lg z-10 py-2 min-w-48">
-                          <a
-                            href={`/pastor/${pastor.slug}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Eye className="h-4 w-4" />
-                            View Profile
-                          </a>
-                          <button
-                            onClick={() => navigate(`/listing/pastor/edit/${pastor.id}`)}
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Edit className="h-4 w-4" />
+                    <td className="p-4 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 bg-white z-[110]">
+                          <DropdownMenuItem asChild className="cursor-pointer">
+                            <a
+                              href={`/pastor/${pastor.slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center"
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Profile
+                            </a>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/listing/pastor/edit/${pastor.id}`)} className="cursor-pointer">
+                            <Edit className="h-4 w-4 mr-2" />
                             Edit Profile
-                          </button>
-                          <hr className="my-1" />
-                          <button
-                            onClick={() => handleStatusChange(pastor.id, 'published')}
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleStatusChange(pastor.id, 'published')} className="cursor-pointer">
+                            <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
                             Publish
-                          </button>
-                          <button
-                            onClick={() => handleStatusChange(pastor.id, 'draft')}
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Edit className="h-4 w-4" />
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusChange(pastor.id, 'draft')} className="cursor-pointer">
+                            <Edit className="h-4 w-4 mr-2" />
                             Set to Draft
-                          </button>
-                          <hr className="my-1" />
-                          <button
-                            onClick={() => handleFeature(pastor.id, !pastor.is_featured)}
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Star className="h-4 w-4 text-yellow-500" />
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleFeature(pastor.id, !pastor.is_featured)} className="cursor-pointer">
+                            <Star className={`h-4 w-4 mr-2 ${pastor.is_featured ? 'text-yellow-500 fill-yellow-500' : 'text-slate-400'}`} />
                             {pastor.is_featured ? 'Remove Featured' : 'Feature'}
-                          </button>
-                          <hr className="my-1" />
-                          <button
-                            onClick={() => handleDelete(pastor.id)}
-                            className="w-full px-4 py-2 text-left hover:bg-red-50 text-red-600 flex items-center gap-2"
-                          >
-                            <Trash2 className="h-4 w-4" />
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleDelete(pastor.id)} className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer">
+                            <Trash2 className="h-4 w-4 mr-2" />
                             Delete Pastor
-                          </button>
-                        </div>
-                      )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))

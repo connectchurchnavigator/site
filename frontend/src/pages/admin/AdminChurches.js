@@ -23,6 +23,13 @@ import {
   Upload,
   Download
 } from 'lucide-react';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from '../../components/ui/dropdown-menu';
 import { adminAPI, taxonomyAPI } from '../../lib/api';
 import { toast } from 'sonner';
 
@@ -40,6 +47,7 @@ const AdminChurches = () => {
   const [denominations, setDenominations] = useState([]);
   const fileInputRef = React.useRef(null);
   const [limit, setLimit] = useState(15);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchChurches();
@@ -74,18 +82,35 @@ const AdminChurches = () => {
   };
 
   const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    toast.loading('Preparing export...', { id: 'export' });
+    
     try {
       const response = await adminAPI.bulkExport('church');
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      
+      // Check if the response is actually an error message in JSON format
+      if (response.data.type === 'application/json') {
+        const text = await response.data.text();
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.detail || 'Export failed');
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `churches_export_${new Date().toISOString().split('T')[0]}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();
-      toast.success('Export successful');
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Export successful', { id: 'export' });
     } catch (error) {
-      toast.error('Failed to export data');
+      console.error('Export error:', error);
+      toast.error(error.message || 'Failed to export data', { id: 'export' });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -246,9 +271,10 @@ const AdminChurches = () => {
             size="sm"
             className="gap-2"
             onClick={handleExport}
+            disabled={exporting}
           >
-            <Download className="h-4 w-4" />
-            Export CSV
+            <Download className={`h-4 w-4 ${exporting ? 'animate-bounce' : ''}`} />
+            {exporting ? 'Exporting...' : 'Export CSV'}
           </Button>
           <Badge variant="secondary" className="text-lg px-4 py-2">
             {total} Churches
@@ -320,7 +346,7 @@ const AdminChurches = () => {
 
       {/* Churches Table */}
       <Card className="border-x-0 sm:border-x rounded-none sm:rounded-xl overflow-visible">
-        <div className="overflow-x-auto pb-48">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[1000px]">
             <thead className="bg-slate-50 border-b">
               <tr>
@@ -412,73 +438,54 @@ const AdminChurches = () => {
                         )}
                       </div>
                     </td>
-                    <td className="p-4 text-right relative">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowActions(showActions === church.id ? null : church.id)}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                      
-                      {showActions === church.id && (
-                        <div className="absolute right-4 top-12 bg-white border rounded-lg shadow-lg z-10 py-2 min-w-48">
-                          <a
-                            href={`/church/${church.slug}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Eye className="h-4 w-4" />
-                            View Listing
-                          </a>
-                          <button
-                            onClick={() => navigate(`/listing/church/edit/${church.id}`)}
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Edit className="h-4 w-4" />
+                    <td className="p-4 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 bg-white z-[110]">
+                          <DropdownMenuItem asChild className="cursor-pointer">
+                            <a
+                              href={`/church/${church.slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center"
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Listing
+                            </a>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/listing/church/edit/${church.id}`)} className="cursor-pointer">
+                            <Edit className="h-4 w-4 mr-2" />
                             Edit Listing
-                          </button>
-                          <hr className="my-1" />
-                          <button
-                            onClick={() => handleStatusChange(church.id, 'published')}
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleStatusChange(church.id, 'published')} className="cursor-pointer">
+                            <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
                             Publish
-                          </button>
-                          <button
-                            onClick={() => handleStatusChange(church.id, 'draft')}
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Edit className="h-4 w-4" />
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusChange(church.id, 'draft')} className="cursor-pointer">
+                            <Edit className="h-4 w-4 mr-2" />
                             Set to Draft
-                          </button>
-                          <hr className="my-1" />
-                          <button
-                            onClick={() => handleFeature(church.id, !church.is_featured)}
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <Star className="h-4 w-4 text-yellow-500" />
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleFeature(church.id, !church.is_featured)} className="cursor-pointer">
+                            <Star className={`h-4 w-4 mr-2 ${church.is_featured ? 'text-yellow-500 fill-yellow-500' : 'text-slate-400'}`} />
                             {church.is_featured ? 'Remove Featured' : 'Feature'}
-                          </button>
-                          <button
-                            onClick={() => handleRecommend(church.id, !church.is_recommended)}
-                            className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                          >
-                            <TrendingUp className="h-4 w-4 text-blue-500" />
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleRecommend(church.id, !church.is_recommended)} className="cursor-pointer">
+                            <TrendingUp className={`h-4 w-4 mr-2 ${church.is_recommended ? 'text-blue-500' : 'text-slate-400'}`} />
                             {church.is_recommended ? 'Remove Recommended' : 'Recommend'}
-                          </button>
-                          <hr className="my-1" />
-                          <button
-                            onClick={() => handleDelete(church.id)}
-                            className="w-full px-4 py-2 text-left hover:bg-red-50 text-red-600 flex items-center gap-2"
-                          >
-                            <Trash2 className="h-4 w-4" />
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleDelete(church.id)} className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer">
+                            <Trash2 className="h-4 w-4 mr-2" />
                             Delete Church
-                          </button>
-                        </div>
-                      )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))

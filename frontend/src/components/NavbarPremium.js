@@ -75,13 +75,15 @@ export const NavbarPremium = ({ variant = 'dark', fixed = true }) => {
             {isAuthenticated ? (
               <>
                 <Button
-                  onClick={() => navigate('/add-listing')}
+                  asChild
                   className={`border rounded-xl px-5 h-10 text-xs font-bold transition-all hover:scale-105 hover:bg-brand hover:text-white ${
                     displayScrolled ? 'bg-brand/5 text-brand border-brand/20 shadow-sm' : 'bg-white/10 text-white border-white/20'
                   }`}
                 >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Add Listing
+                  <Link to="/add-listing">
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Add Listing
+                  </Link>
                 </Button>
 
                 <Link 
@@ -106,19 +108,25 @@ export const NavbarPremium = ({ variant = 'dark', fixed = true }) => {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 bg-white border-slate-100 rounded-2xl p-2 shadow-2xl text-slate-900 z-[110]">
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')} className="rounded-xl p-3 focus:bg-slate-50 text-sm">
-                      <LayoutDashboard className="h-4 w-4 mr-2 text-brand" />
-                      Dashboard
+                    <DropdownMenuItem asChild className="rounded-xl p-0 focus:bg-slate-50 text-sm">
+                      <Link to="/dashboard" className="flex items-center w-full p-3">
+                        <LayoutDashboard className="h-4 w-4 mr-2 text-brand" />
+                        Dashboard
+                      </Link>
                     </DropdownMenuItem>
                     {user?.role === 'super_admin' && (
-                      <DropdownMenuItem onClick={() => navigate('/admin')} className="rounded-xl p-3 focus:bg-slate-50 text-sm">
-                        <Sparkles className="h-4 w-4 mr-2 text-brand" />
-                        Admin Panel
+                      <DropdownMenuItem asChild className="rounded-xl p-0 focus:bg-slate-50 text-sm">
+                        <Link to="/admin" className="flex items-center w-full p-3">
+                          <Sparkles className="h-4 w-4 mr-2 text-brand" />
+                          Admin Panel
+                        </Link>
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onClick={() => navigate('/dashboard/account')} className="rounded-xl p-3 focus:bg-slate-50 text-sm">
-                      <Settings className="h-4 w-4 mr-2 text-brand" />
-                      Settings
+                    <DropdownMenuItem asChild className="rounded-xl p-0 focus:bg-slate-50 text-sm">
+                      <Link to="/dashboard/account" className="flex items-center w-full p-3">
+                        <Settings className="h-4 w-4 mr-2 text-brand" />
+                        Settings
+                      </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-slate-100" />
                     <DropdownMenuItem onClick={logout} className="rounded-xl p-3 text-red-500 focus:bg-red-50 focus:text-red-600 text-sm">
@@ -132,12 +140,12 @@ export const NavbarPremium = ({ variant = 'dark', fixed = true }) => {
               <div className="flex items-center space-x-4">
                 <Button
                   variant="ghost"
-                  onClick={() => navigate('/auth/login')}
+                  asChild
                   className={`font-bold transition-all text-[12px] ${
                     displayScrolled ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' : 'text-white hover:text-white/80'
                   }`}
                 >
-                  Sign in
+                  <Link to="/auth/login">Sign in</Link>
                 </Button>
                 <Button
                   onClick={() => {

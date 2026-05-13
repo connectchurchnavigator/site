@@ -983,37 +983,25 @@ async def get_featured_churches(limit: int = 6):
 
 @api_router.get("/homepage/open-churches")
 async def get_open_churches(limit: int = 6):
-    """Get churches that are open now based on service timings"""
+    """Get churches that have services today (matches Explore 'Open Now' logic)"""
     from datetime import datetime
     
-    # Get current day and time
+    # Get current day
     now = datetime.now()
-    current_day = now.strftime('%A')  # e.g., 'Sunday'
-    current_time = now.strftime('%H:%M')  # e.g., '10:30'
+    current_day = now.strftime('%A')
     
-    # Find published churches
-    churches = await db.churches.find(
-        {'status': ListingStatus.PUBLISHED},
-        {'_id': 0}
-    ).to_list(100)
+    # Find published churches that have services today
+    # We check both 'services' and 'service_timings' for compatibility
+    query = {
+        'status': ListingStatus.PUBLISHED,
+        '$or': [
+            {'services': {'$elemMatch': {'day': current_day}}},
+            {'service_timings': {'$elemMatch': {'day': current_day}}}
+        ]
+    }
     
-    open_churches = []
-    for church in churches:
-        services = church.get('services', [])
-        for service in services:
-            if service.get('day') == current_day:
-                start_time = service.get('start_time', '')
-                end_time = service.get('end_time', '')
-                if start_time and end_time:
-                    if start_time <= current_time <= end_time:
-                        church['current_service'] = service.get('event_name', 'Service')
-                        open_churches.append(church)
-                        break
-        
-        if len(open_churches) >= limit:
-            break
-    
-    return open_churches
+    churches = await db.churches.find(query, {'_id': 0}).limit(limit).to_list(limit)
+    return churches
 
 @api_router.get("/homepage/featured-pastors")
 async def get_featured_pastors(limit: int = 6):
@@ -2718,34 +2706,51 @@ async def bulk_export(
         raise HTTPException(status_code=400, detail="Invalid listing type")
     
     collection = db.churches if type == 'church' else db.pastors
-    data = await collection.find({}, {'_id': 0}).to_list(10000)
+    data = await collection.find({}, {'_id': 0}).to_list(20000)
     
     if not data:
         raise HTTPException(status_code=404, detail="No data to export")
     
-    # Get headers from first row
-    headers = list(data[0].keys())
+    logger.info(f"Exporting {len(data)} {type}s to CSV")
+    
+    # Collect all possible headers from all rows (not just the first one)
+    all_keys = set()
+    for row in data:
+        all_keys.update(row.keys())
+    headers = sorted(list(all_keys))
     
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=headers)
+    writer = csv.DictWriter(output, fieldnames=headers, extrasaction='ignore')
     writer.writeheader()
     
     for row in data:
-        # Convert lists to comma-separated strings for CSV
         clean_row = {}
-        for k, v in row.items():
-            if isinstance(v, list):
-                clean_row[k] = ", ".join([str(x) for x in v])
+        for k in headers:
+            v = row.get(k)
+            if v is None:
+                clean_row[k] = ""
+            elif isinstance(v, list):
+                # Convert list of objects or strings to a readable format
+                if v and isinstance(v[0], dict):
+                    clean_row[k] = json.dumps(v)
+                else:
+                    clean_row[k] = ", ".join([str(x) for x in v])
+            elif isinstance(v, dict):
+                clean_row[k] = json.dumps(v)
             else:
-                clean_row[k] = v
+                clean_row[k] = str(v)
         writer.writerow(clean_row)
     
     output.seek(0)
+    csv_content = output.getvalue()
     
-    return StreamingResponse(
-        iter([output.getvalue()]),
+    return Response(
+        content=csv_content,
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={type}s_export_{datetime.now().strftime('%Y%m%d')}.csv"}
+        headers={
+            "Content-Disposition": f"attachment; filename={type}s_export_{datetime.now().strftime('%Y%m%d')}.csv",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
     )
 
 # ===== FILE UPLOAD ROUTES =====

@@ -295,8 +295,12 @@ export default function Explore2() {
       toast.info("Switched to Nearby mode");
     } else {
       // Switch to Global mode
-      resetFilters();
       setGlobalSearch(true);
+      setFilters(prev => ({ 
+        ...prev, 
+        location: '', 
+        userCoords: null 
+      }));
       setMapBounds(null);
       setViewport({
         latitude: 20,
@@ -690,8 +694,12 @@ export default function Explore2() {
                     onValueChange={(v) => {
                       if (v === 'global') {
                         // Switch to Global mode
-                        resetFilters();
                         setGlobalSearch(true);
+                        setFilters(prev => ({ 
+                          ...prev, 
+                          location: '', 
+                          userCoords: null 
+                        }));
                         setMapBounds(null);
                         setViewport({
                           latitude: 20,
