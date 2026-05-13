@@ -760,18 +760,48 @@ export default function Explore2() {
                          <MapPin className="text-slate-300 w-8 h-8" />
                       </div>
                       <div className="space-y-2">
-                        <h4 className="text-lg font-bold text-slate-900">No results in this area</h4>
-                        <p className="text-sm text-slate-500 max-w-[250px] mx-auto italic">
-                          Try zooming out or clearing your location filters to see more results.
+                        <h4 className="text-xl font-bold text-slate-900">
+                          {!globalSearch 
+                            ? "No results in this area" 
+                            : Object.values(filters).some(v => Array.isArray(v) ? v.length > 0 : (v && v !== 'a-z' && v !== 'nearby' && v !== new Date().toISOString().split('T')[0]))
+                              ? "No matches found"
+                              : `Be the first to join!`}
+                        </h4>
+                        <p className="text-sm text-slate-500 max-w-[300px] mx-auto italic">
+                          {!globalSearch 
+                            ? "Try zooming out or switching to Global mode to see results from further away." 
+                            : Object.values(filters).some(v => Array.isArray(v) ? v.length > 0 : (v && v !== 'a-z' && v !== 'nearby' && v !== new Date().toISOString().split('T')[0]))
+                              ? "We couldn't find any results matching your current filters globally. Try clearing them to see more."
+                              : `There are no ${activeType === 'church' ? 'churches' : 'pastors'} listed yet. Help our community grow by adding one!`}
                         </p>
                       </div>
-                      <Button 
-                        onClick={showAllGlobally}
-                        variant="outline" 
-                        className="rounded-full px-8 border-brand/20 text-brand font-bold hover:bg-brand hover:text-white transition-all shadow-lg shadow-brand/10"
-                      >
-                         Show All {activeType === 'church' ? 'Churches' : 'Pastors'} Globally
-                      </Button>
+                      
+                      {!globalSearch ? (
+                        <Button 
+                          onClick={showAllGlobally}
+                          variant="outline" 
+                          className="rounded-full px-8 border-brand/20 text-brand font-bold hover:bg-brand hover:text-white transition-all shadow-lg shadow-brand/10"
+                        >
+                           Show All {activeType === 'church' ? 'Churches' : 'Pastors'} Globally
+                        </Button>
+                      ) : Object.values(filters).some(v => Array.isArray(v) ? v.length > 0 : (v && v !== 'a-z' && v !== 'nearby' && v !== new Date().toISOString().split('T')[0])) ? (
+                        <Button 
+                          onClick={resetFilters}
+                          variant="outline" 
+                          className="rounded-full px-8 border-brand/20 text-brand font-bold hover:bg-brand hover:text-white transition-all shadow-lg shadow-brand/10"
+                        >
+                           Clear All Filters
+                        </Button>
+                      ) : (
+                        <Button 
+                          asChild
+                          className="rounded-full px-8 bg-brand hover:bg-brand-hover text-white font-bold transition-all shadow-lg shadow-brand/20"
+                        >
+                          <Link to="/add-listing">
+                            Add a {activeType === 'church' ? 'Church' : 'Pastor'}
+                          </Link>
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
