@@ -69,7 +69,7 @@ function AppRoutes() {
       <Route path="/t&c" element={<LegalPage />} />
       <Route path="/cookie-policy" element={<LegalPage />} />
       <Route path="/cookies" element={<LegalPage />} />
-      <Route path="/connect/:slug" element={<ConnectPage />} />
+      <Route path="/:slug/connect" element={<ConnectPage />} />
       
       {/* Protected Routes */}
       <Route path="/add-listing" element={

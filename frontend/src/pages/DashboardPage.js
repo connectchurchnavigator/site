@@ -1338,7 +1338,7 @@ const VisitorLog = () => {
 
   if (loading) return <div className="p-20 text-center">Loading...</div>;
 
-  const checkInUrl = `${window.location.origin}/connect/${church?.slug}`;
+  const checkInUrl = `${window.location.origin}/${church?.slug}/connect`;
 
   return (
     <div className="space-y-6">
