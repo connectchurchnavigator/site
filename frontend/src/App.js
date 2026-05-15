@@ -14,6 +14,7 @@ import DashboardPage from './pages/DashboardPage';
 import ChurchCreationFlow from './pages/listing/ChurchCreationFlow';
 import PastorCreationFlow2 from './pages/listing/PastorCreationFlow2';
 import LegalPage from './pages/LegalPage';
+import ConnectPage from './pages/ConnectPage';
 import ScrollToTop from './components/ScrollToTop';
 import ScrollToTopOnNav from './components/ScrollToTopOnNav';
 import {
@@ -68,6 +69,7 @@ function AppRoutes() {
       <Route path="/t&c" element={<LegalPage />} />
       <Route path="/cookie-policy" element={<LegalPage />} />
       <Route path="/cookies" element={<LegalPage />} />
+      <Route path="/connect/:slug" element={<ConnectPage />} />
       
       {/* Protected Routes */}
       <Route path="/add-listing" element={

@@ -47,7 +47,8 @@ import {
   ChevronRight,
   X
 } from 'lucide-react';
-import { authAPI, churchAPI, pastorAPI, bookmarkAPI, analyticsAPI, adminAPI, claimAPI } from '../lib/api';
+import { authAPI, churchAPI, pastorAPI, bookmarkAPI, analyticsAPI, adminAPI, claimAPI, visitorAPI } from '../lib/api';
+import { QRCodeCanvas } from 'qrcode.react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { cn, getImageUrl, getFallbackImage } from '../lib/utils';
@@ -877,6 +878,18 @@ const MyListings = () => {
                           <Trash2 className="h-4 w-4" />
                           <span>{listing.status === 'trash' ? 'Permanently Delete' : 'Move to Trash'}</span>
                         </DropdownMenuItem>
+                        
+                        {listing.type === 'church' && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem asChild className="gap-2 text-brand focus:text-brand focus:bg-brand/5">
+                              <Link to={`/dashboard/visitors/${listing.id}`} className="flex items-center gap-2 w-full cursor-pointer">
+                                <Users className="h-4 w-4" />
+                                <span className="font-semibold">Visitor Log</span>
+                              </Link>
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -1260,12 +1273,182 @@ const ClaimRequests = () => {
   );
 };
 
+const VisitorLog = () => {
+  const { churchId } = useParams();
+  const navigate = useNavigate();
+  const [visitors, setVisitors] = useState([]);
+  const [church, setChurch] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, [churchId]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [churchRes, visitorRes] = await Promise.all([
+        churchAPI.getById(churchId),
+        visitorAPI.getChurchVisitors(churchId)
+      ]);
+      setChurch(churchRes.data);
+      setVisitors(visitorRes.data);
+    } catch (error) {
+      console.error('Error fetching visitor log:', error);
+      toast.error('Failed to load visitors');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadQR = () => {
+    const canvas = document.getElementById('qr-canvas');
+    if (!canvas) return;
+    const url = canvas.toDataURL("image/png");
+    const link = document.createElement('a');
+    link.download = `${church?.slug || 'church'}-check-in-qr.png`;
+    link.href = url;
+    link.click();
+  };
+
+  const exportCSV = () => {
+    if (visitors.length === 0) return;
+    const headers = ['Name', 'Phone', 'Location', 'Email', 'Pastor Request', 'Date'];
+    const rows = visitors.map(v => [
+      v.name,
+      v.phone,
+      v.location || '',
+      v.email || '',
+      v.pastor_request ? 'Yes' : 'No',
+      new Date(v.timestamp).toLocaleString()
+    ]);
+    
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(",") + "\n"
+      + rows.map(e => e.join(",")).join("\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `visitors-${church?.slug}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (loading) return <div className="p-20 text-center">Loading...</div>;
+
+  const checkInUrl = `${window.location.origin}/connect/${church?.slug}`;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => navigate('/dashboard/my-listings')} className="h-10 w-10 p-0 rounded-full">
+            <Undo2 className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Visitor Log</h1>
+            <p className="text-slate-500 font-medium">{church?.name}</p>
+          </div>
+        </div>
+        
+        <div className="flex gap-3">
+          <Button onClick={exportCSV} variant="outline" className="h-11 rounded-xl border-slate-200 font-bold text-xs uppercase tracking-widest gap-2">
+            <FileText className="h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button onClick={downloadQR} className="h-11 rounded-xl bg-brand text-white font-bold text-xs uppercase tracking-widest gap-2 shadow-lg shadow-brand/20">
+            <Rocket className="h-4 w-4" />
+            Download QR
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* QR Section */}
+        <Card className="p-8 text-center bg-slate-50 border-dashed border-slate-200">
+          <div className="bg-white p-6 rounded-3xl inline-block shadow-xl mb-6">
+            <QRCodeCanvas 
+              id="qr-canvas"
+              value={checkInUrl}
+              size={200}
+              level={"H"}
+              includeMargin={true}
+            />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 mb-2">Check-in QR Code</h3>
+          <p className="text-sm text-slate-500 leading-relaxed mb-6">
+            Display this QR code in your church. Visitors can scan it to connect with you.
+          </p>
+          <div className="p-3 bg-white rounded-xl border border-slate-100 text-[10px] font-mono text-slate-400 break-all">
+            {checkInUrl}
+          </div>
+        </Card>
+
+        {/* Visitors Table */}
+        <div className="lg:col-span-2">
+          {visitors.length > 0 ? (
+            <Card className="overflow-hidden border-slate-100">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Visitor</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pastor Call?</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {visitors.map((v, i) => (
+                      <tr key={i} className="hover:bg-slate-50/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-800">{v.name}</div>
+                          <div className="text-xs text-slate-400">{v.location || 'No location'}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-slate-600">{v.phone}</div>
+                          <div className="text-[11px] text-slate-400">{v.email || 'No email'}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {v.pastor_request ? (
+                            <Badge className="bg-orange-500/10 text-orange-600 border-orange-100">Yes, Please</Badge>
+                          ) : (
+                            <span className="text-xs text-slate-300 italic font-medium">No</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-xs font-medium text-slate-500">
+                          {new Date(v.timestamp).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : (
+            <Card className="p-20 text-center border-dashed border-slate-200">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users className="h-8 w-8 text-slate-200" />
+              </div>
+              <h3 className="font-bold text-slate-800">No visitors yet</h3>
+              <p className="text-sm text-slate-400">Share your QR code to start collecting visitor info.</p>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const DashboardPage = () => {
   return (
     <DashboardLayout>
       <Routes>
         <Route index element={<DashboardHome />} />
         <Route path="my-listings" element={<MyListings />} />
+        <Route path="visitors/:churchId" element={<VisitorLog />} />
         <Route path="bookmarks" element={<Bookmarks />} />
         <Route path="account" element={<AccountSettings />} />
         <Route path="claim-requests" element={<ClaimRequests />} />

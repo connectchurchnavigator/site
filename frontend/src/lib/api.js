@@ -231,6 +231,12 @@ export const homepageAPI = {
   getNewPastors: (limit = 6) => api.get('/homepage/new-pastors', { params: { limit } }),
 };
 
+// Visitor Connect APIs
+export const visitorAPI = {
+  submit: (slug, data) => api.post(`/public/connect/${slug}`, data),
+  getChurchVisitors: (churchId) => api.get(`/user/listings/${churchId}/visitors`),
+};
+
 // Upload APIs
 export const uploadAPI = {
   upload: (file, category = 'general') => {

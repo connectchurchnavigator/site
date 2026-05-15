@@ -522,6 +522,21 @@ class ClaimRequest(ClaimRequestBase):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# Visitor Connect Models
+class VisitorConnectCreate(BaseModel):
+    name: str
+    phone: str
+    location: Optional[str] = None
+    email: Optional[EmailStr] = None
+    pastor_request: bool = False
+
+class VisitorConnect(VisitorConnectCreate):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    church_id: str
+    church_name: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 # ===== UTILITY FUNCTIONS =====
 
 async def get_geo_info(ip: str):
@@ -998,16 +1013,45 @@ async def update_church(
     # Handle Trashed At logic
     if update_data.get('status') == 'trash':
         update_data['trashed_at'] = datetime.now(timezone.utc).isoformat()
-    elif 'status' in update_data and update_data.get('status') != 'trash':
+    elif update_data.get('status') == 'published':
         update_data['trashed_at'] = None
+    
+    await db.churches.update_one({'id': church_id}, {'$set': update_data})
+    return await db.churches.find_one({'id': church_id}, {'_id': 0})
 
-    await db.churches.update_one(
-        {'id': church_id},
-        {'$set': update_data}
+# ===== VISITOR CONNECT ROUTES =====
+
+@api_router.post("/public/connect/{slug}")
+async def submit_visitor_connect(slug: str, data: VisitorConnectCreate):
+    # Find the church by slug
+    church = await db.churches.find_one({'slug': slug}, {'id': 1, 'name': 1, '_id': 0})
+    if not church:
+        raise HTTPException(status_code=404, detail="Church not found")
+    
+    visitor_obj = VisitorConnect(
+        **data.model_dump(),
+        church_id=church['id'],
+        church_name=church['name']
     )
     
-    updated_church = await db.churches.find_one({'id': church_id}, {'_id': 0})
-    return updated_church
+    doc = visitor_obj.model_dump()
+    doc['timestamp'] = doc['timestamp'].isoformat()
+    
+    await db.visitors.insert_one(doc)
+    return {"message": "Success", "church_name": church['name']}
+
+@api_router.get("/user/listings/{church_id}/visitors")
+async def get_church_visitors(church_id: str, current_user: Dict = Depends(get_current_user)):
+    # Check if church exists and user is owner
+    church = await db.churches.find_one({'id': church_id}, {'owner_id': 1, '_id': 0})
+    if not church:
+        raise HTTPException(status_code=404, detail="Church not found")
+    
+    if church.get('owner_id') != current_user['id'] and current_user['role'] != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    visitors = await db.visitors.find({'church_id': church_id}, {'_id': 0}).sort('timestamp', -1).to_list(1000)
+    return visitors
 
 @api_router.post("/churches/{church_id}/submit")
 async def submit_church(
