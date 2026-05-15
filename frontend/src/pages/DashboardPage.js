@@ -45,9 +45,11 @@ import {
   RefreshCw,
   Plus,
   ChevronRight,
-  X
+  X,
+  MessageSquare,
+  Mail
 } from 'lucide-react';
-import { authAPI, churchAPI, pastorAPI, bookmarkAPI, analyticsAPI, adminAPI, claimAPI, visitorAPI } from '../lib/api';
+import { authAPI, churchAPI, pastorAPI, bookmarkAPI, analyticsAPI, adminAPI, claimAPI, visitorAPI, messageAPI } from '../lib/api';
 import { QRCodeCanvas } from 'qrcode.react';
 import { toast } from 'sonner';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -888,6 +890,12 @@ const MyListings = () => {
                                 <span className="font-semibold">Visitor Log</span>
                               </Link>
                             </DropdownMenuItem>
+                            <DropdownMenuItem asChild className="gap-2 text-brand focus:text-brand focus:bg-brand/5">
+                              <Link to={`/dashboard/messages/${listing.id}`} className="flex items-center gap-2 w-full cursor-pointer">
+                                <MessageSquare className="h-4 w-4" />
+                                <span className="font-semibold">Contact Messages</span>
+                              </Link>
+                            </DropdownMenuItem>
                           </>
                         )}
                       </DropdownMenuContent>
@@ -1442,6 +1450,93 @@ const VisitorLog = () => {
   );
 };
 
+const Messages = () => {
+  const { churchId } = useParams();
+  const navigate = useNavigate();
+  const [messages, setMessages] = useState([]);
+  const [church, setChurch] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, [churchId]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [churchRes, msgRes] = await Promise.all([
+        churchAPI.getById(churchId),
+        messageAPI.getChurchMessages(churchId)
+      ]);
+      setChurch(churchRes.data);
+      setMessages(msgRes.data);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      toast.error('Failed to load messages');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div className="p-20 text-center">Loading...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4 mb-8">
+        <Button variant="ghost" onClick={() => navigate('/dashboard/my-listings')} className="h-10 w-10 p-0 rounded-full">
+          <Undo2 className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold">Contact Messages</h1>
+          <p className="text-slate-500 font-medium">{church?.name}</p>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {messages.length > 0 ? (
+          messages.map((msg, i) => (
+            <Card key={i} className="p-6 hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center text-brand font-bold">
+                    {msg.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800">{msg.name}</h3>
+                    <p className="text-sm text-slate-500">{msg.email}</p>
+                  </div>
+                </div>
+                <div className="text-xs text-slate-400 font-medium">
+                  {new Date(msg.timestamp).toLocaleString()}
+                </div>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-4 text-slate-700 text-sm leading-relaxed border border-slate-100">
+                {msg.message}
+              </div>
+              <div className="mt-4 flex gap-2">
+                <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-2">
+                  <a href={`mailto:${msg.email}`}>
+                    <Mail className="h-3.5 w-3.5" />
+                    Reply via Email
+                  </a>
+                </Button>
+              </div>
+            </Card>
+          ))
+        ) : (
+          <Card className="p-20 text-center border-dashed border-slate-200">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MessageSquare className="h-8 w-8 text-slate-200" />
+            </div>
+            <h3 className="font-bold text-slate-800">No messages yet</h3>
+            <p className="text-sm text-slate-400">Messages sent through your church profile contact form will appear here.</p>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const DashboardPage = () => {
   return (
     <DashboardLayout>
@@ -1449,6 +1544,7 @@ const DashboardPage = () => {
         <Route index element={<DashboardHome />} />
         <Route path="my-listings" element={<MyListings />} />
         <Route path="visitors/:churchId" element={<VisitorLog />} />
+        <Route path="messages/:churchId" element={<Messages />} />
         <Route path="bookmarks" element={<Bookmarks />} />
         <Route path="account" element={<AccountSettings />} />
         <Route path="claim-requests" element={<ClaimRequests />} />

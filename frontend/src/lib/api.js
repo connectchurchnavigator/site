@@ -237,6 +237,11 @@ export const visitorAPI = {
   getChurchVisitors: (churchId) => api.get(`/user/listings/${churchId}/visitors`),
 };
 
+export const messageAPI = {
+  submit: (slug, data) => api.post(`/public/messages/${slug}`, data),
+  getChurchMessages: (churchId) => api.get(`/user/listings/${churchId}/messages`),
+};
+
 // Upload APIs
 export const uploadAPI = {
   upload: (file, category = 'general') => {

@@ -25,7 +25,8 @@ import {
   analyticsAPI,
   taxonomyAPI,
   pastorAPI,
-  bookmarkAPI
+  bookmarkAPI,
+  messageAPI
 } from '../lib/api';
 import { getImageUrl, getFallbackImage, ensureExternalUrl, isOpenNow, formatTimeTo12h, getSessionId } from '../lib/utils';
 import { toast } from 'sonner';
@@ -654,8 +655,7 @@ const ChurchDetailPage = () => {
 
     try {
       setSendingMessage(true);
-      // Assuming a generic message endpoint or simulation for now
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await messageAPI.submit(slug, messageData);
       toast.success("Message sent successfully!");
       setMessageData({ name: '', email: '', message: '' });
     } catch (error) {

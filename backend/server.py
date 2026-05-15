@@ -537,6 +537,19 @@ class VisitorConnect(VisitorConnectCreate):
     church_name: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# Contact Message Models
+class ContactMessageCreate(BaseModel):
+    name: str
+    email: EmailStr
+    message: str
+
+class ContactMessage(ContactMessageCreate):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    church_id: str
+    church_name: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 # ===== UTILITY FUNCTIONS =====
 
 async def get_geo_info(ip: str):
@@ -1052,6 +1065,40 @@ async def get_church_visitors(church_id: str, current_user: Dict = Depends(get_c
     
     visitors = await db.visitors.find({'church_id': church_id}, {'_id': 0}).sort('timestamp', -1).to_list(1000)
     return visitors
+
+# ===== CONTACT MESSAGE ROUTES =====
+
+@api_router.post("/public/messages/{slug}")
+async def submit_contact_message(slug: str, data: ContactMessageCreate):
+    # Find the church by slug
+    church = await db.churches.find_one({'slug': slug}, {'id': 1, 'name': 1, '_id': 0})
+    if not church:
+        raise HTTPException(status_code=404, detail="Church not found")
+    
+    msg_obj = ContactMessage(
+        **data.model_dump(),
+        church_id=church['id'],
+        church_name=church['name']
+    )
+    
+    doc = msg_obj.model_dump()
+    doc['timestamp'] = doc['timestamp'].isoformat()
+    
+    await db.messages.insert_one(doc)
+    return {"message": "Success"}
+
+@api_router.get("/user/listings/{church_id}/messages")
+async def get_church_messages(church_id: str, current_user: Dict = Depends(get_current_user)):
+    # Check if church exists and user is owner
+    church = await db.churches.find_one({'id': church_id}, {'owner_id': 1, '_id': 0})
+    if not church:
+        raise HTTPException(status_code=404, detail="Church not found")
+    
+    if church.get('owner_id') != current_user['id'] and current_user['role'] != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    messages = await db.messages.find({'church_id': church_id}, {'_id': 0}).sort('timestamp', -1).to_list(1000)
+    return messages
 
 @api_router.post("/churches/{church_id}/submit")
 async def submit_church(
