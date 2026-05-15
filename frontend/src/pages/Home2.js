@@ -269,7 +269,7 @@ const Home2 = () => {
                <User className="h-3 w-3 mr-2" /> Spiritual Leadership
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-slate-900 tracking-tight">
-              Shepherd <span className="text-gradient">Profiles</span>
+              Pastor <span className="text-gradient">Profiles</span>
             </h2>
             <p className="text-slate-500 text-base font-light mt-4">Connect with visionaries leading the spiritual growth in your city.</p>
           </div>

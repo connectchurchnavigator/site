@@ -142,7 +142,9 @@ export const NavbarPremium = ({ variant = 'dark', fixed = true }) => {
                   variant="ghost"
                   asChild
                   className={`font-bold transition-all text-[12px] ${
-                    displayScrolled ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' : 'text-white hover:text-white/80'
+                    displayScrolled 
+                      ? 'text-slate-600 hover:text-brand hover:bg-brand/5' 
+                      : 'text-white hover:text-white/80 hover:bg-white/10'
                   }`}
                 >
                   <Link to="/auth/login">Sign in</Link>
