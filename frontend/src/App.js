@@ -13,6 +13,7 @@ import AddListingPage from './pages/AddListingPage';
 import DashboardPage from './pages/DashboardPage';
 import ChurchCreationFlow from './pages/listing/ChurchCreationFlow';
 import PastorCreationFlow2 from './pages/listing/PastorCreationFlow2';
+import LegalPage from './pages/LegalPage';
 import ScrollToTop from './components/ScrollToTop';
 import {
   AdminLayout,
@@ -59,6 +60,13 @@ function AppRoutes() {
       <Route path="/pastor/:slug" element={<PastorDetailPage />} />
       <Route path="/auth/login" element={<AuthPage />} />
       <Route path="/auth/register" element={<AuthPage />} />
+      
+      {/* Legal Routes */}
+      <Route path="/privacy" element={<LegalPage />} />
+      <Route path="/terms" element={<LegalPage />} />
+      <Route path="/t&c" element={<LegalPage />} />
+      <Route path="/cookie-policy" element={<LegalPage />} />
+      <Route path="/cookies" element={<LegalPage />} />
       
       {/* Protected Routes */}
       <Route path="/add-listing" element={
