@@ -351,7 +351,12 @@ const Home2 = () => {
                 >
                   Get Listed Now
                 </Button>
-                <Button onClick={() => navigate('/about')} variant="outline" size="lg" className="text-white border-white/10 hover:bg-white/5 rounded-2xl px-12 h-16 backdrop-blur-sm">
+                <Button 
+                  onClick={() => navigate('/about')} 
+                  variant="outline" 
+                  size="lg" 
+                  className="text-white border-white/20 hover:bg-white hover:text-slate-950 rounded-2xl px-12 h-16 backdrop-blur-sm transition-all"
+                >
                   Our Vision
                 </Button>
               </div>
