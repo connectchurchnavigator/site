@@ -15,6 +15,7 @@ import ChurchCreationFlow from './pages/listing/ChurchCreationFlow';
 import PastorCreationFlow2 from './pages/listing/PastorCreationFlow2';
 import LegalPage from './pages/LegalPage';
 import ScrollToTop from './components/ScrollToTop';
+import ScrollToTopOnNav from './components/ScrollToTopOnNav';
 import {
   AdminLayout,
   AdminDashboard,
@@ -132,6 +133,7 @@ function App() {
         <BrowserRouter>
           <div className="App">
             <ScrollToTop />
+            <ScrollToTopOnNav />
             <AppRoutes />
             <CookieConsent />
             <Toaster position="top-right" richColors />
