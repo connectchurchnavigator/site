@@ -182,19 +182,6 @@ const ConnectPage = () => {
                 </div>
               </div>
 
-              <div className="flex items-center space-x-3 pt-2 pb-4">
-                <input 
-                  type="checkbox" 
-                  id="pastor_request"
-                  className="w-5 h-5 rounded-lg border-slate-200 text-brand focus:ring-brand/20"
-                  checked={formData.pastor_request}
-                  onChange={(e) => setFormData({...formData, pastor_request: e.target.checked})}
-                />
-                <label htmlFor="pastor_request" className="text-sm font-medium text-slate-600 cursor-pointer">
-                  I would like a call from the Pastor
-                </label>
-              </div>
-
               <Button 
                 type="submit" 
                 disabled={submitting}
