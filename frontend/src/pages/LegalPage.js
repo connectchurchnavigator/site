@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import Navbar from '../components/NavbarPremium';
-import Footer from '../components/Footer';
+import { NavbarPremium as Navbar } from '../components/NavbarPremium';
+import { Footer } from '../components/Footer';
 
 const LegalPage = () => {
   const location = useLocation();
