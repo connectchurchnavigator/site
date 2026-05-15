@@ -44,6 +44,7 @@ const AdminPastors = () => {
   const [selected, setSelected] = useState([]);
   const fileInputRef = React.useRef(null);
   const [limit, setLimit] = useState(15);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchPastors();
@@ -67,18 +68,40 @@ const AdminPastors = () => {
   };
 
   const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    toast.loading('Preparing export...', { id: 'export' });
+    
     try {
       const response = await adminAPI.bulkExport('pastor');
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      
+      // Check if the response is actually an error message in JSON format
+      if (response.data && response.data.type === 'application/json') {
+        const text = await response.data.text();
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.detail || 'Export failed');
+      }
+
+      if (!response.data || response.data.size === 0) {
+        throw new Error('No data received from server');
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `pastors_export_${new Date().toISOString().split('T')[0]}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();
-      toast.success('Export successful');
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Export successful', { id: 'export' });
     } catch (error) {
-      toast.error('Failed to export data');
+      console.error('Export error:', error);
+      const detail = error.response?.data?.detail || error.message || 'Check network connectivity';
+      toast.error(`Export Failed: ${detail}`, { id: 'export', duration: 5000 });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -228,9 +251,10 @@ const AdminPastors = () => {
             size="sm"
             className="gap-2"
             onClick={handleExport}
+            disabled={exporting}
           >
-            <Download className="h-4 w-4" />
-            Export CSV
+            <Download className={`h-4 w-4 ${exporting ? 'animate-bounce' : ''}`} />
+            {exporting ? 'Exporting...' : 'Export CSV'}
           </Button>
           <Badge variant="secondary" className="text-lg px-4 py-2">
             {total} Pastors

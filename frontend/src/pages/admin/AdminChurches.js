@@ -90,10 +90,14 @@ const AdminChurches = () => {
       const response = await adminAPI.bulkExport('church');
       
       // Check if the response is actually an error message in JSON format
-      if (response.data.type === 'application/json') {
+      if (response.data && response.data.type === 'application/json') {
         const text = await response.data.text();
         const errorData = JSON.parse(text);
         throw new Error(errorData.detail || 'Export failed');
+      }
+
+      if (!response.data || response.data.size === 0) {
+        throw new Error('No data received from server');
       }
 
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
@@ -108,7 +112,8 @@ const AdminChurches = () => {
       toast.success('Export successful', { id: 'export' });
     } catch (error) {
       console.error('Export error:', error);
-      toast.error(error.message || 'Failed to export data', { id: 'export' });
+      const detail = error.response?.data?.detail || error.message || 'Check network connectivity';
+      toast.error(`Export Failed: ${detail}`, { id: 'export', duration: 5000 });
     } finally {
       setExporting(false);
     }
