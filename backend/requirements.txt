@@ -17,3 +17,4 @@ passlib[bcrypt]==1.7.4
 google-analytics-data
 imagekitio==4.0.0
 geonamescache==3.0.1
+google-auth==2.29.0

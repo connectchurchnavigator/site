@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import Home2 from './pages/Home2';
 import About2 from './pages/About2';
 import AuthPage from './pages/AuthPage';
@@ -115,17 +116,21 @@ function AppRoutes() {
 }
 
 function App() {
+  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <div className="App">
-          <ScrollToTop />
-          <AppRoutes />
-          <CookieConsent />
-          <Toaster position="top-right" richColors />
-        </div>
-      </BrowserRouter>
-    </AuthProvider>
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <AuthProvider>
+        <BrowserRouter>
+          <div className="App">
+            <ScrollToTop />
+            <AppRoutes />
+            <CookieConsent />
+            <Toaster position="top-right" richColors />
+          </div>
+        </BrowserRouter>
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
 

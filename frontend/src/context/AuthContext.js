@@ -43,6 +43,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const loginWithGoogle = async (idToken) => {
+    try {
+      const response = await authAPI.googleLogin(idToken);
+      const { access_token, user: userData } = response.data;
+      
+      localStorage.setItem('token', access_token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+      
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.detail || 'Google login failed' 
+      };
+    }
+  };
+
   const register = async (data) => {
     try {
       const response = await authAPI.register(data);
@@ -79,6 +97,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!user,
     isSuperAdmin: user?.role === 'super_admin',
     login,
+    loginWithGoogle,
     register,
     logout,
     updateUser,

@@ -10,6 +10,9 @@ import csv
 import json
 
 logger = logging.getLogger(__name__)
+import json
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 import io
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
@@ -146,7 +149,7 @@ class UserLogin(BaseModel):
 class User(UserBase):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    password_hash: str
+    password_hash: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserResponse(UserBase):
@@ -685,6 +688,63 @@ async def login(credentials: UserLogin):
         access_token=token,
         user=UserResponse(**user)
     )
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+
+@api_router.post("/auth/google", response_model=TokenResponse)
+async def google_login(request: GoogleLoginRequest):
+    try:
+        # Verify the token
+        client_id = os.environ.get("GOOGLE_CLIENT_ID")
+        if not client_id:
+            logger.error("GOOGLE_CLIENT_ID not found in environment")
+            raise HTTPException(status_code=500, detail="Google authentication not configured on server")
+
+        idinfo = id_token.verify_oauth2_token(
+            request.id_token, 
+            google_requests.Request(), 
+            client_id
+        )
+
+        # ID token is valid. Get the user's info.
+        email = idinfo['email']
+        first_name = idinfo.get('given_name')
+        last_name = idinfo.get('family_name')
+        picture = idinfo.get('picture')
+
+        # Check if user exists
+        user = await db.users.find_one({'email': email}, {'_id': 0})
+        
+        if not user:
+            # Create new user
+            new_user = User(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                display_picture=picture,
+                password_hash=None, 
+                role=UserRole.CUSTOMER
+            )
+            user_dict = new_user.model_dump()
+            await db.users.insert_one(user_dict)
+            user = user_dict
+            logger.info(f"Created new user via Google login: {email}")
+        else:
+            logger.info(f"User logged in via Google: {email}")
+        
+        token = create_access_token(user['id'], user['role'])
+        
+        return TokenResponse(
+            access_token=token,
+            user=UserResponse(**user)
+        )
+    except ValueError as e:
+        logger.error(f"Invalid Google token: {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+    except Exception as e:
+        logger.error(f"Google login error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error during Google login")
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(current_user: Dict = Depends(get_current_user)):
