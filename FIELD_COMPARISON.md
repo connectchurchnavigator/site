@@ -181,7 +181,7 @@
 
 ```bash
 # Test API Endpoints
-API_URL="https://spirit-search-2.stage-preview.emergentagent.com"
+API_URL="http://localhost:5000"
 
 # Get Pastor Profile
 curl "$API_URL/api/pastors/rev-bharath-swamy"

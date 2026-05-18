@@ -15,7 +15,7 @@ import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://church-explore-test.preview.emergentagent.com"
+    BASE_URL = "http://localhost:5000"
 
 # Test credentials
 TEST_EMAIL = "zinxs4@gmail.com"
