@@ -235,6 +235,8 @@ export const homepageAPI = {
 export const visitorAPI = {
   submit: (slug, data) => api.post(`/public/connect/${slug}`, data),
   getChurchVisitors: (churchId) => api.get(`/user/listings/${churchId}/visitors`),
+  update: (id, data) => api.put(`/user/visitors/${id}`, data),
+  delete: (id) => api.delete(`/user/visitors/${id}`),
 };
 
 export const messageAPI = {

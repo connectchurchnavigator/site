@@ -468,16 +468,26 @@ const ChurchCreationFlow = () => {
 
    const fetchPastors = async () => {
       try {
-         const res = await pastorAPI.getAll({ limit: 100 });
-         setPastors(res.data.data || []);
-      } catch (error) { }
+         // Increase limit to 1000 to ensure we don't miss pastors in large lists
+         // and explicitly request published status to avoid confusion
+         const res = await pastorAPI.getAll({ limit: 1000, status: 'published', order_by: 'name' });
+         const data = res.data.data || res.data;
+         setPastors(Array.isArray(data) ? data : []);
+      } catch (error) {
+         console.error("Failed to fetch pastors:", error);
+      }
    };
 
    const fetchChurches = async () => {
       try {
-         const res = await churchAPI.getAll({ limit: 100 });
-         setChurches(res.data.data || []);
-      } catch (error) { }
+         // Increase limit to 1000 to ensure we don't miss churches in large lists
+         // and explicitly request published status to avoid confusion
+         const res = await churchAPI.getAll({ limit: 1000, status: 'published', order_by: 'name' });
+         const data = res.data.data || res.data;
+         setChurches(Array.isArray(data) ? data : []);
+      } catch (error) {
+         console.error("Failed to fetch churches:", error);
+      }
    };
 
    const isFieldEmpty = (field) => {

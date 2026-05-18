@@ -1066,6 +1066,38 @@ async def get_church_visitors(church_id: str, current_user: Dict = Depends(get_c
     visitors = await db.visitors.find({'church_id': church_id}, {'_id': 0}).sort('timestamp', -1).to_list(1000)
     return visitors
 
+@api_router.put("/user/visitors/{visitor_id}")
+async def update_visitor(visitor_id: str, data: VisitorConnectCreate, current_user: Dict = Depends(get_current_user)):
+    # Find the visitor record
+    visitor = await db.visitors.find_one({'id': visitor_id})
+    if not visitor:
+        raise HTTPException(status_code=404, detail="Visitor not found")
+    
+    # Check authorization (must be owner of the church or super admin)
+    church = await db.churches.find_one({'id': visitor['church_id']}, {'owner_id': 1, '_id': 0})
+    if not church or (church.get('owner_id') != current_user['id'] and current_user['role'] != UserRole.SUPER_ADMIN):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Update fields
+    update_data = data.model_dump()
+    await db.visitors.update_one({'id': visitor_id}, {'$set': update_data})
+    return {"status": "success", "message": "Visitor updated successfully"}
+
+@api_router.delete("/user/visitors/{visitor_id}")
+async def delete_visitor(visitor_id: str, current_user: Dict = Depends(get_current_user)):
+    # Find the visitor record
+    visitor = await db.visitors.find_one({'id': visitor_id})
+    if not visitor:
+        raise HTTPException(status_code=404, detail="Visitor not found")
+    
+    # Check authorization (must be owner of the church or super admin)
+    church = await db.churches.find_one({'id': visitor['church_id']}, {'owner_id': 1, '_id': 0})
+    if not church or (church.get('owner_id') != current_user['id'] and current_user['role'] != UserRole.SUPER_ADMIN):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.visitors.delete_one({'id': visitor_id})
+    return {"status": "success", "message": "Visitor deleted successfully"}
+
 # ===== CONTACT MESSAGE ROUTES =====
 
 @api_router.post("/public/messages/{slug}")

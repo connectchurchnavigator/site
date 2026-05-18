@@ -325,9 +325,14 @@ const PastorCreationFlow2 = () => {
 
    const fetchChurches = async () => {
       try {
-         const res = await churchAPI.getAll({ limit: 100 });
-         setChurches(res.data.data || []);
-      } catch (error) { }
+         // Increase limit to 1000 to ensure we don't miss churches in large lists
+         // and explicitly request published status to avoid confusion
+         const res = await churchAPI.getAll({ limit: 1000, status: 'published', order_by: 'name' });
+         const data = res.data.data || res.data;
+         setChurches(Array.isArray(data) ? data : []);
+      } catch (error) {
+         console.error("Failed to fetch churches:", error);
+      }
    };
 
    const handleCitySearch = async (query) => {
@@ -716,9 +721,16 @@ const PastorCreationFlow2 = () => {
 
                                  <GMBRow label="Denomination *">
                                     <Select value={formData.denomination} onValueChange={(v) => updateFormData('denomination', v)}>
-                                       <SelectTrigger className={selectStyle}><SelectValue placeholder="Select denomination" /></SelectTrigger>
-                                       <SelectContent className="z-[100] max-h-[300px]">
-                                          {(taxonomies.denomination || []).sort().map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                                       <SelectTrigger className={selectStyle}>
+                                          <SelectValue placeholder="Select denomination" />
+                                       </SelectTrigger>
+                                       <SelectContent position="popper" side="bottom" sideOffset={8} className="z-[1100]">
+                                          {(taxonomies.denomination?.length > 0 
+                                             ? taxonomies.denomination 
+                                             : ['Pentecostal', 'Baptist', 'Anglican', 'Catholic', 'Methodist', 'Evangelical', 'Non-Denominational', 'Orthodox', 'Reformed', 'Seventh-day Adventist', 'Lutheran', 'Presbyterian', 'Assembly of God', 'Church of God', 'Other']
+                                          ).sort().map(d => (
+                                             <SelectItem key={d} value={d}>{d}</SelectItem>
+                                          ))}
                                        </SelectContent>
                                     </Select>
                                  </GMBRow>
@@ -742,7 +754,10 @@ const PastorCreationFlow2 = () => {
                                                     <CommandItem onSelect={() => { setShowQuickChurchDialog(true); setChurchPopoverOpen(false); }} className="text-[#6c1cff] font-semibold py-3 px-4 flex items-center gap-2">
                                                        <Plus className="h-4 w-4" /> Not listed yet? Create now
                                                     </CommandItem>
-                                                    {[...churches].sort((a,b)=>a.name.localeCompare(b.name)).map(c => (
+                                                    {[...churches]
+                                                       .filter(c => c && c.name)
+                                                       .sort((a, b) => a.name.localeCompare(b.name))
+                                                       .map(c => (
                                                        <CommandItem 
                                                           key={c.id} 
                                                           value={c.name} 
@@ -879,7 +894,7 @@ const PastorCreationFlow2 = () => {
                                                 <SelectTrigger className={cn(selectStyle, "bg-white")}>
                                                    <SelectValue placeholder="Add Experience" />
                                                 </SelectTrigger>
-                                                <SelectContent className="z-[100] max-h-[300px]">
+                                                <SelectContent position="popper" side="bottom" sideOffset={8} className="z-[1100]">
                                                    {MINISTRY_EXPERIENCE_OPTIONS.map(opt => (
                                                       <SelectItem key={opt} value={opt}>
                                                          <div className="flex items-center gap-2">
@@ -914,7 +929,7 @@ const PastorCreationFlow2 = () => {
                                                 <SelectTrigger className={cn(selectStyle, "bg-white")}>
                                                    <SelectValue placeholder="Add Training" />
                                                 </SelectTrigger>
-                                                <SelectContent className="z-[100] max-h-[300px]">
+                                                <SelectContent position="popper" side="bottom" sideOffset={8} className="z-[1100]">
                                                    {TRAINING_OPTIONS.map(opt => (
                                                       <SelectItem key={opt} value={opt}>
                                                          <div className="flex items-center gap-2">
@@ -949,7 +964,7 @@ const PastorCreationFlow2 = () => {
                                                 <SelectTrigger className={cn(selectStyle, "bg-white")}>
                                                    <SelectValue placeholder="Add Role" />
                                                 </SelectTrigger>
-                                                <SelectContent className="z-[100] max-h-[300px]">
+                                                <SelectContent position="popper" side="bottom" sideOffset={8} className="z-[1100]">
                                                    {ROLES_INTERESTED_OPTIONS.map(opt => (
                                                       <SelectItem key={opt} value={opt}>
                                                          <div className="flex items-center gap-2">
@@ -1025,7 +1040,7 @@ const PastorCreationFlow2 = () => {
                                                 <SelectTrigger className={cn(selectStyle, "bg-white")}>
                                                    <SelectValue placeholder="Add Language" />
                                                 </SelectTrigger>
-                                                <SelectContent className="z-[100] max-h-[300px]">
+                                                <SelectContent position="popper" side="bottom" sideOffset={8} className="z-[1100]">
                                                    {(taxonomies.language || []).map(lang => (
                                                       <SelectItem key={lang} value={lang}>
                                                          <div className="flex items-center gap-2">
@@ -1137,8 +1152,11 @@ const PastorCreationFlow2 = () => {
                                                  <SelectTrigger className={inputStyle}>
                                                     <SelectValue placeholder="Select your relationship" />
                                                  </SelectTrigger>
-                                                 <SelectContent className="z-[110]">
-                                                    {(taxonomies.relationship_pastor || []).map(r => (
+                                                 <SelectContent position="popper" side="bottom" sideOffset={8} className="z-[1100]">
+                                                    {(taxonomies.relationship_pastor?.length > 0 
+                                                       ? taxonomies.relationship_pastor 
+                                                       : ['Lead Pastor', 'Associate Pastor', 'Church Staff', 'Member', 'Volunteer', 'Other']
+                                                    ).map(r => (
                                                        <SelectItem key={r} value={r}>{r}</SelectItem>
                                                     ))}
                                                  </SelectContent>
@@ -1255,16 +1273,19 @@ const PastorCreationFlow2 = () => {
 
                   <div className="space-y-2">
                      <Label className="text-[12px] font-medium tracking-widest uppercase text-gray-400">Denomination *</Label>
-                     <Select value={quickChurch.denomination} onValueChange={(val) => setQuickChurch({ ...quickChurch, denomination: val })}>
-                        <SelectTrigger className={selectStyle}>
-                           <SelectValue placeholder="Select Denomination" />
-                        </SelectTrigger>
-                        <SelectContent className="z-[120]">
-                           {taxonomies.denomination?.map(d => (
-                              <SelectItem key={d} value={d}>{d}</SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
+                      <Select value={quickChurch.denomination} onValueChange={(val) => setQuickChurch({ ...quickChurch, denomination: val })}>
+                         <SelectTrigger className={selectStyle}>
+                            <SelectValue placeholder="Select Denomination" />
+                         </SelectTrigger>
+                         <SelectContent position="popper" side="bottom" sideOffset={8} className="z-[1200]">
+                             {(taxonomies.denomination?.length > 0 
+                                ? taxonomies.denomination 
+                                : ['Pentecostal', 'Baptist', 'Anglican', 'Catholic', 'Methodist', 'Evangelical', 'Non-Denominational', 'Other']
+                             ).map(d => (
+                               <SelectItem key={d} value={d}>{d}</SelectItem>
+                             ))}
+                          </SelectContent>
+                       </Select>
                   </div>
                </div>
 

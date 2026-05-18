@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Menu, X, LayoutDashboard, Settings, LogOut, Plus, Sparkles, Heart } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Settings, LogOut, Plus, Sparkles, Heart, MessageSquare } from 'lucide-react';
 
 export const NavbarPremium = ({ variant = 'dark', fixed = true }) => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -94,6 +94,16 @@ export const NavbarPremium = ({ variant = 'dark', fixed = true }) => {
                   title="My Favorites"
                 >
                   <Heart className={`h-5 w-5 transition-all group-hover:scale-110 ${displayScrolled ? 'fill-brand/10' : 'fill-white/10'}`} />
+                </Link>
+
+                <Link 
+                  to="/dashboard/messages"
+                  className={`p-2 rounded-full transition-all hover:bg-slate-100/10 group flex items-center justify-center ${
+                    displayScrolled ? 'text-brand' : 'text-white'
+                  }`}
+                  title="Contact Messages"
+                >
+                  <MessageSquare className={`h-5 w-5 transition-all group-hover:scale-110 ${displayScrolled ? 'fill-brand/10' : 'fill-white/10'}`} />
                 </Link>
 
                 <DropdownMenu>

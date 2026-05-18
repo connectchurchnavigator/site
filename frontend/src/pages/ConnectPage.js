@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { churchAPI, visitorAPI } from '../lib/api';
+import { getImageUrl, getFallbackImage } from '../lib/utils';
 import { 
   User, Phone, MapPin, Mail, Send, CheckCircle2, 
-  ChevronRight, Sparkles, Heart
+  Sparkles, Heart, Church as ChurchIcon
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
@@ -46,6 +47,13 @@ const ConnectPage = () => {
       return;
     }
 
+    // Phone number validation: strip spaces, dashes, brackets, and check length
+    const cleanPhone = formData.phone.trim().replace(/[\s\-\(\)]/g, '');
+    if (!/^\+?[0-9]{8,15}$/.test(cleanPhone)) {
+      toast.error("Please enter a valid phone number (8 to 15 digits)");
+      return;
+    }
+
     setSubmitting(true);
     try {
       await visitorAPI.submit(slug, formData);
@@ -61,27 +69,29 @@ const ConnectPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-brand border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-gradient-to-tr from-[#f5f3ff] to-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-brand border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading check-in...</p>
+        </div>
       </div>
     );
   }
 
   if (success) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 text-center shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-2 bg-brand"></div>
-          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+      <div className="min-h-screen bg-gradient-to-tr from-[#f5f3ff] via-[#faf9ff] to-white flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl p-10 text-center shadow-xl border border-slate-100 animate-in fade-in zoom-in-95 duration-500">
+          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-green-100">
             <CheckCircle2 className="h-10 w-10 text-green-500" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-4">We're glad you're here!</h1>
-          <p className="text-slate-500 mb-8 leading-relaxed">
-            Thank you for connecting with <strong>{church?.name}</strong>. Someone from our team will reach out to you soon.
+          <h1 className="text-2xl font-black text-slate-900 mb-3">Welcome to the family!</h1>
+          <p className="text-slate-500 mb-8 leading-relaxed text-[15px] font-medium">
+            We are so glad you joined us today at <strong className="text-brand">{church?.name}</strong>. Someone from our connection team will be delighted to reach out to you.
           </p>
           <Button 
             onClick={() => navigate('/')} 
-            className="w-full bg-brand hover:bg-brand-hover text-white rounded-2xl h-14 font-bold"
+            className="w-full bg-brand hover:bg-brand-hover text-white rounded-2xl h-14 font-bold shadow-lg shadow-brand/25 transition-all"
           >
             Explore More Churches
           </Button>
@@ -91,48 +101,69 @@ const ConnectPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col font-sans">
-      {/* Dynamic Header */}
-      <div className="relative h-64 overflow-hidden">
-        {church?.cover_image ? (
-          <img src={church.cover_image} alt={church.name} className="w-full h-full object-cover opacity-40" />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-brand/20 to-slate-900"></div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent"></div>
-        
-        <div className="absolute bottom-0 left-0 w-full p-8 text-center">
-          {church?.logo && (
-            <img src={church.logo} alt="Logo" className="w-20 h-20 rounded-2xl mx-auto mb-4 border-2 border-white/20 shadow-2xl bg-white" />
-          )}
-          <h1 className="text-3xl font-bold text-white tracking-tight">{church?.name}</h1>
-          <p className="text-white/60 text-sm mt-1 flex items-center justify-center">
-            <MapPin className="h-3 w-3 mr-1" /> {church?.city}, {church?.state}
-          </p>
-        </div>
-      </div>
-
-      {/* Connection Form */}
-      <div className="flex-grow flex items-start justify-center p-4 -mt-6 relative z-10">
-        <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden">
-          <div className="p-8 md:p-10">
-            <div className="flex items-center space-x-2 mb-8">
-              <div className="w-8 h-8 bg-brand/10 rounded-lg flex items-center justify-center">
-                <Heart className="h-4 w-4 text-brand" />
+    <div className="min-h-screen bg-gradient-to-tr from-[#f5f3ff] via-[#faf9ff] to-white flex flex-col font-sans justify-between">
+      
+      {/* Centered Connection Card container */}
+      <div className="flex-grow flex items-center justify-center p-4 md:py-12">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+          
+          {/* Brand header card banner */}
+          <div className="relative h-44 overflow-hidden bg-slate-900">
+            {church?.cover_image ? (
+              <img 
+                src={getImageUrl(church.cover_image)} 
+                alt={church.name} 
+                className="w-full h-full object-cover opacity-60" 
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-brand/80 to-purple-900"></div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+            
+            {/* Logo ring overlapping */}
+            <div className="absolute bottom-4 left-6 flex items-end gap-4 z-10">
+              <div className="w-16 h-16 rounded-2xl border-2 border-white shadow-lg overflow-hidden bg-white flex items-center justify-center shrink-0">
+                {church?.logo ? (
+                  <img 
+                    src={getImageUrl(church.logo)} 
+                    alt="Logo" 
+                    className="h-full w-full object-cover" 
+                  />
+                ) : (
+                  <ChurchIcon className="h-7 w-7 text-brand" />
+                )}
               </div>
-              <h2 className="text-xl font-bold text-slate-900 tracking-tight">Connect with us</h2>
+              <div className="mb-1 text-left">
+                <h1 className="text-lg font-black text-white leading-tight drop-shadow-sm">{church?.name}</h1>
+                {church?.address_line1 && (
+                  <p className="text-white/80 text-xs mt-0.5 flex items-center">
+                    <MapPin className="h-3.5 w-3.5 mr-1 text-brand/80 shrink-0" />
+                    {church.address_line1}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Form Content */}
+          <div className="p-6 md:p-8">
+            <div className="flex items-center space-x-2 mb-6">
+              <div className="w-8 h-8 bg-brand/10 rounded-lg flex items-center justify-center">
+                <Heart className="h-4 w-4 text-brand fill-brand/20" />
+              </div>
+              <h2 className="text-md font-bold text-slate-800 tracking-tight">Visitor Check-in Form</h2>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
                 <div className="relative group">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors" />
                   <input 
                     type="text" 
                     required
-                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-all text-slate-900 font-medium placeholder:text-slate-300"
-                    placeholder="John Doe"
+                    className="w-full h-12 pl-11 pr-4 bg-slate-50/70 border border-slate-100 rounded-xl focus:bg-white focus:ring-4 focus:ring-purple-100 focus:border-brand outline-none transition-all text-slate-900 font-semibold placeholder:text-slate-300 text-sm"
+                    placeholder="Enter your name"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                   />
@@ -140,14 +171,14 @@ const ConnectPage = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
                 <div className="relative group">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors" />
                   <input 
                     type="tel" 
                     required
-                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-all text-slate-900 font-medium placeholder:text-slate-300"
-                    placeholder="+91 00000 00000"
+                    className="w-full h-12 pl-11 pr-4 bg-slate-50/70 border border-slate-100 rounded-xl focus:bg-white focus:ring-4 focus:ring-purple-100 focus:border-brand outline-none transition-all text-slate-900 font-semibold placeholder:text-slate-300 text-sm"
+                    placeholder="Enter your phone number"
                     value={formData.phone}
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   />
@@ -155,12 +186,12 @@ const ConnectPage = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Your Location</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Your Location</label>
                 <div className="relative group">
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors" />
                   <input 
                     type="text" 
-                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-all text-slate-900 font-medium placeholder:text-slate-300"
+                    className="w-full h-12 pl-11 pr-4 bg-slate-50/70 border border-slate-100 rounded-xl focus:bg-white focus:ring-4 focus:ring-purple-100 focus:border-brand outline-none transition-all text-slate-900 font-semibold placeholder:text-slate-300 text-sm"
                     placeholder="City or Neighborhood"
                     value={formData.location}
                     onChange={(e) => setFormData({...formData, location: e.target.value})}
@@ -169,13 +200,13 @@ const ConnectPage = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email (Optional)</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email (Optional)</label>
                 <div className="relative group">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors" />
                   <input 
                     type="email" 
-                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-brand/20 focus:border-brand outline-none transition-all text-slate-900 font-medium placeholder:text-slate-300"
-                    placeholder="john@example.com"
+                    className="w-full h-12 pl-11 pr-4 bg-slate-50/70 border border-slate-100 rounded-xl focus:bg-white focus:ring-4 focus:ring-purple-100 focus:border-brand outline-none transition-all text-slate-900 font-semibold placeholder:text-slate-300 text-sm"
+                    placeholder="yourname@email.com"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                   />
@@ -185,29 +216,31 @@ const ConnectPage = () => {
               <Button 
                 type="submit" 
                 disabled={submitting}
-                className="w-full bg-brand hover:bg-brand-hover text-white rounded-2xl h-16 text-base font-bold shadow-xl shadow-brand/20 transition-all flex items-center justify-center group"
+                className="w-full bg-gradient-to-r from-brand to-purple-600 hover:from-brand-hover hover:to-purple-700 text-white rounded-xl h-14 text-sm font-bold shadow-lg shadow-brand/25 transition-all flex items-center justify-center group mt-6"
               >
                 {submitting ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <>
-                    Send My Info <Send className="ml-2 h-4 w-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    Connect & Check-in <Send className="ml-2 h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                   </>
                 )}
               </Button>
             </form>
           </div>
           
-          <div className="bg-slate-50 p-6 border-t border-slate-100 flex items-center justify-center space-x-2">
+          {/* Footer branding */}
+          <div className="bg-slate-50 p-5 border-t border-slate-100 flex items-center justify-center space-x-2">
             <Sparkles className="h-4 w-4 text-brand/40" />
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Powered by Church Navigator</p>
+            <p className="text-[9px] text-slate-400 uppercase tracking-widest font-black">Powered by Church Navigator</p>
           </div>
         </div>
       </div>
       
-      <div className="py-10 text-center">
-        <p className="text-white/20 text-[10px] uppercase tracking-widest font-bold flex items-center justify-center">
-          Secure & Verified <CheckCircle2 className="h-3 w-3 ml-1" />
+      {/* Bottom badge */}
+      <div className="pb-8 text-center">
+        <p className="text-slate-400 text-[9px] uppercase tracking-widest font-black flex items-center justify-center gap-1">
+          Secure & Verified Connection <CheckCircle2 className="h-3 w-3 text-green-500" />
         </p>
       </div>
     </div>
