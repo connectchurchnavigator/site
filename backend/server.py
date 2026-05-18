@@ -541,13 +541,16 @@ class VisitorConnect(VisitorConnectCreate):
 class ContactMessageCreate(BaseModel):
     name: str
     email: EmailStr
+    phone: Optional[str] = None
     message: str
 
 class ContactMessage(ContactMessageCreate):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    church_id: str
-    church_name: str
+    church_id: Optional[str] = None
+    church_name: Optional[str] = None
+    pastor_id: Optional[str] = None
+    pastor_name: Optional[str] = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # ===== UTILITY FUNCTIONS =====
@@ -1104,14 +1107,23 @@ async def delete_visitor(visitor_id: str, current_user: Dict = Depends(get_curre
 async def submit_contact_message(slug: str, data: ContactMessageCreate):
     # Find the church by slug
     church = await db.churches.find_one({'slug': slug}, {'id': 1, 'name': 1, '_id': 0})
-    if not church:
-        raise HTTPException(status_code=404, detail="Church not found")
-    
-    msg_obj = ContactMessage(
-        **data.model_dump(),
-        church_id=church['id'],
-        church_name=church['name']
-    )
+    if church:
+        msg_obj = ContactMessage(
+            **data.model_dump(),
+            church_id=church['id'],
+            church_name=church['name']
+        )
+    else:
+        # Try to find a pastor by slug
+        pastor = await db.pastors.find_one({'slug': slug}, {'id': 1, 'name': 1, '_id': 0})
+        if not pastor:
+            raise HTTPException(status_code=404, detail="Listing not found")
+        
+        msg_obj = ContactMessage(
+            **data.model_dump(),
+            pastor_id=pastor['id'],
+            pastor_name=pastor['name']
+        )
     
     doc = msg_obj.model_dump()
     doc['timestamp'] = doc['timestamp'].isoformat()
@@ -1130,6 +1142,19 @@ async def get_church_messages(church_id: str, current_user: Dict = Depends(get_c
         raise HTTPException(status_code=403, detail="Not authorized")
     
     messages = await db.messages.find({'church_id': church_id}, {'_id': 0}).sort('timestamp', -1).to_list(1000)
+    return messages
+
+@api_router.get("/user/pastors/{pastor_id}/messages")
+async def get_pastor_messages(pastor_id: str, current_user: Dict = Depends(get_current_user)):
+    # Check if pastor exists and user is owner
+    pastor = await db.pastors.find_one({'id': pastor_id}, {'owner_id': 1, '_id': 0})
+    if not pastor:
+        raise HTTPException(status_code=404, detail="Pastor not found")
+    
+    if pastor.get('owner_id') != current_user['id'] and current_user['role'] != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    messages = await db.messages.find({'pastor_id': pastor_id}, {'_id': 0}).sort('timestamp', -1).to_list(1000)
     return messages
 
 @api_router.post("/churches/{church_id}/submit")

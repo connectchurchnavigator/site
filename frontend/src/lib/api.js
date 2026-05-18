@@ -242,6 +242,7 @@ export const visitorAPI = {
 export const messageAPI = {
   submit: (slug, data) => api.post(`/public/messages/${slug}`, data),
   getChurchMessages: (churchId) => api.get(`/user/listings/${churchId}/messages`),
+  getPastorMessages: (pastorId) => api.get(`/user/pastors/${pastorId}/messages`),
 };
 
 // Upload APIs

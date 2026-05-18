@@ -15,7 +15,7 @@ import { PastorCard } from '../components/PastorCard';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
-import { pastorAPI, churchAPI, analyticsAPI } from '../lib/api';
+import { pastorAPI, churchAPI, analyticsAPI, messageAPI } from '../lib/api';
 import { getImageUrl, getFallbackImage, ensureExternalUrl, getSessionId } from '../lib/utils';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
@@ -104,7 +104,7 @@ const PastorDetailPage = () => {
   const [activeTab, setActiveTab] = useState("profile");
   const [associatedChurches, setAssociatedChurches] = useState([]);
   const [lightbox, setLightbox] = useState({ isOpen: false, images: [], currentIndex: 0 });
-  const [messageData, setMessageData] = useState({ name: '', email: '', message: '' });
+  const [messageData, setMessageData] = useState({ name: '', email: '', phone: '', message: '' });
   const [sendingMessage, setSendingMessage] = useState(false);
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [recommendations, setRecommendations] = useState([]);
@@ -141,15 +141,21 @@ const PastorDetailPage = () => {
 
   const handleMessageSubmit = async (e) => {
     e.preventDefault();
-    if (!messageData.name || !messageData.email || !messageData.message) {
+    if (!messageData.name || !messageData.email || !messageData.phone || !messageData.message) {
       return toast.error("Please fill in all fields");
     }
+
+    const cleanPhone = messageData.phone.trim().replace(/[\s\-\(\)]/g, '');
+    if (!/^\+?[0-9]{8,15}$/.test(cleanPhone)) {
+      toast.error("Please enter a valid phone number (8 to 15 digits)");
+      return;
+    }
+
     setSendingMessage(true);
     try {
-      // Mock sending logic
-      await new Promise(r => setTimeout(r, 1000));
+      await messageAPI.submit(slug, messageData);
       toast.success("Message sent successfully!");
-      setMessageData({ name: '', email: '', message: '' });
+      setMessageData({ name: '', email: '', phone: '', message: '' });
     } catch (error) {
       console.error("Message send failed:", error?.message || error);
       toast.error("Failed to send message");
@@ -706,6 +712,15 @@ const PastorDetailPage = () => {
                     placeholder="Your Email" 
                     value={messageData.email}
                     onChange={(e) => setMessageData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#6c1cff]/10 focus:border-[#6c1cff] transition-all text-sm outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <input 
+                    type="tel" 
+                    placeholder="Your Phone Number" 
+                    value={messageData.phone || ''}
+                    onChange={(e) => setMessageData(prev => ({ ...prev, phone: e.target.value }))}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#6c1cff]/10 focus:border-[#6c1cff] transition-all text-sm outline-none"
                   />
                 </div>

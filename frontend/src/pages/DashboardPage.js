@@ -50,7 +50,8 @@ import {
   MessageSquare,
   Mail,
   MapPin,
-  Share2
+  Share2,
+  Phone
 } from 'lucide-react';
 import { authAPI, churchAPI, pastorAPI, bookmarkAPI, analyticsAPI, adminAPI, claimAPI, visitorAPI, messageAPI } from '../lib/api';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -1937,7 +1938,8 @@ const Messages = () => {
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [churches, setChurches] = useState([]);
-  const [selectedChurchId, setSelectedChurchId] = useState(churchId || 'all');
+  const [pastors, setPastors] = useState([]);
+  const [selectedFilter, setSelectedFilter] = useState('all'); // 'all', 'church:ID', 'pastor:ID'
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1948,41 +1950,61 @@ const Messages = () => {
     if (!user) return;
     setLoading(true);
     try {
-      // 1. Fetch user's churches
+      // 1. Fetch user's churches & pastors
       const params = { page: 1, limit: 100, status: 'all' };
       if (user.role !== 'super_admin') params.owner_id = user.id;
-      const churchRes = await churchAPI.getAll(params);
+      
+      const [churchRes, pastorRes] = await Promise.all([
+        churchAPI.getAll(params),
+        pastorAPI.getAll(params)
+      ]);
       const churchesData = churchRes.data?.data || [];
+      const pastorsData = pastorRes.data?.data || [];
       setChurches(churchesData);
+      setPastors(pastorsData);
 
-      // 2. Fetch messages
+      // 2. Fetch messages for all churches
+      const churchMsgPromises = churchesData.map(c => 
+        messageAPI.getChurchMessages(c.id)
+          .then(res => res.data.map(m => ({ 
+            ...m, 
+            listingName: c.name, 
+            listingType: 'church',
+            listingSlug: c.slug, 
+            listingId: c.id 
+          })))
+          .catch(() => [])
+      );
+
+      // 3. Fetch messages for all pastors
+      const pastorMsgPromises = pastorsData.map(p => 
+        messageAPI.getPastorMessages(p.id)
+          .then(res => res.data.map(m => ({ 
+            ...m, 
+            listingName: p.name, 
+            listingType: 'pastor',
+            listingSlug: p.slug, 
+            listingId: p.id 
+          })))
+          .catch(() => [])
+      );
+
+      const [churchMsgResults, pastorMsgResults] = await Promise.all([
+        Promise.all(churchMsgPromises),
+        Promise.all(pastorMsgPromises)
+      ]);
+
+      const allMessages = [
+        ...churchMsgResults.flat(),
+        ...pastorMsgResults.flat()
+      ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      setMessages(allMessages);
+      
       if (churchId) {
-        // If a specific church is targeted, fetch just that one
-        const activeChurch = churchesData.find(c => c.id === churchId);
-        const msgRes = await messageAPI.getChurchMessages(churchId);
-        setMessages(msgRes.data.map(m => ({ 
-          ...m, 
-          churchName: activeChurch?.name || 'This Church', 
-          churchSlug: activeChurch?.slug,
-          churchId: churchId
-        })));
-        setSelectedChurchId(churchId);
+        setSelectedFilter(`church:${churchId}`);
       } else {
-        // Fetch messages for all owned churches
-        const msgPromises = churchesData.map(c => 
-          messageAPI.getChurchMessages(c.id)
-            .then(res => res.data.map(m => ({ 
-              ...m, 
-              churchName: c.name, 
-              churchSlug: c.slug, 
-              churchId: c.id 
-            })))
-            .catch(() => [])
-        );
-        const msgResults = await Promise.all(msgPromises);
-        const allMessages = msgResults.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setMessages(allMessages);
-        setSelectedChurchId('all');
+        setSelectedFilter('all');
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -1992,48 +2014,87 @@ const Messages = () => {
     }
   };
 
-  const handleChurchChange = (value) => {
-    setSelectedChurchId(value);
+  const handleFilterChange = (value) => {
+    setSelectedFilter(value);
     if (value === 'all') {
       navigate('/dashboard/messages');
     } else {
-      navigate(`/dashboard/messages/${value}`);
+      const [type, id] = value.split(':');
+      if (type === 'church') {
+        navigate(`/dashboard/messages/${id}`);
+      } else {
+        navigate('/dashboard/messages'); // Fallback to avoid breaking church-only router paths
+      }
     }
   };
 
-  if (loading) return <div className="p-20 text-center">Loading...</div>;
+  if (loading) return <div className="p-20 text-center text-slate-400 font-medium animate-pulse">Loading messages...</div>;
 
-  const currentChurch = churchId ? churches.find(c => c.id === churchId) : null;
+  const filteredMessages = messages.filter(msg => {
+    if (selectedFilter === 'all') return true;
+    const [type, id] = selectedFilter.split(':');
+    return msg.listingType === type && msg.listingId === id;
+  });
+
+  const getActiveFilterLabel = () => {
+    if (selectedFilter === 'all') return 'Inbox for all your listings';
+    const [type, id] = selectedFilter.split(':');
+    if (type === 'church') {
+      return churches.find(c => c.id === id)?.name || 'Filtered Church Listing';
+    }
+    return pastors.find(p => p.id === id)?.name || 'Filtered Pastor Listing';
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
-          {churchId && (
-            <Button variant="ghost" onClick={() => navigate('/dashboard/messages')} className="h-10 w-10 p-0 rounded-full">
+          {selectedFilter !== 'all' && (
+            <Button variant="ghost" onClick={() => handleFilterChange('all')} className="h-10 w-10 p-0 rounded-full">
               <Undo2 className="h-5 w-5" />
             </Button>
           )}
           <div>
             <h1 className="text-3xl font-bold">Contact Messages</h1>
             <p className="text-slate-500 font-medium">
-              {churchId ? currentChurch?.name : 'Inbox for all your listings'}
+              {getActiveFilterLabel()}
             </p>
           </div>
         </div>
 
-        {/* Church Filter Dropdown */}
-        {churches.length > 0 && (
-          <div className="w-64">
-            <Select value={selectedChurchId} onValueChange={handleChurchChange}>
-              <SelectTrigger className="w-full h-11 rounded-xl">
-                <SelectValue placeholder="Filter by Church" />
+        {/* Unified Filter Dropdown for Churches and Pastors */}
+        {(churches.length > 0 || pastors.length > 0) && (
+          <div className="w-72">
+            <Select value={selectedFilter} onValueChange={handleFilterChange}>
+              <SelectTrigger className="w-full h-11 rounded-xl focus:ring-brand focus:border-brand border-slate-200 bg-white">
+                <SelectValue placeholder="Filter by Listing" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Churches ({churches.length})</SelectItem>
-                {churches.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
+              <SelectContent className="max-h-80 overflow-y-auto">
+                <SelectItem value="all" className="font-semibold text-slate-800">
+                  All Listings ({churches.length + pastors.length})
+                </SelectItem>
+                
+                {churches.length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 rounded-md my-1 select-none">
+                      Churches ({churches.length})
+                    </div>
+                    {churches.map(c => (
+                      <SelectItem key={c.id} value={`church:${c.id}`}>{c.name}</SelectItem>
+                    ))}
+                  </>
+                )}
+
+                {pastors.length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50/50 rounded-md my-1 select-none">
+                      Pastors ({pastors.length})
+                    </div>
+                    {pastors.map(p => (
+                      <SelectItem key={p.id} value={`pastor:${p.id}`}>{p.name}</SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -2041,22 +2102,27 @@ const Messages = () => {
       </div>
 
       <div className="space-y-4">
-        {messages.length > 0 ? (
-          messages.map((msg, i) => (
-            <Card key={i} className="p-6 hover:shadow-md transition-shadow">
+        {filteredMessages.length > 0 ? (
+          filteredMessages.map((msg, i) => (
+            <Card key={i} className="p-6 hover:shadow-md transition-shadow border border-slate-100/80 rounded-2xl">
               <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center text-brand font-bold text-lg">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${msg.listingType === 'pastor' ? 'bg-[#6c1cff]/10 text-[#6c1cff]' : 'bg-brand/10 text-brand'}`}>
                     {msg.name ? msg.name.charAt(0).toUpperCase() : 'M'}
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-bold text-slate-800">{msg.name}</h3>
-                      <Badge variant="secondary" className="text-[10px] bg-brand/5 text-brand border-none font-bold uppercase tracking-wider">
-                        {msg.churchName}
+                      <Badge variant="secondary" className={`text-[10px] border-none font-bold uppercase tracking-wider ${msg.listingType === 'pastor' ? 'bg-[#6c1cff]/5 text-[#6c1cff]' : 'bg-brand/5 text-brand'}`}>
+                        {msg.listingName}
                       </Badge>
                     </div>
-                    <p className="text-sm text-slate-500">{msg.email}</p>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-medium flex-wrap">
+                      <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> {msg.email}</span>
+                      {msg.phone && (
+                        <span className="flex items-center gap-1 text-slate-600 font-semibold"><Phone className="h-3.5 w-3.5" /> {msg.phone}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="text-xs text-slate-400 font-medium whitespace-nowrap">
@@ -2073,10 +2139,18 @@ const Messages = () => {
                     Reply via Email
                   </a>
                 </Button>
-                {msg.churchSlug && (
+                {msg.phone && (
+                  <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-2 rounded-lg border-slate-200">
+                    <a href={`tel:${msg.phone}`}>
+                      <Phone className="h-3.5 w-3.5" />
+                      Call Phone
+                    </a>
+                  </Button>
+                )}
+                {msg.listingSlug && (
                   <Button asChild variant="ghost" size="sm" className="h-8 text-xs gap-2 text-brand hover:bg-brand/5 rounded-lg">
-                    <Link to={`/church/${msg.churchSlug}`}>
-                      View Church Listing
+                    <Link to={msg.listingType === 'pastor' ? `/pastor/${msg.listingSlug}` : `/church/${msg.listingSlug}`}>
+                      View {msg.listingType === 'pastor' ? 'Pastor' : 'Church'} Listing
                     </Link>
                   </Button>
                 )}
@@ -2090,13 +2164,13 @@ const Messages = () => {
             </div>
             <h3 className="font-bold text-slate-800">No messages yet</h3>
             <p className="text-sm text-slate-400">
-              {churches.length === 0 
-                ? "You don't have any church listings to receive messages. Create a listing to get started!"
-                : "Messages sent through your church profile contact form will appear here."}
+              {churches.length === 0 && pastors.length === 0
+                ? "You don't have any church or pastor listings to receive messages. Create a listing to get started!"
+                : "Messages sent through your church or pastor profile contact form will appear here."}
             </p>
-            {churches.length === 0 && (
+            {churches.length === 0 && pastors.length === 0 && (
               <Button asChild className="mt-4 bg-brand text-white rounded-xl">
-                <Link to="/add-listing">Add Church Listing</Link>
+                <Link to="/add-listing">Add Listing</Link>
               </Button>
             )}
           </Card>
