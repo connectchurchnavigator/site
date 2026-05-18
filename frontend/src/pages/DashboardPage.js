@@ -1941,6 +1941,7 @@ const Messages = () => {
   const [pastors, setPastors] = useState([]);
   const [selectedFilter, setSelectedFilter] = useState('all'); // 'all', 'church:ID', 'pastor:ID'
   const [loading, setLoading] = useState(true);
+  const [imageErrors, setImageErrors] = useState({});
 
   useEffect(() => {
     fetchData();
@@ -2111,22 +2112,20 @@ const Messages = () => {
                 {/* Left Side: Clean rounded avatar/logo of the related Church or Pastor */}
                 <div className="shrink-0 flex md:flex-col items-center gap-2">
                   <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-200 flex items-center justify-center font-bold text-sm bg-slate-50">
-                    {msg.listingLogo ? (
+                    {msg.listingLogo && !imageErrors[i] ? (
                       <img 
                         src={getImageUrl(msg.listingLogo)} 
                         alt={msg.listingName} 
                         className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.style.display = 'none';
+                        onError={() => {
+                          setImageErrors(prev => ({ ...prev, [i]: true }));
                         }}
                       />
-                    ) : null}
-                    {!msg.listingLogo ? (
-                      <span className="text-slate-400">
-                        {msg.listingName.charAt(0).toUpperCase()}
+                    ) : (
+                      <span className="text-slate-500 font-semibold">
+                        {msg.listingName ? msg.listingName.charAt(0).toUpperCase() : 'M'}
                       </span>
-                    ) : null}
+                    )}
                   </div>
                   <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
                     msg.listingType === 'pastor' ? 'bg-[#6c1cff]/5 text-[#6c1cff]' : 'bg-brand/5 text-brand'
