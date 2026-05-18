@@ -1971,7 +1971,8 @@ const Messages = () => {
             listingName: c.name, 
             listingType: 'church',
             listingSlug: c.slug, 
-            listingId: c.id 
+            listingId: c.id,
+            listingLogo: c.logo || c.cover_image || ''
           })))
           .catch(() => [])
       );
@@ -1984,7 +1985,8 @@ const Messages = () => {
             listingName: p.name, 
             listingType: 'pastor',
             listingSlug: p.slug, 
-            listingId: p.id 
+            listingId: p.id,
+            listingLogo: p.profile_picture || p.cover_image || ''
           })))
           .catch(() => [])
       );
@@ -2104,56 +2106,128 @@ const Messages = () => {
       <div className="space-y-4">
         {filteredMessages.length > 0 ? (
           filteredMessages.map((msg, i) => (
-            <Card key={i} className="p-6 hover:shadow-md transition-shadow border border-slate-100/80 rounded-2xl">
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${msg.listingType === 'pastor' ? 'bg-[#6c1cff]/10 text-[#6c1cff]' : 'bg-brand/10 text-brand'}`}>
-                    {msg.name ? msg.name.charAt(0).toUpperCase() : 'M'}
+            <Card key={i} className="p-6 hover:shadow-lg transition-all duration-300 border border-slate-100 rounded-2xl bg-white relative overflow-hidden group">
+              {/* Subtle top indicator bar */}
+              <div className={`absolute top-0 left-0 right-0 h-1.5 ${msg.listingType === 'pastor' ? 'bg-[#6c1cff]/80' : 'bg-brand/85'}`} />
+              
+              <div className="flex flex-col md:flex-row gap-5">
+                {/* Left Side: Avatar/Logo of the related Church or Pastor */}
+                <div className="shrink-0 flex md:flex-col items-center gap-3">
+                  <div className={`w-14 h-14 rounded-2xl overflow-hidden border-2 flex items-center justify-center font-bold text-xl shadow-inner transition-transform group-hover:scale-105 duration-300 ${
+                    msg.listingType === 'pastor' ? 'border-[#6c1cff]/10 bg-[#6c1cff]/5' : 'border-brand/10 bg-brand/5'
+                  }`}>
+                    {msg.listingLogo ? (
+                      <img 
+                        src={getImageUrl(msg.listingLogo)} 
+                        alt={msg.listingName} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    ) : null}
+                    {/* Fallback Letter if image fails or not present */}
+                    {!msg.listingLogo ? (
+                      <span className={msg.listingType === 'pastor' ? 'text-[#6c1cff]' : 'text-brand'}>
+                        {msg.listingName.charAt(0).toUpperCase()}
+                      </span>
+                    ) : null}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-slate-800">{msg.name}</h3>
-                      <Badge variant="secondary" className={`text-[10px] border-none font-bold uppercase tracking-wider ${msg.listingType === 'pastor' ? 'bg-[#6c1cff]/5 text-[#6c1cff]' : 'bg-brand/5 text-brand'}`}>
-                        {msg.listingName}
-                      </Badge>
+                  
+                  {/* Category Type Indicator */}
+                  <Badge className={`text-[9px] font-bold uppercase px-2 py-0.5 border-none select-none tracking-wider ${
+                    msg.listingType === 'pastor' 
+                      ? 'bg-[#6c1cff]/10 text-[#6c1cff] hover:bg-[#6c1cff]/20' 
+                      : 'bg-brand/10 text-brand hover:bg-brand/20'
+                  }`}>
+                    {msg.listingType === 'pastor' ? 'Pastor' : 'Church'}
+                  </Badge>
+                </div>
+
+                {/* Right Side: Message Details */}
+                <div className="flex-1 space-y-4">
+                  {/* Sender Details Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-50 pb-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-lg font-bold text-slate-800 tracking-tight">{msg.name}</h3>
+                        <span className="text-xs text-slate-400 font-medium">to</span>
+                        <span className={`text-xs font-semibold hover:underline ${
+                          msg.listingType === 'pastor' ? 'text-[#6c1cff]' : 'text-brand'
+                        }`}>
+                          <Link to={msg.listingType === 'pastor' ? `/pastor/${msg.listingSlug}` : `/church/${msg.listingSlug}`}>
+                            {msg.listingName}
+                          </Link>
+                        </span>
+                      </div>
+                      
+                      {/* Sender contact badges */}
+                      <div className="flex items-center gap-2 flex-wrap pt-1">
+                        <a 
+                          href={`mailto:${msg.email}`} 
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-50 border border-slate-100 text-xs font-medium text-slate-500 hover:text-brand hover:border-brand/20 transition-all"
+                        >
+                          <Mail className="h-3.5 w-3.5 text-slate-400" />
+                          {msg.email}
+                        </a>
+                        {msg.phone && (
+                          <a 
+                            href={`tel:${msg.phone}`} 
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-50 border border-slate-100 text-xs font-medium text-slate-500 hover:text-[#6c1cff] hover:border-[#6c1cff]/20 transition-all"
+                          >
+                            <Phone className="h-3.5 w-3.5 text-slate-400" />
+                            {msg.phone}
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-medium flex-wrap">
-                      <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> {msg.email}</span>
-                      {msg.phone && (
-                        <span className="flex items-center gap-1 text-slate-600 font-semibold"><Phone className="h-3.5 w-3.5" /> {msg.phone}</span>
-                      )}
+
+                    {/* Timestamp */}
+                    <div className="text-xs text-slate-400 font-semibold bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100/50 self-start sm:self-center">
+                      {new Date(msg.timestamp).toLocaleString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
                     </div>
+                  </div>
+
+                  {/* Message Body Container */}
+                  <div className={`pl-4 py-1 text-sm text-slate-600 leading-relaxed font-normal border-l-2 bg-slate-50/20 rounded-r-xl ${
+                    msg.listingType === 'pastor' ? 'border-[#6c1cff]' : 'border-brand'
+                  }`}>
+                    <p className="whitespace-pre-wrap">{msg.message}</p>
+                  </div>
+
+                  {/* Actions Row */}
+                  <div className="pt-2 flex flex-wrap gap-2.5 justify-end">
+                    <Button asChild variant="outline" size="sm" className="h-9 text-xs gap-1.5 rounded-xl border-slate-200 hover:bg-slate-50 font-bold px-4">
+                      <a href={`mailto:${msg.email}`}>
+                        <Mail className="h-3.5 w-3.5 text-slate-500" />
+                        Reply Email
+                      </a>
+                    </Button>
+                    {msg.phone && (
+                      <Button asChild variant="outline" size="sm" className="h-9 text-xs gap-1.5 rounded-xl border-slate-200 hover:bg-slate-50 font-bold px-4">
+                        <a href={`tel:${msg.phone}`}>
+                          <Phone className="h-3.5 w-3.5 text-slate-500" />
+                          Call Phone
+                        </a>
+                      </Button>
+                    )}
+                    {msg.listingSlug && (
+                      <Button asChild variant="ghost" size="sm" className={`h-9 text-xs gap-1.5 rounded-xl font-bold px-4 ${
+                        msg.listingType === 'pastor' ? 'text-[#6c1cff] hover:bg-[#6c1cff]/5' : 'text-brand hover:bg-brand/5'
+                      }`}>
+                        <Link to={msg.listingType === 'pastor' ? `/pastor/${msg.listingSlug}` : `/church/${msg.listingSlug}`}>
+                          View Listing
+                        </Link>
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <div className="text-xs text-slate-400 font-medium whitespace-nowrap">
-                  {new Date(msg.timestamp).toLocaleString()}
-                </div>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-4 text-slate-700 text-sm leading-relaxed border border-slate-100">
-                {msg.message}
-              </div>
-              <div className="mt-4 flex gap-2">
-                <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-2 rounded-lg border-slate-200">
-                  <a href={`mailto:${msg.email}`}>
-                    <Mail className="h-3.5 w-3.5" />
-                    Reply via Email
-                  </a>
-                </Button>
-                {msg.phone && (
-                  <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-2 rounded-lg border-slate-200">
-                    <a href={`tel:${msg.phone}`}>
-                      <Phone className="h-3.5 w-3.5" />
-                      Call Phone
-                    </a>
-                  </Button>
-                )}
-                {msg.listingSlug && (
-                  <Button asChild variant="ghost" size="sm" className="h-8 text-xs gap-2 text-brand hover:bg-brand/5 rounded-lg">
-                    <Link to={msg.listingType === 'pastor' ? `/pastor/${msg.listingSlug}` : `/church/${msg.listingSlug}`}>
-                      View {msg.listingType === 'pastor' ? 'Pastor' : 'Church'} Listing
-                    </Link>
-                  </Button>
-                )}
               </div>
             </Card>
           ))

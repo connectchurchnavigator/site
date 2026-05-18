@@ -266,7 +266,7 @@ const ChurchDetailPage = () => {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [bookmarkId, setBookmarkId] = useState(null);
   const [lightbox, setLightbox] = useState({ isOpen: false, images: [], currentIndex: 0 });
-  const [messageData, setMessageData] = useState({ name: '', email: '', message: '' });
+  const [messageData, setMessageData] = useState({ name: '', email: '', phone: '', message: '' });
   const [sendingMessage, setSendingMessage] = useState(false);
   const [recommendations, setRecommendations] = useState([]);
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
@@ -648,8 +648,14 @@ const ChurchDetailPage = () => {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!messageData.name || !messageData.email || !messageData.message) {
+    if (!messageData.name || !messageData.email || !messageData.phone || !messageData.message) {
       toast.error("Please fill in all fields");
+      return;
+    }
+
+    const cleanPhone = messageData.phone.trim().replace(/[\s\-\(\)]/g, '');
+    if (!/^\+?[0-9]{8,15}$/.test(cleanPhone)) {
+      toast.error("Please enter a valid phone number (8 to 15 digits)");
       return;
     }
 
@@ -657,7 +663,7 @@ const ChurchDetailPage = () => {
       setSendingMessage(true);
       await messageAPI.submit(slug, messageData);
       toast.success("Message sent successfully!");
-      setMessageData({ name: '', email: '', message: '' });
+      setMessageData({ name: '', email: '', phone: '', message: '' });
     } catch (error) {
       toast.error("Failed to send message. Please try again.");
     } finally {
@@ -1249,6 +1255,15 @@ const ChurchDetailPage = () => {
                       placeholder="Your Email" 
                       value={messageData.email}
                       onChange={(e) => setMessageData(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-[5px] border border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#6c1cff]/10 focus:border-[#6c1cff] transition-all text-sm outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <input 
+                      type="tel" 
+                      placeholder="Your Phone Number" 
+                      value={messageData.phone || ''}
+                      onChange={(e) => setMessageData(prev => ({ ...prev, phone: e.target.value }))}
                       className="w-full px-4 py-2.5 rounded-[5px] border border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#6c1cff]/10 focus:border-[#6c1cff] transition-all text-sm outline-none"
                     />
                   </div>
