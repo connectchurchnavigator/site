@@ -3205,6 +3205,88 @@ async def get_church_insights(church_id: str, current_user: Dict = Depends(get_c
         "avg_duration": "2m 15s"
     }
 
+@app.get("/sitemap.xml")
+async def get_sitemap():
+    base_url = "https://churchnavigator.com"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    urls = []
+    
+    # Static pages
+    static_pages = [
+        {"loc": f"{base_url}/", "changefreq": "daily", "priority": "1.0"},
+        {"loc": f"{base_url}/churches/", "changefreq": "daily", "priority": "0.9"},
+        {"loc": f"{base_url}/worship-leaders/", "changefreq": "weekly", "priority": "0.8"},
+        {"loc": f"{base_url}/media-team/", "changefreq": "weekly", "priority": "0.8"},
+        {"loc": f"{base_url}/about/", "changefreq": "monthly", "priority": "0.5"},
+        {"loc": f"{base_url}/contact/", "changefreq": "monthly", "priority": "0.5"},
+    ]
+    
+    for page in static_pages:
+        urls.append(f'''
+    <url>
+        <loc>{page['loc']}</loc>
+        <lastmod>{today}</lastmod>
+        <changefreq>{page['changefreq']}</changefreq>
+        <priority>{page['priority']}</priority>
+    </url>''')
+
+    # Dynamic churches
+    churches = await db.churches.find({"status": "published"}, {"slug": 1, "updated_at": 1, "_id": 0}).to_list(10000)
+    for c in churches:
+        slug = c.get("slug")
+        if not slug:
+            continue
+        updated_at = c.get("updated_at")
+        if isinstance(updated_at, datetime):
+            lastmod = updated_at.strftime("%Y-%m-%d")
+        elif isinstance(updated_at, str):
+            try:
+                lastmod = datetime.fromisoformat(updated_at.replace('Z', '+00:00')).strftime("%Y-%m-%d")
+            except:
+                lastmod = today
+        else:
+            lastmod = today
+            
+        urls.append(f'''
+    <url>
+        <loc>{base_url}/listing/{slug}/</loc>
+        <lastmod>{lastmod}</lastmod>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>''')
+        
+    # Dynamic pastors
+    pastors = await db.pastors.find({"status": "published"}, {"slug": 1, "updated_at": 1, "_id": 0}).to_list(10000)
+    for p in pastors:
+        slug = p.get("slug")
+        if not slug:
+            continue
+        updated_at = p.get("updated_at")
+        if isinstance(updated_at, datetime):
+            lastmod = updated_at.strftime("%Y-%m-%d")
+        elif isinstance(updated_at, str):
+            try:
+                lastmod = datetime.fromisoformat(updated_at.replace('Z', '+00:00')).strftime("%Y-%m-%d")
+            except:
+                lastmod = today
+        else:
+            lastmod = today
+            
+        urls.append(f'''
+    <url>
+        <loc>{base_url}/pastor/{slug}/</loc>
+        <lastmod>{lastmod}</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.7</priority>
+    </url>''')
+
+    xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{''.join(urls)}
+</urlset>"""
+
+    return Response(content=xml_content, media_type="application/xml")
+
 # Include the router in the main app
 app.include_router(api_router)
 
