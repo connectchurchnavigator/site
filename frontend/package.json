@@ -65,6 +65,7 @@
   },
   "scripts": {
     "start": "craco start",
+    "prebuild": "python ../generate_sitemap.py",
     "build": "CI=false craco build",
     "test": "craco test"
   },
