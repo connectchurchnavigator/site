@@ -527,9 +527,10 @@ class ClaimRequest(ClaimRequestBase):
 # Visitor Connect Models
 class VisitorConnectCreate(BaseModel):
     name: str
-    phone: str
-    location: Optional[str] = None
+    phone: Optional[str] = None
     email: Optional[EmailStr] = None
+    heard_from: Optional[str] = None
+    date_visited: Optional[str] = None
     pastor_request: bool = False
 
 class VisitorConnect(VisitorConnectCreate):
@@ -1041,6 +1042,10 @@ async def update_church(
 
 @api_router.post("/public/connect/{slug}")
 async def submit_visitor_connect(slug: str, data: VisitorConnectCreate):
+    # Require at least phone or email
+    if not data.phone and not data.email:
+        raise HTTPException(status_code=422, detail="Either phone number or email is required")
+    
     # Find the church by slug
     church = await db.churches.find_one({'slug': slug}, {'id': 1, 'name': 1, '_id': 0})
     if not church:

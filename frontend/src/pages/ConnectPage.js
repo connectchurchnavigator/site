@@ -4,7 +4,7 @@ import { churchAPI, visitorAPI } from '../lib/api';
 import { getImageUrl, getFallbackImage } from '../lib/utils';
 import { 
   User, Phone, MapPin, Mail, Send, CheckCircle2, 
-  Sparkles, Heart, Church as ChurchIcon
+  Sparkles, Heart, Church as ChurchIcon, Calendar, MessageCircleQuestion
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
@@ -19,8 +19,9 @@ const ConnectPage = () => {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    location: '',
     email: '',
+    heard_from: '',
+    date_visited: new Date().toISOString().split('T')[0],
     pastor_request: false
   });
 
@@ -42,16 +43,22 @@ const ConnectPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.phone) {
-      toast.error("Please fill in your name and phone number");
+    if (!formData.name) {
+      toast.error("Please fill in your name");
+      return;
+    }
+    if (!formData.phone && !formData.email) {
+      toast.error("Please provide at least your phone number or email address");
       return;
     }
 
-    // Phone number validation: strip spaces, dashes, brackets, and check length
-    const cleanPhone = formData.phone.trim().replace(/[\s\-\(\)]/g, '');
-    if (!/^\+?[0-9]{8,15}$/.test(cleanPhone)) {
-      toast.error("Please enter a valid phone number (8 to 15 digits)");
-      return;
+    // Phone number validation if provided
+    if (formData.phone) {
+      const cleanPhone = formData.phone.trim().replace(/[\s\-\(\)]/g, '');
+      if (!/^\+?[0-9]{8,15}$/.test(cleanPhone)) {
+        toast.error("Please enter a valid phone number (8 to 15 digits)");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -171,12 +178,13 @@ const ConnectPage = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                  Phone Number <span className="text-brand/60 normal-case font-medium">(or email below)</span>
+                </label>
                 <div className="relative group">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors" />
                   <input 
-                    type="tel" 
-                    required
+                    type="tel"
                     className="w-full h-12 pl-11 pr-4 bg-slate-50/70 border border-slate-100 rounded-xl focus:bg-white focus:ring-4 focus:ring-purple-100 focus:border-brand outline-none transition-all text-slate-900 font-semibold placeholder:text-slate-300 text-sm"
                     placeholder="Enter your phone number"
                     value={formData.phone}
@@ -186,21 +194,9 @@ const ConnectPage = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Your Location</label>
-                <div className="relative group">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors" />
-                  <input 
-                    type="text" 
-                    className="w-full h-12 pl-11 pr-4 bg-slate-50/70 border border-slate-100 rounded-xl focus:bg-white focus:ring-4 focus:ring-purple-100 focus:border-brand outline-none transition-all text-slate-900 font-semibold placeholder:text-slate-300 text-sm"
-                    placeholder="City or Neighborhood"
-                    value={formData.location}
-                    onChange={(e) => setFormData({...formData, location: e.target.value})}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email (Optional)</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                  Email <span className="text-brand/60 normal-case font-medium">(or phone above)</span>
+                </label>
                 <div className="relative group">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors" />
                   <input 
@@ -210,6 +206,40 @@ const ConnectPage = () => {
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                   />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Date Visited</label>
+                <div className="relative group">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors" />
+                  <input 
+                    type="date"
+                    className="w-full h-12 pl-11 pr-4 bg-slate-50/70 border border-slate-100 rounded-xl focus:bg-white focus:ring-4 focus:ring-purple-100 focus:border-brand outline-none transition-all text-slate-900 font-semibold text-sm"
+                    value={formData.date_visited}
+                    onChange={(e) => setFormData({...formData, date_visited: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Where did you hear from us?</label>
+                <div className="relative group">
+                  <MessageCircleQuestion className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand transition-colors pointer-events-none" />
+                  <select
+                    className="w-full h-12 pl-11 pr-4 bg-slate-50/70 border border-slate-100 rounded-xl focus:bg-white focus:ring-4 focus:ring-purple-100 focus:border-brand outline-none transition-all text-slate-900 font-semibold text-sm appearance-none cursor-pointer"
+                    value={formData.heard_from}
+                    onChange={(e) => setFormData({...formData, heard_from: e.target.value})}
+                  >
+                    <option value="">Select an option...</option>
+                    <option value="Friend / Family">Friend / Family</option>
+                    <option value="Social Media">Social Media</option>
+                    <option value="Google Search">Google Search</option>
+                    <option value="Church Navigator App">Church Navigator App</option>
+                    <option value="Flyer / Banner">Flyer / Banner</option>
+                    <option value="Walk-in">Walk-in</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
               </div>
 
