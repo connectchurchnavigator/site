@@ -296,6 +296,11 @@ const PastorDetailPage = () => {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl md:text-3xl font-bold text-slate-700">{pastor.name}</h1>
+              {pastor.is_verified && (
+                <span className="px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Verified
+                </span>
+              )}
             </div>
             {pastor.current_designation && (
               <p className="text-[#6c1cff] font-semibold text-sm mt-1 mb-1">{pastor.current_designation}</p>

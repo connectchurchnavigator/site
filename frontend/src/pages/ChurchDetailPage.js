@@ -4,7 +4,7 @@ import {
   Heart, Share2, MapPin, Clock, Phone, Globe, Users, 
   Calendar, Info, ChevronRight, MessageSquare, Shield,
   Layers, Lock, Play, Music, HeartHandshake, Church,
-  Camera, ChevronDown, ChevronUp, ArrowLeft, Mail, Facebook, 
+  Camera, ChevronDown, ChevronUp, ArrowLeft, Mail, Facebook, Linkedin,
   Instagram, Youtube, Twitter, Navigation, QrCode, Send, 
   ExternalLink, Bookmark, Star, PhoneCall, Link2, Sparkles, 
   ChevronLeft, X, User, Building2, Video, Languages, ShieldCheck
@@ -1189,6 +1189,7 @@ const ChurchDetailPage = () => {
                       { icon: Instagram, url: church.instagram, label: "Instagram", hover: "hover:bg-[#E4405F] hover:border-[#E4405F]" },
                       { icon: Youtube, url: church.youtube, label: "YouTube", hover: "hover:bg-[#FF0000] hover:border-[#FF0000]" },
                       { icon: Facebook, url: church.facebook, label: "Facebook", hover: "hover:bg-[#1877F2] hover:border-[#1877F2]" },
+                      { icon: Linkedin, url: church.linkedin, label: "LinkedIn", hover: "hover:bg-[#0A66C2] hover:border-[#0A66C2]" },
                       { icon: XIcon, url: church.twitter, label: "X", hover: "hover:bg-black hover:border-black" },
                     ].map((s) => (
                       <a

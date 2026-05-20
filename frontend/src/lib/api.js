@@ -142,6 +142,7 @@ export const adminAPI = {
   reject: (listingType, listingId, feedback) => api.put(`/admin/reject/${listingType}/${listingId}`, null, { params: { feedback } }),
   feature: (listingType, listingId, isFeatured) => api.put(`/admin/feature/${listingType}/${listingId}`, null, { params: { is_featured: isFeatured } }),
   recommend: (listingType, listingId, isRecommended) => api.put(`/admin/recommend/${listingType}/${listingId}`, null, { params: { is_recommended: isRecommended } }),
+  verify: (listingType, listingId, isVerified) => api.put(`/admin/verify/${listingType}/${listingId}`, null, { params: { is_verified: isVerified } }),
   
   // User Management
   getUsers: (params) => api.get('/admin/users', { params }),
@@ -167,7 +168,7 @@ export const adminAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
   },
-  bulkExport: (type) => api.get(`/admin/bulk/export/${type}`, { responseType: 'blob' }),
+  bulkExport: (type, ids) => api.get(`/admin/bulk/export/${type}`, { params: ids ? { ids } : {}, responseType: 'blob' }),
   
   // Pastor Management
   getPastors: (params) => api.get('/admin/pastors', { params }),

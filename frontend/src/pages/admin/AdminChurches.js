@@ -87,7 +87,8 @@ const AdminChurches = () => {
     toast.loading('Preparing export...', { id: 'export' });
     
     try {
-      const response = await adminAPI.bulkExport('church');
+      const idsParam = selected.length > 0 ? selected.join(',') : undefined;
+      const response = await adminAPI.bulkExport('church', idsParam);
       
       // Check if the response is actually an error message in JSON format
       if (response.data && response.data.type === 'application/json') {
@@ -178,6 +179,17 @@ const AdminChurches = () => {
       fetchChurches();
     } catch (error) {
       toast.error('Failed to update');
+    }
+    setShowActions(null);
+  };
+
+  const handleVerify = async (churchId, verified) => {
+    try {
+      await adminAPI.verify('church', churchId, verified);
+      toast.success(verified ? 'Church verified' : 'Church unverified');
+      fetchChurches();
+    } catch (error) {
+      toast.error('Failed to update verification status');
     }
     setShowActions(null);
   };
@@ -280,6 +292,22 @@ const AdminChurches = () => {
           >
             <Download className={`h-4 w-4 ${exporting ? 'animate-bounce' : ''}`} />
             {exporting ? 'Exporting...' : 'Export CSV'}
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="gap-2"
+            asChild
+          >
+            <a 
+              href="https://docs.google.com/spreadsheets/d/1yOzu6eq90hZpVCjZbHeCT5mlle1K3DAhOI5jZX6aBI8/edit?usp=sharing" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Download Sample
+            </a>
           </Button>
           <Badge variant="secondary" className="text-lg px-4 py-2">
             {total} Churches
@@ -429,6 +457,12 @@ const AdminChurches = () => {
                     </td>
                     <td className="p-4">
                       <div className="flex gap-1">
+                        {church.is_verified && (
+                          <Badge variant="outline" className="bg-green-50 border-green-200 text-green-700">
+                            <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
+                            Verified
+                          </Badge>
+                        )}
                         {church.is_featured && (
                           <Badge variant="outline" className="bg-yellow-50">
                             <Star className="h-3 w-3 mr-1 text-yellow-500" />
@@ -483,6 +517,10 @@ const AdminChurches = () => {
                           <DropdownMenuItem onClick={() => handleRecommend(church.id, !church.is_recommended)} className="cursor-pointer">
                             <TrendingUp className={`h-4 w-4 mr-2 ${church.is_recommended ? 'text-blue-500' : 'text-slate-400'}`} />
                             {church.is_recommended ? 'Remove Recommended' : 'Recommend'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleVerify(church.id, !church.is_verified)} className="cursor-pointer">
+                            <CheckCircle className={`h-4 w-4 mr-2 ${church.is_verified ? 'text-green-500' : 'text-slate-400'}`} />
+                            {church.is_verified ? 'Remove Verified' : 'Verify'}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleDelete(church.id)} className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer">

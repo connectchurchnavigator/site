@@ -72,6 +72,7 @@ import {
    Instagram,
    Youtube,
    Twitter,
+   Linkedin,
    DollarSign,
    Users,
    Eye,
@@ -2224,9 +2225,9 @@ const ChurchCreationFlow = () => {
                                        <div className="flex items-center gap-4">
                                           <div className={cn(
                                              "w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-semibold transition-all border-2",
-                                             (formData.website || formData.facebook || formData.instagram || formData.youtube || formData.twitter || formData.donations_url || formData.website_status !== 'no_website') ? "bg-green-500 border-green-500 text-white" : "border-gray-200 text-gray-400"
+                                             (formData.website || formData.facebook || formData.instagram || formData.youtube || formData.twitter || formData.linkedin || formData.donations_url || formData.website_status !== 'no_website') ? "bg-green-500 border-green-500 text-white" : "border-gray-200 text-gray-400"
                                           )}>
-                                             {(formData.website || formData.facebook || formData.instagram || formData.youtube || formData.twitter || formData.donations_url || formData.website_status !== 'no_website') ? "✓" : "4"}
+                                             {(formData.website || formData.facebook || formData.instagram || formData.youtube || formData.twitter || formData.linkedin || formData.donations_url || formData.website_status !== 'no_website') ? "✓" : "4"}
                                           </div>
                                           <span className="text-[16px] font-semibold text-gray-800 tracking-wide">Online Presence</span>
                                        </div>
@@ -2267,9 +2268,14 @@ const ChurchCreationFlow = () => {
                                              <Input value={formData.twitter} onChange={(e) => updateFormData('twitter', e.target.value)} placeholder="twitter.com/yourchurch" className={inputStyle} />
                                           </GMBRow>
                                        </div>
-                                       <GMBRow label="Donations URL" className="mb-10">
-                                          <Input value={formData.donations_url} onChange={(e) => updateFormData('donations_url', e.target.value)} placeholder="https://yourchurch.com/donate" className={inputStyle} />
-                                       </GMBRow>
+                                       <div className="grid grid-cols-2 gap-x-8 mb-10">
+                                          <GMBRow label="LinkedIn">
+                                             <Input value={formData.linkedin} onChange={(e) => updateFormData('linkedin', e.target.value)} placeholder="linkedin.com/company/yourchurch" className={inputStyle} />
+                                          </GMBRow>
+                                          <GMBRow label="Donations URL">
+                                             <Input value={formData.donations_url} onChange={(e) => updateFormData('donations_url', e.target.value)} placeholder="https://yourchurch.com/donate" className={inputStyle} />
+                                          </GMBRow>
+                                       </div>
                                     </AccordionContent>
                                  </AccordionItem>
 

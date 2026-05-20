@@ -73,7 +73,8 @@ const AdminPastors = () => {
     toast.loading('Preparing export...', { id: 'export' });
     
     try {
-      const response = await adminAPI.bulkExport('pastor');
+      const idsParam = selected.length > 0 ? selected.join(',') : undefined;
+      const response = await adminAPI.bulkExport('pastor', idsParam);
       
       // Check if the response is actually an error message in JSON format
       if (response.data && response.data.type === 'application/json') {
@@ -153,6 +154,17 @@ const AdminPastors = () => {
       fetchPastors();
     } catch (error) {
       toast.error('Failed to update');
+    }
+    setShowActions(null);
+  };
+
+  const handleVerify = async (pastorId, verified) => {
+    try {
+      await adminAPI.verify('pastor', pastorId, verified);
+      toast.success(verified ? 'Pastor verified' : 'Pastor unverified');
+      fetchPastors();
+    } catch (error) {
+      toast.error('Failed to update verification status');
     }
     setShowActions(null);
   };
@@ -255,6 +267,22 @@ const AdminPastors = () => {
           >
             <Download className={`h-4 w-4 ${exporting ? 'animate-bounce' : ''}`} />
             {exporting ? 'Exporting...' : 'Export CSV'}
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="gap-2"
+            asChild
+          >
+            <a 
+              href="https://docs.google.com/spreadsheets/d/1yOzu6eq90hZpVCjZbHeCT5mlle1K3DAhOI5jZX6aBI8/edit?usp=sharing" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Download Sample
+            </a>
           </Button>
           <Badge variant="secondary" className="text-lg px-4 py-2">
             {total} Pastors
@@ -391,12 +419,20 @@ const AdminPastors = () => {
                       {getStatusBadge(pastor.status)}
                     </td>
                     <td className="p-4">
-                      {pastor.is_featured && (
-                        <Badge variant="outline" className="bg-yellow-50">
-                          <Star className="h-3 w-3 mr-1 text-yellow-500" />
-                          Featured
-                        </Badge>
-                      )}
+                      <div className="flex gap-1">
+                        {pastor.is_verified && (
+                          <Badge variant="outline" className="bg-green-50 border-green-200 text-green-700">
+                            <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
+                            Verified
+                          </Badge>
+                        )}
+                        {pastor.is_featured && (
+                          <Badge variant="outline" className="bg-yellow-50">
+                            <Star className="h-3 w-3 mr-1 text-yellow-500" />
+                            Featured
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 text-right">
                       <DropdownMenu>
@@ -434,6 +470,10 @@ const AdminPastors = () => {
                           <DropdownMenuItem onClick={() => handleFeature(pastor.id, !pastor.is_featured)} className="cursor-pointer">
                             <Star className={`h-4 w-4 mr-2 ${pastor.is_featured ? 'text-yellow-500 fill-yellow-500' : 'text-slate-400'}`} />
                             {pastor.is_featured ? 'Remove Featured' : 'Feature'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleVerify(pastor.id, !pastor.is_verified)} className="cursor-pointer">
+                            <CheckCircle className={`h-4 w-4 mr-2 ${pastor.is_verified ? 'text-green-500' : 'text-slate-400'}`} />
+                            {pastor.is_verified ? 'Remove Verified' : 'Verify'}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleDelete(pastor.id)} className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer">

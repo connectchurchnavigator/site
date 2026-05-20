@@ -9,14 +9,18 @@ export const ChurchCard = ({ church, dark }) => {
   const openStatus = isOpenNow(church.service_timings || church.services);
 
   return (
-    <Link
-      to={`/church/${church.slug || church.id}`}
-      className="block"
-      data-testid={`church-card-${church.id}`}
+    <div
+      className="relative group"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className={`rounded-2xl border transition-all duration-300 overflow-hidden group hover:-translate-y-1 ${
+      <Link
+        to={`/church/${church.slug || church.id}`}
+        className="absolute inset-0 z-10"
+        data-testid={`church-card-${church.id}`}
+        aria-label={church.name}
+      />
+      <div className={`rounded-2xl border transition-all duration-300 overflow-hidden group-hover:-translate-y-1 ${
         dark 
           ? 'bg-white/7 border-white/10 text-white shadow-2xl backdrop-blur-md' 
           : 'bg-white border-slate-100 shadow-sm hover:shadow-md'
@@ -80,7 +84,7 @@ export const ChurchCard = ({ church, dark }) => {
 
           {/* Phone on Hover */}
           {isHovered && church.phone && (
-            <div className="flex items-center text-sm text-brand animate-fade-in">
+            <div className="relative z-20 flex items-center text-sm text-brand animate-fade-in">
               <Phone className="h-4 w-4 mr-2" />
               <a href={`tel:${church.phone}`} className="hover:underline">
                 {church.phone}
@@ -89,6 +93,6 @@ export const ChurchCard = ({ church, dark }) => {
           )}
         </div>
       </div>
-    </Link>
+    </div>
   );
 };

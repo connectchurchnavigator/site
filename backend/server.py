@@ -259,6 +259,7 @@ class ChurchBase(BaseModel):
     trashed_at: Optional[str] = None
     is_recommended: bool = False
     is_featured: bool = False
+    is_verified: bool = False
 
 class Church(ChurchBase):
     model_config = ConfigDict(extra="ignore")
@@ -334,6 +335,7 @@ class PastorBase(BaseModel):
     trashed_at: Optional[str] = None
     is_recommended: bool = False
     is_featured: bool = False
+    is_verified: bool = False
 
 class Pastor(PastorBase):
     model_config = ConfigDict(extra="ignore")
@@ -2472,6 +2474,26 @@ async def recommend_listing(
     await log_admin_action(current_user['id'], 'recommend_listing', f"{'Recommended' if is_recommended else 'Unrecommended'} {listing_type} {listing_id}")
     return {'message': 'Listing recommended status updated'}
 
+@api_router.put("/admin/verify/{listing_type}/{listing_id}")
+async def verify_listing(
+    listing_type: ListingType,
+    listing_id: str,
+    is_verified: bool,
+    current_user: Dict = Depends(get_super_admin)
+):
+    collection = db.churches if listing_type == ListingType.CHURCH else db.pastors
+    
+    result = await collection.update_one(
+        {'id': listing_id},
+        {'$set': {'is_verified': is_verified}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Listing not found")
+        
+    await log_admin_action(current_user['id'], 'verify_listing', f"{'Verified' if is_verified else 'Unverified'} {listing_type} {listing_id}")
+    return {'message': 'Listing verification status updated'}
+
 # --- Taxonomy Management ---
 @api_router.get("/admin/taxonomies")
 async def get_all_taxonomies_admin(current_user: Dict = Depends(get_super_admin)):
@@ -2785,7 +2807,7 @@ async def bulk_upload(
     errors = []
     collection = db.churches if type == 'church' else db.pastors
     
-    for row in reader:
+    for row_idx, row in enumerate(reader, start=1):
         try:
             # Clean empty strings into None for optional fields
             processed_row = {k: (v.strip() if v and v.strip() else None) for k, v in row.items()}
@@ -2793,16 +2815,11 @@ async def bulk_upload(
             # Basic validation: Name is required
             name = processed_row.get('name') or processed_row.get('full_name')
             if not name:
-                errors.append(f"Row {count + 1}: Name is required")
+                errors.append(f"Row {row_idx}: Name is required")
                 continue
 
             # Handle slug uniqueness
-            base_slug = create_slug(name)
-            slug = base_slug
-            slug_count = 1
-            while await collection.find_one({'slug': slug}):
-                slug = f"{base_slug}-{slug_count}"
-                slug_count += 1
+            slug = await create_unique_slug(name, 'churches' if type == 'church' else 'pastors')
 
             # URL Sanitization Helper
             def sanitize_url(url):
@@ -2826,7 +2843,7 @@ async def bulk_upload(
                 'status': ListingStatus.PUBLISHED,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat(),
-                'is_verified': True,
+                'is_verified': False,
                 'is_featured': False
             }
 
@@ -2895,8 +2912,8 @@ async def bulk_upload(
             await collection.insert_one(doc)
             count += 1
         except Exception as e:
-            logger.error(f"Error processing row {count + 1}: {str(e)}")
-            errors.append(f"Row {count + 1}: {str(e)}")
+            logger.error(f"Error processing row {row_idx}: {str(e)}")
+            errors.append(f"Row {row_idx}: {str(e)}")
     
     await log_admin_action(current_user['id'], 'bulk_upload', f"Bulk uploaded {count} {type}s")
     
@@ -2908,6 +2925,7 @@ async def bulk_upload(
 @api_router.get("/admin/bulk/export/{type}")
 async def bulk_export(
     type: str,
+    ids: Optional[str] = None,
     current_user: Dict = Depends(get_super_admin)
 ):
     """Export listings to CSV"""
@@ -2915,7 +2933,14 @@ async def bulk_export(
         raise HTTPException(status_code=400, detail="Invalid listing type")
     
     collection = db.churches if type == 'church' else db.pastors
-    data = await collection.find({}, {'_id': 0}).to_list(20000)
+    
+    query = {}
+    if ids:
+        ids_list = [i.strip() for i in ids.split(",") if i.strip()]
+        if ids_list:
+            query = {'id': {'$in': ids_list}}
+            
+    data = await collection.find(query, {'_id': 0}).to_list(20000)
     
     if not data:
         raise HTTPException(status_code=404, detail="No data to export")
