@@ -139,7 +139,9 @@ const AdminChurches = () => {
       }
       fetchChurches();
     } catch (error) {
-      toast.error('Bulk upload failed', { id: 'bulk-upload' });
+      console.error('Bulk upload failed error details:', error);
+      const errorMsg = error.response?.data?.detail || error.message || 'Bulk upload failed';
+      toast.error(`Bulk upload failed: ${errorMsg}`, { id: 'bulk-upload', duration: 6000 });
     }
     e.target.value = null;
   };
