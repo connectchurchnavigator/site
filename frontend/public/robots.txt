@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /churches/
+Allow: /pastors/
+Allow: /worship-leaders/
+Allow: /media-teams/
+Allow: /about/
+Allow: /contact/
+
+Disallow: /api/
+Disallow: /admin/
+Disallow: /account/
+
+Sitemap: https://churchnavigator.com/sitemap.xml
