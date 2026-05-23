@@ -1,6 +1,6 @@
 User-agent: *
 Allow: /
-Allow: /churches/
+Allow: /church/
 Allow: /pastors/
 Allow: /worship-leaders/
 Allow: /media-teams/
