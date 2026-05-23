@@ -280,7 +280,7 @@ const ChurchDetailPage = () => {
     const description = church.description
       ? church.description.replace(/<[^>]+>/g, '').slice(0, 155) + '...'
       : `Find ${church.name} in ${[church.city, church.state].filter(Boolean).join(', ')}. ${church.denomination || ''} church listed on ChurchNavigator.`;
-    const canonical = `https://churchnavigator.com/churches/${church.slug}`;
+    const canonical = `https://churchnavigator.com/church/${church.slug}`;
     const image = church.cover_image || church.logo || 'https://churchnavigator.com/logo.png';
 
     document.title = title;
