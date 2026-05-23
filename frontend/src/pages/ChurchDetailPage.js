@@ -322,6 +322,63 @@ const ChurchDetailPage = () => {
     };
   }, [church]);
 
+  // ===== JSON-LD Structured Data =====
+  useEffect(() => {
+    if (!church) return;
+
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "Church",
+      "name": church.name,
+      "description": church.description
+        ? church.description.replace(/<[^>]+>/g, '').slice(0, 200)
+        : `${church.name} is a ${church.denomination || ''} church listed on ChurchNavigator.`,
+      "url": `https://churchnavigator.com/church/${church.slug}`,
+      "telephone": church.phone || undefined,
+      "email": church.email || undefined,
+      "sameAs": [
+        church.website,
+        church.facebook,
+        church.instagram,
+        church.youtube,
+        church.twitter,
+        church.linkedin,
+      ].filter(Boolean),
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": church.address_line1 || undefined,
+        "addressLocality": church.city || undefined,
+        "addressRegion": church.state || undefined,
+        "postalCode": church.zip_code || undefined,
+        "addressCountry": church.country || "GB"
+      },
+      "geo": church.latitude && church.longitude ? {
+        "@type": "GeoCoordinates",
+        "latitude": church.latitude,
+        "longitude": church.longitude
+      } : undefined,
+      "logo": church.logo
+        ? { "@type": "ImageObject", "url": church.logo }
+        : undefined,
+      "image": church.cover_image || church.logo || undefined,
+      "denomination": church.denomination || undefined,
+    };
+
+    // Remove undefined values
+    const cleanSchema = JSON.parse(JSON.stringify(schema));
+
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'church-jsonld';
+    script.textContent = JSON.stringify(cleanSchema);
+    document.head.appendChild(script);
+
+    return () => {
+      const el = document.getElementById('church-jsonld');
+      if (el) el.remove();
+    };
+  }, [church]);
+
   useEffect(() => {
     if (church) {
       fetchRecommendations();
