@@ -820,11 +820,13 @@ export default function Explore2() {
                     hoveredId={hoveredId} 
                     onMarkerHover={setHoveredId}
                     center={filters.userCoords}
-                    onBoundsChange={(bounds) => {
-                      setFilters(prev => ({ 
-                        ...prev, 
-                        location: 'Current Map View'
-                      }));
+                    onBoundsChange={(bounds, isManual) => {
+                      if (isManual) {
+                        setFilters(prev => ({ 
+                          ...prev, 
+                          location: 'Current Map View'
+                        }));
+                      }
                       setMapBounds(bounds);
                     }}
                   />

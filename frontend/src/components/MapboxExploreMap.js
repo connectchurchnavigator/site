@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { Map, Marker, Popup, NavigationControl, GeolocateControl } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -16,6 +16,7 @@ const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
 
 const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, onBoundsChange, center }) => {
   const navigate = useNavigate();
+  const mapRef = useRef(null);
 
   useEffect(() => {
     if (!MAPBOX_TOKEN) {
@@ -43,12 +44,22 @@ const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, 
 
   useEffect(() => {
     if (center?.lat && center?.lng && !mapMoved) {
-      setViewport(prev => ({
-        ...prev,
-        latitude: center.lat,
-        longitude: center.lng,
-        zoom: 12
-      }));
+      const map = mapRef.current?.getMap();
+      if (map) {
+        map.flyTo({
+          center: [center.lng, center.lat],
+          zoom: 12,
+          duration: 1000,
+          essential: true
+        });
+      } else {
+        setViewport(prev => ({
+          ...prev,
+          latitude: center.lat,
+          longitude: center.lng,
+          zoom: 12
+        }));
+      }
     }
   }, [center]);
 
@@ -154,10 +165,13 @@ const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, 
   return (
     <div className="w-full h-full relative">
       <Map
+        ref={mapRef}
         {...viewport}
         onMove={evt => {
             setViewport(evt.viewState);
-            setMapMoved(true);
+            if (evt.originalEvent) {
+                setMapMoved(true);
+            }
         }}
         onLoad={evt => {
             const map = evt.target;
@@ -167,17 +181,18 @@ const MapboxExploreMap = ({ results, type = 'church', hoveredId, onMarkerHover, 
                 maxLat: b.getNorth(),
                 minLng: b.getWest(),
                 maxLng: b.getEast()
-            });
+            }, false);
         }}
         onMoveEnd={evt => {
             const map = evt.target;
             const b = map.getBounds();
+            const isManual = !!evt.originalEvent;
             onBoundsChange?.({
                 minLat: b.getSouth(),
                 maxLat: b.getNorth(),
                 minLng: b.getWest(),
                 maxLng: b.getEast()
-            });
+            }, isManual);
         }}
         mapStyle="mapbox://styles/mapbox/streets-v12"
         mapboxAccessToken={MAPBOX_TOKEN}
