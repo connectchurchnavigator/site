@@ -3235,6 +3235,52 @@ async def get_church_insights(church_id: str, current_user: Dict = Depends(get_c
         "avg_duration": "2m 15s"
     }
 
+@app.get("/pastor/{slug}/ld")
+async def pastor_jsonld(slug: str):
+    pastor = await db.pastors.find_one(
+        {"slug": slug, "status": "published"},
+        {"_id": 0}
+    )
+    if not pastor:
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        "name": pastor.get("name", ""),
+        "jobTitle": pastor.get("current_designation", "Pastor"),
+        "description": pastor.get("bio", "")[:200] if pastor.get("bio") else None,
+        "url": f"https://churchnavigator.com/pastor/{slug}",
+        "telephone": pastor.get("phone"),
+        "email": pastor.get("email"),
+        "image": pastor.get("profile_picture") or pastor.get("cover_image"),
+        "address": {
+            "@type": "PostalAddress",
+            "addressLocality": pastor.get("city"),
+            "addressCountry": pastor.get("country") or "GB"
+        },
+        "sameAs": [x for x in [
+            pastor.get("website"),
+            pastor.get("facebook"),
+            pastor.get("instagram"),
+            pastor.get("youtube"),
+            pastor.get("twitter"),
+        ] if x],
+        "knowsLanguage": pastor.get("languages_known") or [],
+    }
+
+    clean = {k: v for k, v in schema.items() if v is not None}
+    
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<script type="application/ld+json">{json.dumps(clean)}</script>
+</head>
+<body></body>
+</html>"""
+    
+    return Response(content=html, media_type="text/html")
+
 @app.get("/sitemap.xml")
 async def get_sitemap():
     base_url = "https://churchnavigator.com"
