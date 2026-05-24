@@ -852,7 +852,7 @@ const ChurchDetailPage = () => {
         <div className="h-56 sm:h-72 md:h-80 overflow-hidden">
           {church.cover_image ? (
             <img 
-              src={getImageUrl(church.cover_image)} 
+              src={getImageUrl(church.cover_image, 1200)} 
               alt={church.name} 
               className="w-full h-full object-cover" 
             />
@@ -869,7 +869,7 @@ const ChurchDetailPage = () => {
             !church.logo && "p-5"
           )}>
             {church.logo ? (
-              <img src={getImageUrl(church.logo)} alt={church.name} className="w-full h-full object-cover" />
+              <img src={getImageUrl(church.logo, 200, 200)} alt={church.name} className="w-full h-full object-cover" />
             ) : (
               <img src={getFallbackImage('church')} alt={church.name} className="w-full h-full object-cover" />
             )}
@@ -1046,7 +1046,7 @@ const ChurchDetailPage = () => {
                               )}>
                                 {profilePic ? (
                                   <img 
-                                    src={getImageUrl(profilePic)} 
+                                    src={getImageUrl(profilePic, 120, 120)} 
                                     alt={displayName} 
                                     className="w-full h-full object-cover transition-transform group-hover:scale-105" 
                                   />

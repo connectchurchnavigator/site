@@ -369,7 +369,7 @@ const PastorDetailPage = () => {
       <div className="relative">
         <div className="h-48 sm:h-64 md:h-72 overflow-hidden">
           {pastor.cover_image ? (
-            <img src={getImageUrl(pastor.cover_image)} alt={pastor.name} className="w-full h-full object-cover" />
+            <img src={getImageUrl(pastor.cover_image, 1200)} alt={pastor.name} className="w-full h-full object-cover" />
           ) : (
             <img src={getFallbackImage('pastor')} alt={pastor.name} className="w-full h-full object-cover opacity-40 grayscale" />
           )}
@@ -381,7 +381,7 @@ const PastorDetailPage = () => {
             !pastor.profile_picture && "p-6"
           )}>
             {pastor.profile_picture ? (
-              <img src={getImageUrl(pastor.profile_picture)} alt={pastor.name} className="w-full h-full object-cover" />
+              <img src={getImageUrl(pastor.profile_picture, 200, 200)} alt={pastor.name} className="w-full h-full object-cover" />
             ) : (
               <img src={getFallbackImage('pastor')} alt={pastor.name} className="w-full h-full object-cover" />
             )}

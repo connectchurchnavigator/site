@@ -21,14 +21,30 @@ export function truncate(text, length = 100) {
   return text.substring(0, length) + "...";
 }
 
-export function getImageUrl(image) {
+export function getImageUrl(image, width, height) {
   if (!image) return null;
   if (typeof image !== 'string') return null;
-  if (image.startsWith('http')) return image;
-  if (image.startsWith('data:')) return image;
   
-  const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
-  return `${backendUrl}${image}`;
+  let url = image;
+  if (!image.startsWith('http') && !image.startsWith('data:')) {
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+    url = `${backendUrl}${image}`;
+  }
+  
+  // Apply ImageKit dynamic transformations if the URL points to your ImageKit CDN
+  if (url.includes('ik.imagekit.io')) {
+    if (!url.includes('?tr=')) {
+      if (width && height) {
+        url = `${url}?tr=w-${width},h-${height},fo-auto`;
+      } else if (width) {
+        url = `${url}?tr=w-${width}`;
+      } else if (height) {
+        url = `${url}?tr=h-${height}`;
+      }
+    }
+  }
+  
+  return url;
 }
 
 export function getFallbackImage(type) {
