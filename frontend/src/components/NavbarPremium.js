@@ -46,6 +46,8 @@ export const NavbarPremium = ({ variant = 'dark', fixed = true }) => {
               <img 
                 src="/logo.png" 
                 alt="Church Navigator" 
+                width={180}
+                height={48}
                 className={`h-10 md:h-12 w-auto transition-all ${
                   displayScrolled ? '' : 'brightness-0 invert'
                 }`}
@@ -190,6 +192,7 @@ export const NavbarPremium = ({ variant = 'dark', fixed = true }) => {
           {/* Mobile Menu Toggle */}
           <button
             className="md:hidden p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 transition-all hover:bg-slate-100"
+            aria-label="Toggle navigation menu"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X /> : <Menu />}
