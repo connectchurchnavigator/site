@@ -14,7 +14,8 @@ import {
   FileText, 
   Shield,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Gauge
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 
@@ -29,6 +30,7 @@ const sidebarItems = [
   { path: '/admin/reports', icon: Shield, label: 'Reports' },
   { path: '/admin/announcements', icon: Bell, label: 'Announcements' },
   { path: '/admin/logs', icon: FileText, label: 'Audit Logs' },
+  { path: '/admin/speed', icon: Gauge, label: 'Speed Analyzer' },
   { path: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 

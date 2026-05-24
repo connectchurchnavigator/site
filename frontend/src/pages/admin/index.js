@@ -10,3 +10,5 @@ export { default as AdminReports } from './AdminReports';
 export { default as AdminAnnouncements } from './AdminAnnouncements';
 export { default as AdminLogs } from './AdminLogs';
 export { default as AdminSettings } from './AdminSettings';
+export { default as AdminSpeed } from './AdminSpeed';
+

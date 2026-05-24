@@ -29,7 +29,8 @@ import {
   AdminReports,
   AdminAnnouncements,
   AdminLogs,
-  AdminSettings
+  AdminSettings,
+  AdminSpeed
 } from './pages/admin';
 import CookieConsent from './components/CookieConsent';
 import '@/App.css';
@@ -118,6 +119,7 @@ function AppRoutes() {
         <Route path="announcements" element={<AdminAnnouncements />} />
         <Route path="logs" element={<AdminLogs />} />
         <Route path="settings" element={<AdminSettings />} />
+        <Route path="speed" element={<AdminSpeed />} />
       </Route>
       
       {/* Catch All */}

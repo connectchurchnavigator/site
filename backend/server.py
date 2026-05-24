@@ -454,6 +454,73 @@ async def get_imagekit_auth():
         logger.error(f"ImageKit Auth Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate auth parameters: {str(e)}")
 
+@api_router.get("/utility/page-speed")
+async def analyze_page_speed(
+    url: str = Query(..., description="The URL to analyze"),
+    strategy: str = Query("desktop", regex="^(desktop|mobile)$")
+):
+    """
+    Queries Google PageSpeed Insights API and extracts key Lighthouse metrics
+    """
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    api_key = os.environ.get("GOOGLE_PAGESPEED_API_KEY", "")
+    psi_url = "https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed"
+    
+    params = {
+        "url": url,
+        "strategy": strategy,
+        "category": "performance"
+    }
+    if api_key:
+        params["key"] = api_key
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(psi_url, params=params, timeout=45.0)
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code, 
+                    detail=f"Google PageSpeed API error: {response.text}"
+                )
+            
+            data = response.json()
+            lh = data.get("lighthouseResult", {})
+            audits = lh.get("audits", {})
+            
+            def get_audit(key):
+                audit = audits.get(key, {})
+                return {
+                    "title": audit.get("title"),
+                    "displayValue": audit.get("displayValue", "N/A"),
+                    "numericValue": audit.get("numericValue", 0),
+                    "score": audit.get("score", 0)
+                }
+
+            performance_report = {
+                "url": url,
+                "strategy": strategy,
+                "overallScore": int(lh.get("categories", {}).get("performance", {}).get("score", 0) * 100),
+                "analyzedAt": lh.get("fetchTime"),
+                "metrics": {
+                    "fcp": get_audit("first-contentful-paint"),
+                    "lcp": get_audit("largest-contentful-paint"),
+                    "cls": get_audit("cumulative-layout-shift"),
+                    "tbt": get_audit("total-blocking-time"),
+                    "speedIndex": get_audit("speed-index"),
+                }
+            }
+            
+            return performance_report
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Page Speed analysis request timed out")
+    except Exception as e:
+        logger.error(f"Error analyzing page speed for {url}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze page speed: {str(e)}")
+
 # Relationship Model
 class RelationshipBase(BaseModel):
     pastor_id: str
