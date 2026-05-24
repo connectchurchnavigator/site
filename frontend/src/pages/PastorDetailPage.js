@@ -103,6 +103,105 @@ const PastorDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("profile");
   const [associatedChurches, setAssociatedChurches] = useState([]);
+  // ===== SEO Metadata =====
+  useEffect(() => {
+    if (!pastor) return;
+
+    const siteName = 'ChurchNavigator';
+    const title = `${pastor.name} | ${pastor.current_designation || 'Pastor'} | ${siteName}`;
+    const description = pastor.bio
+      ? pastor.bio.slice(0, 155) + '...'
+      : `${pastor.name} is a ${pastor.current_designation || 'Pastor'} listed on ChurchNavigator. ${pastor.denomination || ''} minister based in ${pastor.city || 'UK'}.`;
+    const canonical = `https://churchnavigator.com/pastor/${pastor.slug}`;
+    const image = pastor.profile_picture || pastor.cover_image || 'https://churchnavigator.com/logo.png';
+
+    document.title = title;
+
+    const setMeta = (attr, key, value) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', value);
+    };
+
+    setMeta('name', 'description', description);
+
+    let canonicalEl = document.querySelector('link[rel="canonical"]');
+    if (!canonicalEl) {
+      canonicalEl = document.createElement('link');
+      canonicalEl.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalEl);
+    }
+    canonicalEl.setAttribute('href', canonical);
+
+    setMeta('property', 'og:title', title);
+    setMeta('property', 'og:description', description);
+    setMeta('property', 'og:image', image);
+    setMeta('property', 'og:url', canonical);
+    setMeta('property', 'og:type', 'profile');
+    setMeta('property', 'og:site_name', siteName);
+
+    setMeta('name', 'twitter:card', 'summary_large_image');
+    setMeta('name', 'twitter:title', title);
+    setMeta('name', 'twitter:description', description);
+    setMeta('name', 'twitter:image', image);
+
+    return () => {
+      document.title = siteName;
+    };
+  }, [pastor]);
+
+  // ===== JSON-LD Structured Data =====
+  useEffect(() => {
+    if (!pastor) return;
+
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "name": pastor.name,
+      "jobTitle": pastor.current_designation || "Pastor",
+      "description": pastor.bio ? pastor.bio.slice(0, 200) : undefined,
+      "url": `https://churchnavigator.com/pastor/${pastor.slug}`,
+      "telephone": pastor.phone || undefined,
+      "email": pastor.email || undefined,
+      "image": pastor.profile_picture || pastor.cover_image || undefined,
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": pastor.city || undefined,
+        "addressRegion": pastor.state || undefined,
+        "addressCountry": pastor.country || "GB"
+      },
+      "sameAs": [
+        pastor.website,
+        pastor.facebook,
+        pastor.instagram,
+        pastor.youtube,
+        pastor.twitter,
+        pastor.linkedin,
+      ].filter(Boolean),
+      "knowsLanguage": pastor.languages_known || undefined,
+      "memberOf": pastor.denomination ? {
+        "@type": "Organization",
+        "name": pastor.denomination
+      } : undefined,
+    };
+
+    const cleanSchema = JSON.parse(JSON.stringify(schema));
+
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'pastor-jsonld';
+    script.textContent = JSON.stringify(cleanSchema);
+    document.head.appendChild(script);
+
+    return () => {
+      const el = document.getElementById('pastor-jsonld');
+      if (el) el.remove();
+    };
+  }, [pastor]);
   const [lightbox, setLightbox] = useState({ isOpen: false, images: [], currentIndex: 0 });
   const [messageData, setMessageData] = useState({ name: '', email: '', phone: '', message: '' });
   const [sendingMessage, setSendingMessage] = useState(false);

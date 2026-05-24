@@ -271,6 +271,113 @@ const ChurchDetailPage = () => {
   const [recommendations, setRecommendations] = useState([]);
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [isBranchesExpanded, setIsBranchesExpanded] = useState(false);
+  // ===== SEO Metadata =====
+  useEffect(() => {
+    if (!church) return;
+
+    const siteName = 'ChurchNavigator';
+    const title = `${church.name} | ${siteName}`;
+    const description = church.description
+      ? church.description.replace(/<[^>]+>/g, '').slice(0, 155) + '...'
+      : `Find ${church.name} in ${[church.city, church.state].filter(Boolean).join(', ')}. ${church.denomination || ''} church listed on ChurchNavigator.`;
+    const canonical = `https://churchnavigator.com/church/${church.slug}`;
+    const image = church.cover_image || church.logo || 'https://churchnavigator.com/logo.png';
+
+    document.title = title;
+
+    const setMeta = (attr, key, value) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', value);
+    };
+
+    setMeta('name', 'description', description);
+
+    let canonicalEl = document.querySelector('link[rel="canonical"]');
+    if (!canonicalEl) {
+      canonicalEl = document.createElement('link');
+      canonicalEl.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalEl);
+    }
+    canonicalEl.setAttribute('href', canonical);
+
+    setMeta('property', 'og:title', title);
+    setMeta('property', 'og:description', description);
+    setMeta('property', 'og:image', image);
+    setMeta('property', 'og:url', canonical);
+    setMeta('property', 'og:type', 'place');
+    setMeta('property', 'og:site_name', siteName);
+
+    setMeta('name', 'twitter:card', 'summary_large_image');
+    setMeta('name', 'twitter:title', title);
+    setMeta('name', 'twitter:description', description);
+    setMeta('name', 'twitter:image', image);
+
+    return () => {
+      document.title = siteName;
+    };
+  }, [church]);
+
+  // ===== JSON-LD Structured Data =====
+  useEffect(() => {
+    if (!church) return;
+
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "Church",
+      "name": church.name,
+      "description": church.description
+        ? church.description.replace(/<[^>]+>/g, '').slice(0, 200)
+        : `${church.name} is a ${church.denomination || ''} church listed on ChurchNavigator.`,
+      "url": `https://churchnavigator.com/church/${church.slug}`,
+      "telephone": church.phone || undefined,
+      "email": church.email || undefined,
+      "sameAs": [
+        church.website,
+        church.facebook,
+        church.instagram,
+        church.youtube,
+        church.twitter,
+        church.linkedin,
+      ].filter(Boolean),
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": church.address_line1 || undefined,
+        "addressLocality": church.city || undefined,
+        "addressRegion": church.state || undefined,
+        "postalCode": church.zip_code || undefined,
+        "addressCountry": church.country || "GB"
+      },
+      "geo": church.latitude && church.longitude ? {
+        "@type": "GeoCoordinates",
+        "latitude": church.latitude,
+        "longitude": church.longitude
+      } : undefined,
+      "logo": church.logo
+        ? { "@type": "ImageObject", "url": church.logo }
+        : undefined,
+      "image": church.cover_image || church.logo || undefined,
+      "denomination": church.denomination || undefined,
+    };
+
+    // Remove undefined values
+    const cleanSchema = JSON.parse(JSON.stringify(schema));
+
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'church-jsonld';
+    script.textContent = JSON.stringify(cleanSchema);
+    document.head.appendChild(script);
+
+    return () => {
+      const el = document.getElementById('church-jsonld');
+      if (el) el.remove();
+    };
+  }, [church]);
 
   useEffect(() => {
     if (church) {
