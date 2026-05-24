@@ -20,7 +20,7 @@ export const PastorCard = ({ pastor, dark }) => {
         <div className="relative h-48 bg-slate-100 overflow-hidden">
           {pastor.cover_image ? (
             <img
-              src={getImageUrl(pastor.cover_image)}
+              src={getImageUrl(pastor.cover_image, 400, 224)}
               alt={pastor.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
@@ -35,7 +35,7 @@ export const PastorCard = ({ pastor, dark }) => {
           {/* Profile Picture Overlay */}
           <div className={`absolute bottom-4 left-4 w-16 h-16 bg-white rounded-full shadow-lg overflow-hidden border-2 border-white flex items-center justify-center ${!pastor.profile_picture ? 'p-3' : ''}`}>
             <img
-              src={pastor.profile_picture ? getImageUrl(pastor.profile_picture) : getFallbackImage('pastor')}
+              src={pastor.profile_picture ? getImageUrl(pastor.profile_picture, 100, 100) : getFallbackImage('pastor')}
               alt={pastor.name}
               className="w-full h-full object-cover"
             />

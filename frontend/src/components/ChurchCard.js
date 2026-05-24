@@ -28,7 +28,7 @@ export const ChurchCard = ({ church, dark }) => {
         <div className="relative h-48 bg-slate-100 overflow-hidden">
           {church.cover_image ? (
             <img
-              src={getImageUrl(church.cover_image)}
+              src={getImageUrl(church.cover_image, 400, 224)}
               alt={church.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
@@ -43,7 +43,7 @@ export const ChurchCard = ({ church, dark }) => {
           {/* Logo Overlay */}
           <div className={`absolute bottom-4 left-4 w-16 h-16 bg-white rounded-xl shadow-lg overflow-hidden border-2 border-white flex items-center justify-center ${!church.logo ? 'p-3' : ''}`}>
             <img
-              src={church.logo ? getImageUrl(church.logo) : getFallbackImage('church')}
+              src={church.logo ? getImageUrl(church.logo, 100, 100) : getFallbackImage('church')}
               alt={`${church.name} logo`}
               className="w-full h-full object-cover"
             />
