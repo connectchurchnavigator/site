@@ -30,7 +30,7 @@ const CookieConsent = () => {
           exit={{ y: 100, opacity: 0 }}
           className="fixed bottom-6 left-6 right-6 md:left-auto md:right-8 md:max-w-md z-[9999]"
         >
-          <Card className="p-6 bg-white/80 backdrop-blur-xl border-slate-200/50 shadow-2xl shadow-slate-200/50 relative overflow-hidden">
+          <Card className="p-6 bg-white border border-slate-200 shadow-2xl relative overflow-hidden">
             {/* Subtle Gradient Background */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
             
@@ -40,7 +40,7 @@ const CookieConsent = () => {
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-slate-900 mb-1">Cookie Policy</h3>
-                <p className="text-sm text-slate-600 leading-relaxed">
+                <p className="text-sm text-slate-700 leading-relaxed">
                   We use cookies to enhance your experience, analyze site traffic, and serve targeted advertisements. By clicking "Accept All", you consent to our use of cookies.
                 </p>
               </div>
@@ -63,14 +63,14 @@ const CookieConsent = () => {
               <Button 
                 variant="outline"
                 onClick={() => handleConsent('essential')}
-                className="flex-1 border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-6"
+                className="flex-1 border-slate-300 hover:bg-slate-50 text-slate-800 font-semibold py-6"
               >
                 Decline All
               </Button>
             </div>
             
             <div className="mt-4 text-center">
-              <button className="text-xs text-slate-400 hover:text-brand transition-colors underline underline-offset-4">
+              <button className="text-xs text-slate-500 font-medium hover:text-brand transition-colors underline underline-offset-4">
                 View Privacy Policy
               </button>
             </div>

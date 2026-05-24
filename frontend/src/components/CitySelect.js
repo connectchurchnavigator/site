@@ -80,7 +80,7 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
   const inputStyles = variant === "outline" 
     ? "bg-white border-slate-200 rounded-xl border h-11 px-4 pl-10" 
     : variant === "transparent-glass"
-    ? "bg-transparent border-none focus:ring-0 text-white placeholder:text-white/60 h-14 pl-10"
+    ? "bg-transparent border-none focus:ring-0 text-white placeholder:text-slate-300 h-14 pl-10"
     : "border-0 border-b border-slate-200 bg-transparent rounded-none h-14 pl-10";
 
   return (
@@ -97,6 +97,7 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
             if (cities.length > 0) setOpen(true);
           }}
           placeholder={placeholder}
+          autoComplete="off"
           className={cn(
             "pr-10 text-sm font-medium text-slate-700 focus-visible:ring-0 focus-visible:border-brand transition-all placeholder:text-slate-400 w-full",
             inputStyles
@@ -124,7 +125,7 @@ export function CitySelect({ value, onChange, placeholder = "Search City...", cl
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <div className="absolute bottom-0 left-0 right-0 h-px pointer-events-none" />
+          <button type="button" aria-label="City suggestions" className="absolute bottom-0 left-0 right-0 h-px pointer-events-none opacity-0" />
         </PopoverTrigger>
         <PopoverContent 
           onOpenAutoFocus={(e) => e.preventDefault()}

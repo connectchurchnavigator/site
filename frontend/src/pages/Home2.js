@@ -8,7 +8,7 @@ import {
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { 
-  Tabs, TabsList, TabsTrigger 
+  Tabs, TabsList, TabsTrigger, TabsContent 
 } from '../components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
@@ -111,7 +111,7 @@ const Home2 = () => {
             <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-[1.05] text-white hero-text-glow tracking-tight">
               Find Your <span className="text-gradient">Spiritual</span> Home
             </h1>
-            <p className="text-lg md:text-xl text-white/50 mb-12 max-w-2xl mx-auto font-light leading-relaxed tracking-wide">
+            <p className="text-lg md:text-xl text-slate-300 mb-12 max-w-2xl mx-auto font-light leading-relaxed tracking-wide">
               Experience the next generation of faith exploration. Verified communities, real connections, zero clutter.
             </p>
           </div>
@@ -121,10 +121,10 @@ const Home2 = () => {
             <div className="bg-white/12 backdrop-blur-3xl rounded-[2.5rem] p-6 border border-white/20 shadow-[0_0_50px_rgba(108,28,255,0.15)] transition-all">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="bg-white/10 backdrop-blur-md rounded-xl mb-8 self-center p-1 w-fit mx-auto border border-white/10">
-                  <TabsTrigger value="churches" className="rounded-lg px-8 h-9 text-xs uppercase tracking-widest data-[state=active]:bg-brand data-[state=active]:text-white transition-all">
+                  <TabsTrigger value="churches" className="rounded-lg px-8 h-9 text-xs uppercase tracking-widest text-slate-300 data-[state=active]:bg-brand data-[state=active]:text-white hover:text-white transition-all">
                     <Church className="h-4 w-4 mr-2" /> Churches
                   </TabsTrigger>
-                  <TabsTrigger value="pastors" className="rounded-lg px-8 h-9 text-xs uppercase tracking-widest data-[state=active]:bg-brand data-[state=active]:text-white transition-all">
+                  <TabsTrigger value="pastors" className="rounded-lg px-8 h-9 text-xs uppercase tracking-widest text-slate-300 data-[state=active]:bg-brand data-[state=active]:text-white hover:text-white transition-all">
                     <User className="h-4 w-4 mr-2" /> Pastors
                   </TabsTrigger>
                 </TabsList>
@@ -135,7 +135,7 @@ const Home2 = () => {
                     <input 
                       type="text" 
                       placeholder={activeTab === 'churches' ? "Search church name..." : "Search pastor profile..."} 
-                      className="bg-transparent border-none focus:ring-0 focus:outline-none focus-visible:ring-0 w-full h-14 text-sm text-white font-medium placeholder:text-white/60"
+                      className="bg-transparent border-none focus:ring-0 focus:outline-none focus-visible:ring-0 w-full h-14 text-sm text-white font-medium placeholder:text-slate-300"
                       value={searchData.name}
                       onChange={(e) => setSearchData({...searchData, name: e.target.value})}
                     />
@@ -157,7 +157,10 @@ const Home2 = () => {
 
                   <div className="flex-1 flex items-center px-1 bg-white/10 rounded-2xl border border-white/10">
                     <Select value={searchData.denomination} onValueChange={(v) => setSearchData({ ...searchData, denomination: v })}>
-                      <SelectTrigger className="border-none bg-transparent focus:ring-0 h-14 shadow-none text-sm text-white/60">
+                      <SelectTrigger 
+                        aria-label="Select Denomination"
+                        className="border-none bg-transparent focus:ring-0 h-14 shadow-none text-sm text-slate-300"
+                      >
                         <SelectValue placeholder="Denomination" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-900 border-white/10 text-white rounded-xl shadow-2xl z-[200]">
@@ -181,6 +184,9 @@ const Home2 = () => {
                     Search
                   </Button>
                 </div>
+                
+                <TabsContent value="churches" className="hidden" />
+                <TabsContent value="pastors" className="hidden" />
               </Tabs>
             </div>
           </div>
@@ -333,7 +339,7 @@ const Home2 = () => {
               <h2 className="text-4xl md:text-7xl font-black text-white mb-10 leading-none tracking-tighter">
                 Expand Your <br /> <span className="text-brand">Reach</span>
               </h2>
-              <p className="text-slate-300 text-xl mb-12 max-w-xl mx-auto font-medium leading-relaxed opacity-80">
+              <p className="text-slate-300 text-xl mb-12 max-w-xl mx-auto font-medium leading-relaxed">
                 A high-fidelity directory that puts your community in front of thousands seeking spiritual guidance.
               </p>
                <div className="flex flex-col sm:flex-row gap-4 justify-center">

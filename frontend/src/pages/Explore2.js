@@ -12,7 +12,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Checkbox } from '../components/ui/checkbox';
 import { churchAPI, pastorAPI, taxonomyAPI } from '../lib/api';
@@ -730,6 +730,9 @@ export default function Explore2() {
                         Global
                       </TabsTrigger>
                     </TabsList>
+                    
+                    <TabsContent value="nearby" className="hidden" />
+                    <TabsContent value="global" className="hidden" />
                   </Tabs>
                 </div>
 

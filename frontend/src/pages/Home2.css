@@ -123,3 +123,16 @@
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* Accessibility Contrast Enhancements for Dark Layouts */
+.bg-hero-dark-custom .text-gradient {
+  background: linear-gradient(135deg, #a78bfa 0%, #f472b6 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+.bg-slate-950 .text-brand,
+.bg-hero-dark-custom .text-brand {
+  color: #a78bfa !important;
+}
