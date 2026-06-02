@@ -146,11 +146,7 @@ function App() {
       </AuthProvider>
     </GoogleOAuthProvider>
   );
-
-  
-<Route path="/church/:slug"         element={<ChurchDetailPage />} />
-<Route path="/pastor/:slug"         element={<PastorDetailPage />} />
-}
+ }
 
 export default App;
 
