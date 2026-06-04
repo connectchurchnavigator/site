@@ -450,7 +450,7 @@ export default function ChurchDetailPage() {
 
       {/* ── BODY ── */}
       <div style={{ background:"#f9fafb" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 240px", gap:12, padding:14 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 300px", gap:12, padding:14 }}>
 
           {/* LEFT */}
           <div>
