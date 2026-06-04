@@ -438,9 +438,6 @@ export default function ChurchDetailPage() {
         </a>
       </div>
 
-      </div>
-      </div>
-
       {/* ── TABS ── */}
       <div style={{ background:"#fff", borderBottom:"0.5px solid #e5e7eb", borderRadius:"12px 12px 0 0", display:"flex", overflowX:"auto" }}>
         {[
