@@ -1,6 +1,8 @@
 /* eslint-disable */
 import React from "react";
 
+import ListingChatWidget from "../components/ListingChatWidget";
+
 // Load Tabler Icons if not already loaded
 if (typeof document !== "undefined" && !document.getElementById("tabler-icons-css")) {
   const link = document.createElement("link");
@@ -729,6 +731,16 @@ export default function ChurchDetailPage() {
 
       {/* ── NEARBY CHURCHES ── */}
       <NearbyChurches currentSlug={slug} city={city} />
+
+      {/* ── CHAT WIDGET ── */}
+      <ListingChatWidget
+        entityType="church"
+        entityId={church.id}
+        entityName={church.name}
+        entityRole={church.denomination || "Church"}
+        entityAvatar={church.logo}
+        isOwner={false}
+      />
 
       {/* ── FOOTER ── */}
       <div style={{ background:"#fff", borderTop:"0.5px solid #e5e7eb", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
