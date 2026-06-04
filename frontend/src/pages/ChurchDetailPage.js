@@ -109,32 +109,116 @@ function BranchesTab({ branches, mainChurch }) {
 function NearbyChurches({ currentSlug, city }) {
   const [churches, setChurches] = React.useState([]);
   React.useEffect(() => {
-    fetch(`${API_URL}/api/churches?limit=10`)
+    // Fetch same city first, fallback to general list
+    const cityParam = city ? `&city=${encodeURIComponent(city)}` : "";
+    fetch(`${API_URL}/api/churches?limit=20${cityParam}`)
       .then(r => r.json())
       .then(data => {
         const list = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
-        setChurches(list.filter(c => c.slug !== currentSlug).slice(0, 3));
+        const filtered = list.filter(c => c.slug !== currentSlug && c.status === "published");
+        // Sort: featured first, then recommended, then others
+        const sorted = [
+          ...filtered.filter(c => c.is_featured),
+          ...filtered.filter(c => c.is_recommended && !c.is_featured),
+          ...filtered.filter(c => !c.is_featured && !c.is_recommended),
+        ];
+        // If not enough from city, fetch more
+        if (sorted.length >= 3) {
+          setChurches(sorted.slice(0, 3));
+        } else {
+          fetch(`${API_URL}/api/churches?limit=20`)
+            .then(r => r.json())
+            .then(data2 => {
+              const list2 = Array.isArray(data2.data) ? data2.data : Array.isArray(data2) ? data2 : [];
+              const filtered2 = list2.filter(c => c.slug !== currentSlug && !sorted.find(s => s.id === c.id));
+              setChurches([...sorted, ...filtered2].slice(0, 3));
+            }).catch(() => setChurches(sorted.slice(0, 3)));
+        }
       })
       .catch(() => {});
-  },[currentSlug]);
+  },[currentSlug, city]);
   if (!churches.length) return null;
   return (
-    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", margin:"0 14px 14px", maxWidth:1100, marginLeft:"auto", marginRight:"auto" }}>
+    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", margin:"0 auto 14px", maxWidth:1100 }}>
+      {/* Header */}
       <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
-        <div style={{ width:28, height:28, borderRadius:7, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:15, color:"#7c3aed" }} /></div>
-        <span style={{ fontSize:13, fontWeight:500, color:"#5b21b6" }}>Other Churches in {city}</span>
-        <a href="/explore" style={{ marginLeft:"auto", fontSize:12, color:"#7c3aed", textDecoration:"none", display:"flex", alignItems:"center", gap:3 }}>See all <i className="ti ti-arrow-right" style={{ fontSize:13 }} /></a>
+        <div style={{ width:28, height:28, borderRadius:7, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <i className="ti ti-building-church" style={{ fontSize:15, color:"#7c3aed" }} />
+        </div>
+        <span style={{ fontSize:13, fontWeight:500, color:"#5b21b6" }}>
+          {city ? `Other Churches in ${city}` : "You might also like"}
+        </span>
+        <a href="/explore" style={{ marginLeft:"auto", fontSize:12, color:"#7c3aed", textDecoration:"none", display:"flex", alignItems:"center", gap:3, fontWeight:500 }}>
+          See all churches <i className="ti ti-arrow-right" style={{ fontSize:13 }} />
+        </a>
       </div>
-      <div style={{ padding:"12px 14px", display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
-        {churches.map(c => (
-          <a key={c.id} href={`/church/${c.slug}`} style={{ textDecoration:"none", background:"#f9fafb", border:"0.5px solid #e5e7eb", borderRadius:10, overflow:"hidden", display:"block" }}>
-            <div style={{ height:80, overflow:"hidden" }}>
-              {c.cover_image ? <img src={c.cover_image} alt={c.name} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} loading="lazy" />
-                : <div style={{ width:"100%", height:"100%", background:"linear-gradient(135deg,#7c3aed,#a78bfa)", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:28, color:"#fff" }} /></div>}
+
+      {/* Church cards */}
+      <div style={{ padding:"14px", display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+        {churches.map((c,i) => (
+          <a key={c.id} href={`/church/${c.slug}`} style={{ textDecoration:"none", display:"block", borderRadius:12, overflow:"hidden", border:"0.5px solid #e5e7eb", background:"#fff", transition:"box-shadow .2s" }}
+            onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(124,58,237,0.15)"}
+            onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+
+            {/* Cover image with overlay */}
+            <div style={{ position:"relative", height:100, overflow:"hidden" }}>
+              {c.cover_image
+                ? <img src={c.cover_image} alt={c.name} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} loading="lazy" />
+                : <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg,${["#7c3aed,#a78bfa","#059669,#34d399","#1d4ed8,#60a5fa"][i%3]})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <i className="ti ti-building-church" style={{ fontSize:32, color:"rgba(255,255,255,0.8)" }} />
+                  </div>
+              }
+              <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(0,0,0,0.5) 0%,rgba(0,0,0,0) 60%)" }} />
+
+              {/* Logo */}
+              {c.logo && (
+                <div style={{ position:"absolute", bottom:8, left:10, width:28, height:28, borderRadius:"50%", overflow:"hidden", border:"2px solid rgba(255,255,255,0.8)", background:"#fff" }}>
+                  <img src={c.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+                </div>
+              )}
+
+              {/* Featured badge */}
+              {c.is_featured && (
+                <span style={{ position:"absolute", top:8, right:8, fontSize:9, fontWeight:500, padding:"2px 7px", borderRadius:8, background:"rgba(124,58,237,0.85)", color:"#fff" }}>
+                  ⭐ Featured
+                </span>
+              )}
             </div>
-            <div style={{ padding:"8px 10px" }}>
-              <div style={{ fontSize:12, fontWeight:500, color:"#111", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.name}</div>
-              <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>{c.city||""}{c.denomination?` · ${c.denomination}`:""}</div>
+
+            {/* Info */}
+            <div style={{ padding:"10px 12px" }}>
+              <div style={{ fontSize:13, fontWeight:500, color:"#111", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:4 }}>{c.name}</div>
+
+              {/* Location */}
+              {(c.city || c.address_line1) && (
+                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"#6b7280", marginBottom:4 }}>
+                  <i className="ti ti-map-pin" style={{ fontSize:11, color:"#7c3aed", flexShrink:0 }} />
+                  <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.city || c.address_line1}</span>
+                </div>
+              )}
+
+              {/* Denomination */}
+              {c.denomination && (
+                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"#6b7280", marginBottom:8 }}>
+                  <i className="ti ti-building-church" style={{ fontSize:11, color:"#6b7280", flexShrink:0 }} />
+                  <span>{c.denomination}</span>
+                </div>
+              )}
+
+              {/* Service time if available */}
+              {c.services?.[0] && (
+                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:"#7c3aed", background:"#f5f0ff", padding:"3px 8px", borderRadius:7, marginBottom:8, width:"fit-content" }}>
+                  <i className="ti ti-clock" style={{ fontSize:10 }} />
+                  {c.services[0].day} {c.services[0].start_time}
+                </div>
+              )}
+
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <span style={{ fontSize:10, color:"#059669", background:"#d1fae5", padding:"2px 7px", borderRadius:6 }}>Open Sunday</span>
+                <span style={{ fontSize:11, color:"#7c3aed", display:"flex", alignItems:"center", gap:2 }}>
+                  View <i className="ti ti-arrow-right" style={{ fontSize:11 }} />
+                </span>
+              </div>
             </div>
           </a>
         ))}
@@ -221,7 +305,7 @@ export default function ChurchDetailPage() {
 
 
       {/* ── HERO ── */}
-      <div style={{ position:"relative", height:260, overflow:"hidden", background:"#1a0d3d" }}>
+      <div style={{ position:"relative", height:340, overflow:"hidden", background:"#1a0d3d" }}>
         {cover_image && <img src={cover_image} alt={name} style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />}
         <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"#4c1d95", top:-120, right:-60, opacity:0.35 }} />
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(10,5,30,0.93) 0%,rgba(10,5,30,0.1) 75%)" }} />
@@ -519,10 +603,10 @@ export default function ChurchDetailPage() {
                     const eventName=s.event_name||s.eventName||s.name||"";
                     const isToday=s.day?.toLowerCase()===new Date().toLocaleDateString("en-GB",{weekday:"long"}).toLowerCase();
                     return (
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:i<services.length-1?"0.5px solid #e5e7eb":"none", fontSize:12 }}>
-                        <span style={{ minWidth:60, fontWeight:500, color:"#111" }}>{s.day}</span>
-                        <span style={{ flex:1, color:"#6b7280" }}>{eventName}{isToday&&<span style={{ background:"#d1fae5", color:"#065f46", fontSize:10, padding:"2px 6px", borderRadius:5, marginLeft:4 }}>Today</span>}</span>
-                        <span style={{ color:"#7c3aed", fontWeight:500, fontSize:11, background:"#f5f0ff", padding:"3px 7px", borderRadius:7, whiteSpace:"nowrap" }}>{startTime}{endTime?` — ${endTime}`:""}</span>
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 0", borderBottom:i<services.length-1?"0.5px solid #e5e7eb":"none", fontSize:12, flexWrap:"nowrap" }}>
+                        <span style={{ minWidth:55, fontWeight:500, color:"#111", flexShrink:0 }}>{s.day}</span>
+                        <span style={{ flex:1, color:"#6b7280", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{eventName}{isToday&&<span style={{ background:"#d1fae5", color:"#065f46", fontSize:10, padding:"2px 6px", borderRadius:5, marginLeft:4 }}>Today</span>}</span>
+                        <span style={{ color:"#7c3aed", fontWeight:500, fontSize:10, background:"#f5f0ff", padding:"3px 7px", borderRadius:7, whiteSpace:"nowrap", flexShrink:0 }}>{startTime}{endTime?` — ${endTime}`:""}</span>
                       </div>
                     );
                   })}
