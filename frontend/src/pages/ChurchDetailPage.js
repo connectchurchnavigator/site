@@ -109,26 +109,14 @@ function BranchesTab({ branches, mainChurch }) {
 function NearbyChurches({ currentSlug, city }) {
   const [churches, setChurches] = React.useState([]);
   React.useEffect(() => {
-    // Try multiple endpoint formats
-    const tryFetch = (urls) => {
-      if (!urls.length) return;
-      fetch(urls[0])
-        .then(r => r.json())
-        .then(data => {
-          let list = [];
-          if (Array.isArray(data)) list = data;
-          else if (Array.isArray(data.churches)) list = data.churches;
-          else if (Array.isArray(data.results)) list = data.results;
-          else if (Array.isArray(data.data)) list = data.data;
-          const filtered = list.filter(c => c.slug !== currentSlug).slice(0, 3);
-          if (filtered.length > 0) setChurches(filtered);
-          else if (urls.length > 1) tryFetch(urls.slice(1));
-        })
-        .catch(() => { if (urls.length > 1) tryFetch(urls.slice(1)); });
-    };
-    if (city) tryFetch(endpoints);
-    }
-  },[city,currentSlug]);
+    fetch(`${API_URL}/api/churches?limit=10`)
+      .then(r => r.json())
+      .then(data => {
+        const list = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+        setChurches(list.filter(c => c.slug !== currentSlug).slice(0, 3));
+      })
+      .catch(() => {});
+  },[currentSlug]);
   if (!churches.length) return null;
   return (
     <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", margin:"0 14px 14px", maxWidth:1100, marginLeft:"auto", marginRight:"auto" }}>
