@@ -2,7 +2,7 @@
 import React from "react";
 
 import ListingChatWidget from "../components/ListingChatWidget";
-import Footer from "../components/Footer";
+import { Footer } from "../components/Footer";
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || "https://api.churchnavigator.com";
 
@@ -133,7 +133,7 @@ function NearbyChurches({ currentSlug, city }) {
   },[currentSlug, city]);
   if (!churches.length) return null;
   return (
-    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden" }}>
+    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:16 }}>
       {/* Header */}
       <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
         <div style={{ width:28, height:28, borderRadius:7, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -420,7 +420,7 @@ export default function ChurchDetailPage() {
 
       {/* ── FIRST TIME VISITOR BAND ── */}
       <div style={{ background:"#1a0d3d" }}>
-      <div style={{ maxWidth:1280, margin:"0 auto", padding:"14px 48px", boxSizing:"border-box", display:"flex", alignItems:"center", gap:12, position:"relative", overflow:"hidden" }}>
+        <div style={{ maxWidth:1280, margin:"0 auto", padding:"14px 48px", boxSizing:"border-box", display:"flex", alignItems:"center", gap:12, position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", width:160, height:160, borderRadius:"50%", background:"#4c1d95", top:-50, right:70, opacity:0.5 }} />
         <div style={{ position:"absolute", width:100, height:100, borderRadius:"50%", background:"#0891b2", bottom:-30, right:20, opacity:0.25 }} />
         {/* QR icon in box */}
@@ -436,6 +436,7 @@ export default function ChurchDetailPage() {
         </a>
       </div>
 
+        </div>
       </div>{/* end visitor band wrapper */}
 
       {/* ── TABS ── */}
@@ -741,7 +742,7 @@ export default function ChurchDetailPage() {
       </div>{/* end contact wrapper */}
 
       {/* ── NEARBY CHURCHES ── */}
-      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box" }}>
+      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", marginBottom:16 }}>
         <NearbyChurches currentSlug={slug} city={city} />
 
       {/* ── CHAT WIDGET ── */}
