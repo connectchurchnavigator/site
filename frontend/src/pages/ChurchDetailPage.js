@@ -697,7 +697,7 @@ export default function ChurchDetailPage() {
           <span style={{ marginLeft:"auto", fontSize:12, color:"#6b7280" }}>We'll get back to you soon</span>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr" }}>
-          <div style={{ padding:20, borderRight:"0.5px solid #e5e7eb" }}>
+          <div style={{ padding:"20px 24px", borderRight:"0.5px solid #e5e7eb" }}>
             <div style={{ fontSize:13, fontWeight:500, color:"#111", marginBottom:14 }}>Send a message</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9, marginBottom:9 }}>
               <input placeholder="Your name *" style={{ padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none" }} />
@@ -709,7 +709,7 @@ export default function ChurchDetailPage() {
               <i className="ti ti-send" style={{ fontSize:15 }} /> Send Message
             </button>
           </div>
-          <div style={{ padding:20 }}>
+          <div style={{ padding:"20px 24px" }}>
             <div style={{ fontSize:13, fontWeight:500, color:"#111", marginBottom:14 }}>Get in touch directly</div>
             {[
               {icon:"map-pin",bg:"linear-gradient(135deg,#7c3aed,#a78bfa)",label:"Address",value:address},
@@ -755,14 +755,7 @@ export default function ChurchDetailPage() {
       </div>{/* end nearby wrapper */}
 
       {/* ── FOOTER ── */}
-      <div style={{ background:"#fff", borderTop:"0.5px solid #e5e7eb", padding:"14px 0px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
-        <span style={{ fontSize:12, color:"#9ca3af" }}>© 2026 ChurchNavigator — Finding your spiritual home</span>
-        <div style={{ display:"flex", gap:16 }}>
-          {["Privacy","Terms","Add your church"].map(l=>(
-            <span key={l} style={{ fontSize:12, color:"#9ca3af", cursor:"pointer" }}>{l}</span>
-          ))}
-        </div>
-      </div>
+      <div style={{ marginTop:40 }}><Footer /></div>
 
     </div>
   );
