@@ -158,3 +158,5 @@ export function ensureExternalUrl(url) {
   // For standard domain patterns or social handles, assume https
   return `https://${url}`;
 }
+
+export default ChurchDetailPage;
