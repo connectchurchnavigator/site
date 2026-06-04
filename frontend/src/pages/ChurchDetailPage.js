@@ -85,7 +85,6 @@ function BranchesTab({ branches, mainChurch }) {
               <i className="ti ti-navigation" style={{ fontSize:12 }} /> Directions
             </a>
           )}
-        </div>
       </div>
     </div>
   );
@@ -418,9 +417,12 @@ export default function ChurchDetailPage() {
         ))}
       </div>
 
+      {/* ── PAGE CONTENT WRAPPER ── */}
+      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box" }}>
+
       {/* ── FIRST TIME VISITOR BAND ── */}
-      <div style={{ background:"#1a0d3d" }}>
-        <div style={{ maxWidth:1280, margin:"0 auto", padding:"14px 48px", boxSizing:"border-box", display:"flex", alignItems:"center", gap:12, position:"relative", overflow:"hidden" }}>
+      <div style={{ background:"#1a0d3d", borderRadius:12, overflow:"hidden" }}>
+      <div style={{ padding:"14px 24px", display:"flex", alignItems:"center", gap:12, position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", width:160, height:160, borderRadius:"50%", background:"#4c1d95", top:-50, right:70, opacity:0.5 }} />
         <div style={{ position:"absolute", width:100, height:100, borderRadius:"50%", background:"#0891b2", bottom:-30, right:20, opacity:0.25 }} />
         {/* QR icon in box */}
@@ -436,12 +438,11 @@ export default function ChurchDetailPage() {
         </a>
       </div>
 
-        </div>
-      </div>{/* end visitor band wrapper */}
+      </div>
+      </div>
 
       {/* ── TABS ── */}
-      <div style={{ background:"#fff", borderBottom:"0.5px solid #e5e7eb" }}>
-        <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", display:"flex", overflowX:"auto" }}>
+      <div style={{ background:"#fff", borderBottom:"0.5px solid #e5e7eb", borderRadius:"12px 12px 0 0", display:"flex", overflowX:"auto" }}>
         {[
           { key:"profile", icon:"building-church", label:"Profile" },
           { key:"team", icon:"users", label:"Our Team", count:[worship_team,it_media_team,outreach_team].filter(t=>t?.images?.length>0).length },
@@ -459,7 +460,7 @@ export default function ChurchDetailPage() {
       </div>
 
       {/* ── BODY ── */}
-      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", background:"#f9fafb" }}>
+      <div style={{ background:"#f9fafb" }}>
         <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 300px", gap:12, padding:"14px 0" }}>
 
           {/* LEFT */}
@@ -691,8 +692,7 @@ export default function ChurchDetailPage() {
       </div>
 
       {/* ── FULL WIDTH CONTACT (at bottom) ── */}
-      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", marginBottom:16 }}>
-        <div ref={contactRef} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden" }}>
+      <div ref={contactRef} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden" }}>
         <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
           <div style={{ width:30, height:30, borderRadius:8, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-message" style={{ fontSize:16, color:"#7c3aed" }} /></div>
           <span style={{ fontSize:14, fontWeight:500, color:"#5b21b6" }}>Contact This Church</span>
@@ -738,12 +738,10 @@ export default function ChurchDetailPage() {
         </div>
       </div>
 
-        </div>
       </div>{/* end contact wrapper */}
 
       {/* ── NEARBY CHURCHES ── */}
-      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", marginBottom:16 }}>
-        <NearbyChurches currentSlug={slug} city={city} />
+      <NearbyChurches currentSlug={slug} city={city} />
 
       {/* ── CHAT WIDGET ── */}
       <ListingChatWidget
@@ -755,9 +753,11 @@ export default function ChurchDetailPage() {
         isOwner={false}
       />
 
-      </div>{/* end nearby wrapper */}
+
 
       {/* ── FOOTER ── */}
+      </div>{/* end page content wrapper */}
+
       <div style={{ marginTop:40 }}><Footer /></div>
 
     </div>
