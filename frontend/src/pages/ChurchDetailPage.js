@@ -2,15 +2,7 @@
 import React from "react";
 
 import ListingChatWidget from "../components/ListingChatWidget";
-
-// Load Tabler Icons if not already loaded
-if (typeof document !== "undefined" && !document.getElementById("tabler-icons-css")) {
-  const link = document.createElement("link");
-  link.id = "tabler-icons-css";
-  link.rel = "stylesheet";
-  link.href = "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css";
-  document.head.appendChild(link);
-}
+import Footer from "../components/Footer";
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || "https://api.churchnavigator.com";
 
@@ -240,6 +232,14 @@ export default function ChurchDetailPage() {
   const contactRef = React.useRef(null);
 
   React.useEffect(() => {
+    // Load Tabler Icons
+    if (!document.getElementById("tabler-icons-css")) {
+      const link = document.createElement("link");
+      link.id = "tabler-icons-css";
+      link.rel = "stylesheet";
+      link.href = "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css";
+      document.head.appendChild(link);
+    }
     const slug = window.location.pathname.split("/church/")[1]?.split("/")[0];
     if (!slug) { setLoading(false); return; }
     fetch(`${API_URL}/api/churches/${slug}`)
@@ -419,7 +419,8 @@ export default function ChurchDetailPage() {
       </div>
 
       {/* ── FIRST TIME VISITOR BAND ── */}
-      <div style={{ background:"#1a0d3d", padding:"14px 16px", display:"flex", alignItems:"center", gap:12, position:"relative", overflow:"hidden" }}>
+      <div style={{ background:"#1a0d3d" }}>
+      <div style={{ maxWidth:1280, margin:"0 auto", padding:"14px 48px", boxSizing:"border-box", display:"flex", alignItems:"center", gap:12, position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", width:160, height:160, borderRadius:"50%", background:"#4c1d95", top:-50, right:70, opacity:0.5 }} />
         <div style={{ position:"absolute", width:100, height:100, borderRadius:"50%", background:"#0891b2", bottom:-30, right:20, opacity:0.25 }} />
         {/* QR icon in box */}
@@ -435,8 +436,11 @@ export default function ChurchDetailPage() {
         </a>
       </div>
 
+      </div>{/* end visitor band wrapper */}
+
       {/* ── TABS ── */}
-      <div style={{ display:"flex", background:"#fff", borderBottom:"0.5px solid #e5e7eb", overflowX:"auto" }}>
+      <div style={{ background:"#fff", borderBottom:"0.5px solid #e5e7eb" }}>
+      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", display:"flex", overflowX:"auto" }}>
         {[
           { key:"profile", icon:"building-church", label:"Profile" },
           { key:"team", icon:"users", label:"Our Team", count:[worship_team,it_media_team,outreach_team].filter(t=>t?.images?.length>0).length },
@@ -449,6 +453,9 @@ export default function ChurchDetailPage() {
           </div>
         ))}
       </div>
+
+      </div>{/* end tabs inner */}
+      </div>{/* end tabs wrapper */}
 
       {/* ── BODY ── */}
       <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", background:"#f9fafb" }}>
@@ -729,7 +736,10 @@ export default function ChurchDetailPage() {
         </div>
       </div>
 
+      </div>{/* end contact wrapper */}
+
       {/* ── NEARBY CHURCHES ── */}
+      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box" }}>
       <NearbyChurches currentSlug={slug} city={city} />
 
       {/* ── CHAT WIDGET ── */}
@@ -741,6 +751,8 @@ export default function ChurchDetailPage() {
         entityAvatar={church.logo}
         isOwner={false}
       />
+
+      </div>{/* end nearby wrapper */}
 
       {/* ── FOOTER ── */}
       <div style={{ background:"#fff", borderTop:"0.5px solid #e5e7eb", padding:"14px 0px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
