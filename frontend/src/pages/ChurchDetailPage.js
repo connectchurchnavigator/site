@@ -690,7 +690,8 @@ export default function ChurchDetailPage() {
       </div>
 
       {/* ── FULL WIDTH CONTACT (at bottom) ── */}
-      <div ref={contactRef} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden" }}>
+      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", marginBottom:16 }}>
+        <div ref={contactRef} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden" }}>
         <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
           <div style={{ width:30, height:30, borderRadius:8, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-message" style={{ fontSize:16, color:"#7c3aed" }} /></div>
           <span style={{ fontSize:14, fontWeight:500, color:"#5b21b6" }}>Contact This Church</span>
@@ -736,11 +737,12 @@ export default function ChurchDetailPage() {
         </div>
       </div>
 
+        </div>
       </div>{/* end contact wrapper */}
 
       {/* ── NEARBY CHURCHES ── */}
       <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box" }}>
-      <NearbyChurches currentSlug={slug} city={city} />
+        <NearbyChurches currentSlug={slug} city={city} />
 
       {/* ── CHAT WIDGET ── */}
       <ListingChatWidget
