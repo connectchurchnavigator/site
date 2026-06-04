@@ -1,18 +1,12 @@
 /* eslint-disable */
 import React from "react";
-
-import ListingChatWidget from "../components/ListingChatWidget";
 import { Footer } from "../components/Footer";
+import ListingChatWidget from "../components/ListingChatWidget";
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || "https://api.churchnavigator.com";
+const fixUrl = (url) => (!url || url === "#") ? null : url.startsWith("http") ? url : `https://${url}`;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-const fixUrl = (url) => {
-  if (!url || url === "#") return null;
-  return url.startsWith("http") ? url : `https://${url}`;
-};
-
-// ── Section Card ─────────────────────────────────────────────────────────────
+// ── Section Card ──────────────────────────────────────────────────────────────
 function SCard({ icon, iconBg, iconColor, hdrBg, title, children, action }) {
   return (
     <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:12 }}>
@@ -47,7 +41,7 @@ function BranchesTab({ branches, mainChurch }) {
   }, [branches]);
 
   if (!branches?.length) return (
-    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, padding:30, textAlign:"center", color:"#6b7280", fontSize:13 }}>No branches listed for this church yet.</div>
+    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, padding:30, textAlign:"center", color:"#6b7280", fontSize:13 }}>No branches listed yet.</div>
   );
 
   const display = branchData.length > 0 ? branchData : branches.slice(0,5).map((id,i)=>({ id, name:`Branch — ${labels[i+1]||"Location"}`, city:mainChurch.city||"London", slug:id }));
@@ -103,115 +97,47 @@ function BranchesTab({ branches, mainChurch }) {
 function NearbyChurches({ currentSlug, city }) {
   const [churches, setChurches] = React.useState([]);
   React.useEffect(() => {
-    // Fetch same city first, fallback to general list
-    const cityParam = city ? `&city=${encodeURIComponent(city)}` : "";
-    fetch(`${API_URL}/api/churches?limit=20${cityParam}`)
-      .then(r => r.json())
+    fetch(`${API_URL}/api/churches?limit=20`)
+      .then(r=>r.json())
       .then(data => {
         const list = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
-        const filtered = list.filter(c => c.slug !== currentSlug && c.status === "published");
-        // Sort: featured first, then recommended, then others
         const sorted = [
-          ...filtered.filter(c => c.is_featured),
-          ...filtered.filter(c => c.is_recommended && !c.is_featured),
-          ...filtered.filter(c => !c.is_featured && !c.is_recommended),
+          ...list.filter(c=>c.slug!==currentSlug&&c.is_featured),
+          ...list.filter(c=>c.slug!==currentSlug&&!c.is_featured),
         ];
-        // If not enough from city, fetch more
-        if (sorted.length >= 3) {
-          setChurches(sorted.slice(0, 3));
-        } else {
-          fetch(`${API_URL}/api/churches?limit=20`)
-            .then(r => r.json())
-            .then(data2 => {
-              const list2 = Array.isArray(data2.data) ? data2.data : Array.isArray(data2) ? data2 : [];
-              const filtered2 = list2.filter(c => c.slug !== currentSlug && !sorted.find(s => s.id === c.id));
-              setChurches([...sorted, ...filtered2].slice(0, 3));
-            }).catch(() => setChurches(sorted.slice(0, 3)));
-        }
-      })
-      .catch(() => {});
-  },[currentSlug, city]);
+        setChurches(sorted.slice(0,3));
+      }).catch(()=>{});
+  },[currentSlug]);
+
   if (!churches.length) return null;
+
   return (
     <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:16 }}>
-      {/* Header */}
       <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
-        <div style={{ width:28, height:28, borderRadius:7, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <i className="ti ti-building-church" style={{ fontSize:15, color:"#7c3aed" }} />
-        </div>
-        <span style={{ fontSize:13, fontWeight:500, color:"#5b21b6" }}>
-          {city ? `Other Churches in ${city}` : "You might also like"}
-        </span>
-        <a href="/explore" style={{ marginLeft:"auto", fontSize:12, color:"#7c3aed", textDecoration:"none", display:"flex", alignItems:"center", gap:3, fontWeight:500 }}>
-          See all churches <i className="ti ti-arrow-right" style={{ fontSize:13 }} />
-        </a>
+        <div style={{ width:28, height:28, borderRadius:7, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:15, color:"#7c3aed" }} /></div>
+        <span style={{ fontSize:13, fontWeight:500, color:"#5b21b6" }}>{city ? `Other Churches in ${city}` : "You might also like"}</span>
+        <a href="/explore" style={{ marginLeft:"auto", fontSize:12, color:"#7c3aed", textDecoration:"none", display:"flex", alignItems:"center", gap:3, fontWeight:500 }}>See all <i className="ti ti-arrow-right" style={{ fontSize:13 }} /></a>
       </div>
-
-      {/* Church cards */}
       <div style={{ padding:"14px", display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
         {churches.map((c,i) => (
-          <a key={c.id} href={`/church/${c.slug}`} style={{ textDecoration:"none", display:"block", borderRadius:12, overflow:"hidden", border:"0.5px solid #e5e7eb", background:"#fff", transition:"box-shadow .2s" }}
-            onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(124,58,237,0.15)"}
-            onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
-
-            {/* Cover image with overlay */}
+          <a key={c.id} href={`/church/${c.slug}`} style={{ textDecoration:"none", display:"block", borderRadius:12, overflow:"hidden", border:"0.5px solid #e5e7eb", background:"#fff" }}>
             <div style={{ position:"relative", height:100, overflow:"hidden" }}>
               {c.cover_image
                 ? <img src={c.cover_image} alt={c.name} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} loading="lazy" />
                 : <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg,${["#7c3aed,#a78bfa","#059669,#34d399","#1d4ed8,#60a5fa"][i%3]})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
                     <i className="ti ti-building-church" style={{ fontSize:32, color:"rgba(255,255,255,0.8)" }} />
-                  </div>
-              }
-              <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(0,0,0,0.5) 0%,rgba(0,0,0,0) 60%)" }} />
-
-              {/* Logo */}
-              {c.logo && (
-                <div style={{ position:"absolute", bottom:8, left:10, width:28, height:28, borderRadius:"50%", overflow:"hidden", border:"2px solid rgba(255,255,255,0.8)", background:"#fff" }}>
-                  <img src={c.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
-                </div>
-              )}
-
-              {/* Featured badge */}
-              {c.is_featured && (
-                <span style={{ position:"absolute", top:8, right:8, fontSize:9, fontWeight:500, padding:"2px 7px", borderRadius:8, background:"rgba(124,58,237,0.85)", color:"#fff" }}>
-                  ⭐ Featured
-                </span>
-              )}
+                  </div>}
+              <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(0,0,0,0.45) 0%,transparent 60%)" }} />
+              {c.logo && <div style={{ position:"absolute", bottom:8, left:10, width:26, height:26, borderRadius:"50%", overflow:"hidden", border:"2px solid rgba(255,255,255,0.8)", background:"#fff" }}><img src={c.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /></div>}
+              {c.is_featured && <span style={{ position:"absolute", top:8, right:8, fontSize:9, fontWeight:500, padding:"2px 7px", borderRadius:8, background:"rgba(124,58,237,0.85)", color:"#fff" }}>⭐ Featured</span>}
             </div>
-
-            {/* Info */}
             <div style={{ padding:"10px 12px" }}>
               <div style={{ fontSize:13, fontWeight:500, color:"#111", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:4 }}>{c.name}</div>
-
-              {/* Location */}
-              {(c.city || c.address_line1) && (
-                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"#6b7280", marginBottom:4 }}>
-                  <i className="ti ti-map-pin" style={{ fontSize:11, color:"#7c3aed", flexShrink:0 }} />
-                  <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.city || c.address_line1}</span>
-                </div>
-              )}
-
-              {/* Denomination */}
-              {c.denomination && (
-                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"#6b7280", marginBottom:8 }}>
-                  <i className="ti ti-building-church" style={{ fontSize:11, color:"#6b7280", flexShrink:0 }} />
-                  <span>{c.denomination}</span>
-                </div>
-              )}
-
-              {/* Service time if available */}
-              {c.services?.[0] && (
-                <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:"#7c3aed", background:"#f5f0ff", padding:"3px 8px", borderRadius:7, marginBottom:8, width:"fit-content" }}>
-                  <i className="ti ti-clock" style={{ fontSize:10 }} />
-                  {c.services[0].day} {c.services[0].start_time}
-                </div>
-              )}
-
+              {(c.city||c.address_line1) && <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"#6b7280", marginBottom:4 }}><i className="ti ti-map-pin" style={{ fontSize:11, color:"#7c3aed" }} /><span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.city||c.address_line1}</span></div>}
+              {c.denomination && <div style={{ fontSize:11, color:"#6b7280", marginBottom:8 }}>{c.denomination}</div>}
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                 <span style={{ fontSize:10, color:"#059669", background:"#d1fae5", padding:"2px 7px", borderRadius:6 }}>Open Sunday</span>
-                <span style={{ fontSize:11, color:"#7c3aed", display:"flex", alignItems:"center", gap:2 }}>
-                  View <i className="ti ti-arrow-right" style={{ fontSize:11 }} />
-                </span>
+                <span style={{ fontSize:11, color:"#7c3aed", display:"flex", alignItems:"center", gap:2 }}>View <i className="ti ti-arrow-right" style={{ fontSize:11 }} /></span>
               </div>
             </div>
           </a>
@@ -228,11 +154,9 @@ export default function ChurchDetailPage() {
   const [activeTab, setActiveTab] = React.useState("profile");
   const [showCoverPanel, setShowCoverPanel] = React.useState(false);
   const [coverMode, setCoverMode] = React.useState("image");
-  const [ytUrl, setYtUrl] = React.useState("");
   const contactRef = React.useRef(null);
 
   React.useEffect(() => {
-    // Load Tabler Icons
     if (!document.getElementById("tabler-icons-css")) {
       const link = document.createElement("link");
       link.id = "tabler-icons-css";
@@ -293,7 +217,6 @@ export default function ChurchDetailPage() {
   const slug = church.slug||"";
   const lat = church.latitude;
   const lng = church.longitude;
-
   const socials = [
     { icon:"brand-facebook", bg:"linear-gradient(135deg,#1877f2,#42a5f5)", href:facebook },
     { icon:"brand-instagram", bg:"linear-gradient(135deg,#833ab4,#e1306c)", href:instagram },
@@ -302,18 +225,20 @@ export default function ChurchDetailPage() {
     { icon:"brand-whatsapp", bg:"linear-gradient(135deg,#25d366,#128c7e)", href:phone?`https://wa.me/${phone.replace(/\D/g,"")}`:null },
   ].filter(s=>s.href);
 
+  // Centered container style
+  const C = { maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", width:"100%" };
+
   return (
     <div style={{ background:"#f9fafb", minHeight:"100vh" }}>
 
-
-      {/* ── HERO ── */}
-      <div style={{ position:"relative", height:340, overflow:"hidden", background:"#1a0d3d" }}>
+      {/* ── HERO (full width) ── */}
+      <div style={{ position:"relative", height:320, overflow:"hidden", background:"#1a0d3d" }}>
         {cover_image && <img src={cover_image} alt={name} style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />}
         <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"#4c1d95", top:-120, right:-60, opacity:0.35 }} />
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(10,5,30,0.93) 0%,rgba(10,5,30,0.1) 75%)" }} />
 
-        {/* Top left badges */}
-        <div style={{ position:"absolute", top:14, left:16, display:"flex", gap:7, flexWrap:"wrap", zIndex:2 }}>
+        {/* Badges */}
+        <div style={{ position:"absolute", top:14, left:16, display:"flex", gap:7, zIndex:2 }}>
           <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, fontWeight:500, padding:"3px 9px", borderRadius:10, background:"rgba(16,185,129,0.2)", color:"#6ee7b7", border:"0.5px solid rgba(16,185,129,0.35)" }}>
             <i className="ti ti-circle-check" style={{ fontSize:11 }} /> Open Sunday
           </span>
@@ -324,14 +249,13 @@ export default function ChurchDetailPage() {
           )}
         </div>
 
-        {/* Top right buttons */}
+        {/* Top right */}
         <div style={{ position:"absolute", top:14, right:16, display:"flex", gap:7, zIndex:5 }}>
-          {["Save","Share","Claim"].map((btn,i) => (
+          {["Save","Share"].map((btn,i) => (
             <button key={btn} style={{ background:"rgba(255,255,255,0.15)", border:"0.5px solid rgba(255,255,255,0.3)", borderRadius:18, padding:"5px 11px", color:"#fff", fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontFamily:"inherit" }}>
-              <i className={`ti ti-${["bookmark","share","shield-check"][i]}`} style={{ fontSize:13 }} /> {btn}
+              <i className={`ti ti-${["bookmark","share"][i]}`} style={{ fontSize:13 }} /> {btn}
             </button>
           ))}
-          {/* Edit Cover button */}
           <button onClick={()=>setShowCoverPanel(!showCoverPanel)} style={{ background:"rgba(124,58,237,0.4)", border:"0.5px solid rgba(139,92,246,0.5)", borderRadius:18, padding:"5px 11px", color:"#fff", fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontFamily:"inherit" }}>
             <i className="ti ti-photo-edit" style={{ fontSize:13 }} /> Change Cover
           </button>
@@ -350,10 +274,8 @@ export default function ChurchDetailPage() {
             ))}
             {coverMode==="youtube" && (
               <div>
-                <input value={ytUrl} onChange={e=>setYtUrl(e.target.value)} placeholder="Paste YouTube URL..." style={{ width:"100%", padding:"8px 10px", fontSize:12, border:"0.5px solid rgba(255,255,255,0.15)", borderRadius:7, background:"rgba(255,255,255,0.07)", color:"#fff", fontFamily:"inherit", outline:"none", marginTop:8, boxSizing:"border-box" }} />
-                <button style={{ width:"100%", background:"#dc2626", color:"#fff", border:"none", borderRadius:7, padding:8, fontSize:12, fontWeight:500, cursor:"pointer", marginTop:6, fontFamily:"inherit" }}>
-                  <i className="ti ti-brand-youtube" style={{ fontSize:13 }} /> Play as Cover
-                </button>
+                <input placeholder="Paste YouTube URL..." style={{ width:"100%", padding:"8px 10px", fontSize:12, border:"0.5px solid rgba(255,255,255,0.15)", borderRadius:7, background:"rgba(255,255,255,0.07)", color:"#fff", fontFamily:"inherit", outline:"none", marginTop:8, boxSizing:"border-box" }} />
+                <button style={{ width:"100%", background:"#dc2626", color:"#fff", border:"none", borderRadius:7, padding:8, fontSize:12, fontWeight:500, cursor:"pointer", marginTop:6, fontFamily:"inherit" }}>Play as Cover</button>
               </div>
             )}
             {coverMode==="image" && (
@@ -379,7 +301,6 @@ export default function ChurchDetailPage() {
               </div>
             </div>
           </div>
-          {/* Action buttons */}
           <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
             {google_maps_link && (
               <a href={google_maps_link} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:18, fontSize:12, fontWeight:500, background:"#7c3aed", color:"#fff", textDecoration:"none", whiteSpace:"nowrap" }}>
@@ -394,11 +315,9 @@ export default function ChurchDetailPage() {
                 <i className="ti ti-phone" style={{ fontSize:14 }} /> Call
               </a>
             )}
-            {/* Contact Us — scrolls to bottom */}
             <button onClick={()=>contactRef.current?.scrollIntoView({behavior:"smooth"})} style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:18, fontSize:12, fontWeight:500, color:"#fff", background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.35)", cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
               <i className="ti ti-message" style={{ fontSize:14 }} /> Contact Us
             </button>
-            {/* Watch Live */}
             {video_url && (
               <a href={video_url} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:18, fontSize:12, fontWeight:500, color:"#fff", background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.35)", textDecoration:"none", whiteSpace:"nowrap" }}>
                 <i className="ti ti-brand-youtube" style={{ fontSize:14 }} /> Watch Live
@@ -408,7 +327,7 @@ export default function ChurchDetailPage() {
         </div>
       </div>
 
-      {/* ── STATS ── */}
+      {/* ── STATS (full width) ── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", background:"#fff", borderBottom:"0.5px solid #e5e7eb" }}>
         {[{n:ministries.length,l:"Ministries",c:"#7c3aed"},{n:worship_styles.length,l:"Worship Styles",c:"#0891b2"},{n:languages.length,l:"Languages",c:"#d97706"},{n:services.length,l:"Services/Week",c:"#059669"},{n:other_branches.length,l:"Branches",c:"#db2777"}].map((s,i)=>(
           <div key={i} style={{ textAlign:"center", padding:"12px 4px", borderRight:i<4?"0.5px solid #e5e7eb":"none" }}>
@@ -418,54 +337,47 @@ export default function ChurchDetailPage() {
         ))}
       </div>
 
-      {/* ── PAGE CONTENT WRAPPER ── */}
-      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box" }}>
+      {/* ── ALL CONTENT IN CENTERED CONTAINER ── */}
+      <div style={C}>
 
-      {/* ── FIRST TIME VISITOR BAND ── */}
-      <div style={{ background:"#1a0d3d", borderRadius:12, overflow:"hidden" }}>
-      <div style={{ padding:"14px 24px", display:"flex", alignItems:"center", gap:12, position:"relative", overflow:"hidden" }}>
-        <div style={{ position:"absolute", width:160, height:160, borderRadius:"50%", background:"#4c1d95", top:-50, right:70, opacity:0.5 }} />
-        <div style={{ position:"absolute", width:100, height:100, borderRadius:"50%", background:"#0891b2", bottom:-30, right:20, opacity:0.25 }} />
-        {/* QR icon in box */}
-        <div style={{ width:40, height:40, borderRadius:10, background:"rgba(124,58,237,0.5)", border:"1px solid rgba(139,92,246,0.5)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, position:"relative", zIndex:1 }}>
-          <i className="ti ti-qrcode" style={{ fontSize:20, color:"#c4b5fd" }} />
-        </div>
-        <div style={{ flex:1, position:"relative", zIndex:1 }}>
-          <div style={{ fontSize:13, fontWeight:500, color:"#fff", marginBottom:2 }}>Visiting For The First Time?</div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)" }}>Register your visit — takes 30 seconds</div>
-        </div>
-        <a href={`/church/${slug}/visit`} style={{ background:"#fff", color:"#5b21b6", border:"none", borderRadius:16, padding:"8px 16px", fontSize:12, fontWeight:500, cursor:"pointer", position:"relative", zIndex:1, whiteSpace:"nowrap", textDecoration:"none", display:"flex", alignItems:"center", gap:4 }}>
-          <i className="ti ti-user-plus" style={{ fontSize:13, color:"#5b21b6" }} />Register My Visit
-        </a>
-      </div>
-
-      {/* ── TABS ── */}
-      <div style={{ background:"#fff", borderBottom:"0.5px solid #e5e7eb", borderRadius:"12px 12px 0 0", display:"flex", overflowX:"auto" }}>
-        {[
-          { key:"profile", icon:"building-church", label:"Profile" },
-          { key:"team", icon:"users", label:"Our Team", count:[worship_team,it_media_team,outreach_team].filter(t=>t?.images?.length>0).length },
-          { key:"branches", icon:"building-community", label:"Branches", count:other_branches.length },
-        ].map(tab=>(
-          <div key={tab.key} onClick={()=>setActiveTab(tab.key)}
-            style={{ padding:"10px 14px", fontSize:13, fontWeight:500, cursor:"pointer", color:activeTab===tab.key?"#7c3aed":"#6b7280", borderBottom:`2px solid ${activeTab===tab.key?"#7c3aed":"transparent"}`, whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:5 }}>
-            <i className={`ti ti-${tab.icon}`} style={{ fontSize:13 }} /> {tab.label}
-            {tab.count>0 && <span style={{ background:"#f5f0ff", color:"#7c3aed", fontSize:10, padding:"1px 6px", borderRadius:8 }}>{tab.count}</span>}
+        {/* ── FIRST TIME VISITOR BAND ── */}
+        <div style={{ background:"#1a0d3d", borderRadius:12, padding:"14px 20px", display:"flex", alignItems:"center", gap:12, position:"relative", overflow:"hidden", marginTop:16, marginBottom:4 }}>
+          <div style={{ position:"absolute", width:160, height:160, borderRadius:"50%", background:"#4c1d95", top:-50, right:70, opacity:0.5 }} />
+          <div style={{ position:"absolute", width:100, height:100, borderRadius:"50%", background:"#0891b2", bottom:-30, right:20, opacity:0.25 }} />
+          <div style={{ width:40, height:40, borderRadius:10, background:"rgba(124,58,237,0.5)", border:"1px solid rgba(139,92,246,0.5)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, position:"relative", zIndex:1 }}>
+            <i className="ti ti-qrcode" style={{ fontSize:20, color:"#c4b5fd" }} />
           </div>
-        ))}
-      </div>
-
+          <div style={{ flex:1, position:"relative", zIndex:1 }}>
+            <div style={{ fontSize:13, fontWeight:500, color:"#fff", marginBottom:2 }}>Visiting For The First Time?</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)" }}>Register your visit — takes 30 seconds</div>
+          </div>
+          <a href={`/church/${slug}/visit`} style={{ background:"#fff", color:"#5b21b6", border:"none", borderRadius:16, padding:"8px 16px", fontSize:12, fontWeight:500, cursor:"pointer", position:"relative", zIndex:1, whiteSpace:"nowrap", textDecoration:"none", display:"flex", alignItems:"center", gap:4 }}>
+            <i className="ti ti-user-plus" style={{ fontSize:13, color:"#5b21b6" }} /> Register My Visit
+          </a>
         </div>
-      </div>
 
-      {/* ── BODY ── */}
-      <div style={{ background:"#f9fafb" }}>
+        {/* ── TABS ── */}
+        <div style={{ display:"flex", background:"#fff", borderBottom:"0.5px solid #e5e7eb", overflowX:"auto", marginBottom:0 }}>
+          {[
+            { key:"profile", icon:"building-church", label:"Profile" },
+            { key:"team", icon:"users", label:"Our Team", count:[worship_team,it_media_team,outreach_team].filter(t=>t?.images?.length>0).length },
+            { key:"branches", icon:"building-community", label:"Branches", count:other_branches.length },
+          ].map(tab=>(
+            <div key={tab.key} onClick={()=>setActiveTab(tab.key)}
+              style={{ padding:"10px 14px", fontSize:13, fontWeight:500, cursor:"pointer", color:activeTab===tab.key?"#7c3aed":"#6b7280", borderBottom:`2px solid ${activeTab===tab.key?"#7c3aed":"transparent"}`, whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:5 }}>
+              <i className={`ti ti-${tab.icon}`} style={{ fontSize:13 }} /> {tab.label}
+              {tab.count>0 && <span style={{ background:"#f5f0ff", color:"#7c3aed", fontSize:10, padding:"1px 6px", borderRadius:8 }}>{tab.count}</span>}
+            </div>
+          ))}
+        </div>
+
+        {/* ── BODY ── */}
         <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 300px", gap:12, padding:"14px 0" }}>
 
           {/* LEFT */}
           <div>
             {activeTab==="profile" && (
               <>
-                {/* About */}
                 <SCard icon="building-church" iconBg="#ede9fe" iconColor="#7c3aed" hdrBg="#faf5ff" title="About This Church">
                   {description && <p style={{ fontSize:13, color:"#6b7280", lineHeight:1.7, marginBottom:12 }}>{description}</p>}
                   <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -484,7 +396,6 @@ export default function ChurchDetailPage() {
                   </div>
                 </SCard>
 
-                {/* Pastor */}
                 {pastor_name && (
                   <SCard icon="user" iconBg="#ccfbf1" iconColor="#0f766e" hdrBg="#f0fdfa" title="Senior Pastor">
                     <a href={pastor_id?`/pastor/${pastor_id}`:"#"} style={{ display:"flex", alignItems:"center", gap:10, background:"#f5f0ff", border:"0.5px solid #ddd6fe", borderRadius:9, padding:10, cursor:"pointer", textDecoration:"none" }}>
@@ -493,43 +404,37 @@ export default function ChurchDetailPage() {
                       </div>
                       <div>
                         <div style={{ fontSize:13, fontWeight:500, color:"#111" }}>{pastor_name}</div>
-                        <div style={{ fontSize:11, color:"#7c3aed", marginTop:2 }}>Senior Pastor &nbsp;·&nbsp; {denomination}</div>
-                        {city && <div style={{ fontSize:11, color:"#6b7280", marginTop:2, display:"flex", alignItems:"center", gap:3 }}><i className="ti ti-map-pin" style={{ fontSize:11 }} /> {city}</div>}
+                        <div style={{ fontSize:11, color:"#7c3aed", marginTop:2 }}>Senior Pastor · {denomination}</div>
                       </div>
                       <i className="ti ti-arrow-right" style={{ fontSize:15, color:"#d1d5db", marginLeft:"auto" }} />
                     </a>
                   </SCard>
                 )}
 
-                {/* Worship Styles */}
                 {worship_styles.length>0 && (
                   <SCard icon="sparkles" iconBg="#fef08a" iconColor="#ca8a04" hdrBg="#fefce8" title="Worship Styles">
                     {worship_styles.map(w=><Tag key={w} label={w} bg="#fef9ec" color="#78350f" border="#fde68a" />)}
                   </SCard>
                 )}
 
-                {/* Ministries */}
                 {ministries.length>0 && (
                   <SCard icon="users" iconBg="#fecdd3" iconColor="#be123c" hdrBg="#fff1f2" title="Ministries & Outreach">
                     {ministries.map(m=><Tag key={m} label={m} bg="#fff1ee" color="#9f1239" border="#fecdc7" />)}
                   </SCard>
                 )}
 
-                {/* Languages */}
                 {languages.length>0 && (
                   <SCard icon="language" iconBg="#ccfbf1" iconColor="#0f766e" hdrBg="#f0fdfa" title="Languages Spoken">
                     {languages.map(l=><Tag key={l} label={l} bg="#e0f9f3" color="#065f46" border="#99f0d8" />)}
                   </SCard>
                 )}
 
-                {/* Facilities */}
                 {facilities.length>0 && (
                   <SCard icon="building" iconBg="#bfdbfe" iconColor="#1d4ed8" hdrBg="#eff6ff" title="Facilities">
                     {facilities.map(f=><Tag key={f} label={f} bg="#eff6ff" color="#1e40af" border="#bfdbfe" />)}
                   </SCard>
                 )}
 
-                {/* Gallery — 3 per row */}
                 {gallery_images.length>0 && (
                   <SCard icon="photo" iconBg="#bfdbfe" iconColor="#1d4ed8" hdrBg="#eff6ff" title="Gallery">
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
@@ -591,14 +496,11 @@ export default function ChurchDetailPage() {
               </>
             )}
 
-            {activeTab==="branches" && (
-              <BranchesTab branches={other_branches} mainChurch={church} />
-            )}
+            {activeTab==="branches" && <BranchesTab branches={other_branches} mainChurch={church} />}
           </div>
 
           {/* ── SIDEBAR ── */}
           <div>
-            {/* Service Schedule */}
             {services.length>0 && (
               <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:10 }}>
                 <div style={{ padding:"11px 14px 10px", display:"flex", alignItems:"center", gap:8, background:"#f0fdf4", borderBottom:"0.5px solid #bbf7d0" }}>
@@ -607,15 +509,15 @@ export default function ChurchDetailPage() {
                 </div>
                 <div style={{ padding:"8px 14px 12px" }}>
                   {services.map((s,i)=>{
-                    const startTime=s.start_time||s.startTime||"";
-                    const endTime=s.end_time||s.endTime||"";
-                    const eventName=s.event_name||s.eventName||s.name||"";
+                    const st=s.start_time||""; const et=s.end_time||""; const en=s.event_name||s.name||"";
                     const isToday=s.day?.toLowerCase()===new Date().toLocaleDateString("en-GB",{weekday:"long"}).toLowerCase();
                     return (
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 0", borderBottom:i<services.length-1?"0.5px solid #e5e7eb":"none", fontSize:12, flexWrap:"nowrap" }}>
-                        <span style={{ minWidth:55, fontWeight:500, color:"#111", flexShrink:0 }}>{s.day}</span>
-                        <span style={{ flex:1, color:"#6b7280", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{eventName}{isToday&&<span style={{ background:"#d1fae5", color:"#065f46", fontSize:10, padding:"2px 6px", borderRadius:5, marginLeft:4 }}>Today</span>}</span>
-                        <span style={{ color:"#7c3aed", fontWeight:500, fontSize:10, background:"#f5f0ff", padding:"3px 7px", borderRadius:7, whiteSpace:"nowrap", flexShrink:0 }}>{startTime}{endTime?` — ${endTime}`:""}</span>
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 0", borderBottom:i<services.length-1?"0.5px solid #e5e7eb":"none", fontSize:12 }}>
+                        <span style={{ minWidth:60, fontWeight:500, color:"#111", flexShrink:0 }}>{s.day}</span>
+                        <span style={{ flex:1, color:"#6b7280", fontSize:11, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {en}{isToday&&<span style={{ background:"#d1fae5", color:"#065f46", fontSize:9, padding:"1px 5px", borderRadius:5, marginLeft:3 }}>Today</span>}
+                        </span>
+                        <span style={{ color:"#7c3aed", fontWeight:500, fontSize:10, background:"#f5f0ff", padding:"3px 6px", borderRadius:7, whiteSpace:"nowrap", flexShrink:0 }}>{st}{et?` — ${et}`:""}</span>
                       </div>
                     );
                   })}
@@ -623,7 +525,6 @@ export default function ChurchDetailPage() {
               </div>
             )}
 
-            {/* Location — Map only */}
             <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:10 }}>
               <div style={{ padding:"11px 14px 10px", display:"flex", alignItems:"center", gap:8, background:"#eff6ff", borderBottom:"0.5px solid #bfdbfe" }}>
                 <div style={{ width:28, height:28, borderRadius:7, background:"#bfdbfe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-map" style={{ fontSize:15, color:"#1d4ed8" }} /></div>
@@ -633,7 +534,7 @@ export default function ChurchDetailPage() {
                 {lat && lng ? (
                   <iframe src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY&q=${lat},${lng}&zoom=15`}
                     style={{ width:"100%", height:150, borderRadius:8, border:"0.5px solid #bfdbfe", marginBottom:10, display:"block" }}
-                    allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade" title="church location" />
+                    allowFullScreen loading="lazy" title="church location" />
                 ) : (
                   <div style={{ height:150, background:"#eff6ff", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", border:"0.5px solid #bfdbfe", marginBottom:10 }}>
                     <i className="ti ti-map" style={{ fontSize:32, color:"#93c5fd" }} />
@@ -641,15 +542,13 @@ export default function ChurchDetailPage() {
                 )}
                 {address && <div style={{ fontSize:12, color:"#6b7280", display:"flex", alignItems:"center", gap:4, marginBottom:8 }}><i className="ti ti-map-pin" style={{ fontSize:13, color:"#7c3aed" }} /> {address}</div>}
                 {google_maps_link && (
-                  <a href={google_maps_link} target="_blank" rel="noreferrer"
-                    style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, width:"100%", background:"#7c3aed", color:"#fff", border:"none", borderRadius:8, padding:8, fontSize:12, fontWeight:500, cursor:"pointer", textDecoration:"none" }}>
+                  <a href={google_maps_link} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, width:"100%", background:"#7c3aed", color:"#fff", border:"none", borderRadius:8, padding:8, fontSize:12, fontWeight:500, cursor:"pointer", textDecoration:"none" }}>
                     <i className="ti ti-navigation" style={{ fontSize:14 }} /> Open in Google Maps
                   </a>
                 )}
               </div>
             </div>
 
-            {/* Watch Live */}
             {video_url && (
               <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:10 }}>
                 <div style={{ padding:"11px 14px 10px", display:"flex", alignItems:"center", gap:8, background:"#fff1f2", borderBottom:"0.5px solid #fecdd3" }}>
@@ -667,12 +566,11 @@ export default function ChurchDetailPage() {
                       </div>
                     </div>
                   </a>
-                  <div style={{ fontSize:11, color:"#6b7280", marginTop:7, textAlign:"center" }}>Watch our latest service on YouTube</div>
+                  <div style={{ fontSize:11, color:"#6b7280", marginTop:7, textAlign:"center" }}>Watch our latest service</div>
                 </div>
               </div>
             )}
 
-            {/* QR Scan & Share */}
             <div style={{ background:"#f5f0ff", border:"0.5px solid #ddd6fe", borderRadius:12, padding:"10px 13px", display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
               <div style={{ width:40, height:40, background:"#fff", borderRadius:7, border:"0.5px solid #ddd6fe", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                 <i className="ti ti-qrcode" style={{ fontSize:24, color:"#c4b5fd" }} />
@@ -681,82 +579,69 @@ export default function ChurchDetailPage() {
                 <div style={{ fontSize:13, fontWeight:500, color:"#4c1d95" }}>Scan & Share</div>
                 <div style={{ fontSize:11, color:"#7c3aed", marginTop:1 }}>Share this church listing</div>
               </div>
-              <button style={{ background:"#7c3aed", border:"none", borderRadius:7, padding:"6px 11px", color:"#fff", fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontFamily:"inherit", whiteSpace:"nowrap" }}>
+              <button style={{ background:"#7c3aed", border:"none", borderRadius:7, padding:"6px 11px", color:"#fff", fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
                 <i className="ti ti-qrcode" style={{ fontSize:12 }} /> Get QR
               </button>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ── FULL WIDTH CONTACT (at bottom) ── */}
-      <div ref={contactRef} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden" }}>
-        <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
-          <div style={{ width:30, height:30, borderRadius:8, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-message" style={{ fontSize:16, color:"#7c3aed" }} /></div>
-          <span style={{ fontSize:14, fontWeight:500, color:"#5b21b6" }}>Contact This Church</span>
-          <span style={{ marginLeft:"auto", fontSize:12, color:"#6b7280" }}>We'll get back to you soon</span>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr" }}>
-          <div style={{ padding:"20px 24px", borderRight:"0.5px solid #e5e7eb" }}>
-            <div style={{ fontSize:13, fontWeight:500, color:"#111", marginBottom:14 }}>Send a message</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9, marginBottom:9 }}>
-              <input placeholder="Your name *" style={{ padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none" }} />
-              <input type="email" placeholder="Your email *" style={{ padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none" }} />
-            </div>
-            <input placeholder="Subject" style={{ width:"100%", padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none", marginBottom:9, boxSizing:"border-box" }} />
-            <textarea placeholder="Your message *" style={{ width:"100%", height:88, padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none", resize:"vertical", marginBottom:9, boxSizing:"border-box" }} />
-            <button style={{ width:"100%", background:"#7c3aed", color:"#fff", border:"none", borderRadius:8, padding:10, fontSize:13, fontWeight:500, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"inherit" }}>
-              <i className="ti ti-send" style={{ fontSize:15 }} /> Send Message
-            </button>
+        {/* ── CONTACT ── */}
+        <div ref={contactRef} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:16 }}>
+          <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
+            <div style={{ width:30, height:30, borderRadius:8, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-message" style={{ fontSize:16, color:"#7c3aed" }} /></div>
+            <span style={{ fontSize:14, fontWeight:500, color:"#5b21b6" }}>Contact This Church</span>
+            <span style={{ marginLeft:"auto", fontSize:12, color:"#6b7280" }}>We'll get back to you soon</span>
           </div>
-          <div style={{ padding:"20px 24px" }}>
-            <div style={{ fontSize:13, fontWeight:500, color:"#111", marginBottom:14 }}>Get in touch directly</div>
-            {[
-              {icon:"map-pin",bg:"linear-gradient(135deg,#7c3aed,#a78bfa)",label:"Address",value:address},
-              {icon:"phone",bg:"linear-gradient(135deg,#059669,#34d399)",label:"Phone",value:phone,color:"#059669"},
-              {icon:"mail",bg:"linear-gradient(135deg,#1d4ed8,#60a5fa)",label:"Email",value:email,color:"#1d4ed8"},
-              {icon:"clock",bg:"linear-gradient(135deg,#d97706,#fbbf24)",label:"Office hours",value:"Mon–Fri 9:00 AM — 5:00 PM"},
-            ].filter(r=>r.value).map(row=>(
-              <div key={row.label} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"9px 0", borderBottom:"0.5px solid #e5e7eb" }}>
-                <div style={{ width:36, height:36, borderRadius:9, background:row.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <i className={`ti ti-${row.icon}`} style={{ fontSize:15, color:"#fff" }} />
-                </div>
-                <div><div style={{ fontSize:11, color:"#6b7280" }}>{row.label}</div><div style={{ fontSize:13, color:row.color||"#111", wordBreak:"break-all" }}>{row.value}</div></div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr" }}>
+            <div style={{ padding:"20px 24px", borderRight:"0.5px solid #e5e7eb" }}>
+              <div style={{ fontSize:13, fontWeight:500, color:"#111", marginBottom:14 }}>Send a message</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9, marginBottom:9 }}>
+                <input placeholder="Your name *" style={{ padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none" }} />
+                <input type="email" placeholder="Your email *" style={{ padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none" }} />
               </div>
-            ))}
-            <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
-              {socials.map(soc=>(
-                <a key={soc.icon} href={soc.href} target="_blank" rel="noreferrer"
-                  style={{ width:38, height:38, borderRadius:"50%", background:soc.bg, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none" }}>
-                  <i className={`ti ti-${soc.icon}`} style={{ fontSize:19, color:"#fff" }} />
-                </a>
+              <input placeholder="Subject" style={{ width:"100%", padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none", marginBottom:9, boxSizing:"border-box" }} />
+              <textarea placeholder="Your message *" style={{ width:"100%", height:88, padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none", resize:"vertical", marginBottom:9, boxSizing:"border-box" }} />
+              <button style={{ width:"100%", background:"#7c3aed", color:"#fff", border:"none", borderRadius:8, padding:10, fontSize:13, fontWeight:500, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"inherit" }}>
+                <i className="ti ti-send" style={{ fontSize:15 }} /> Send Message
+              </button>
+            </div>
+            <div style={{ padding:"20px 24px" }}>
+              <div style={{ fontSize:13, fontWeight:500, color:"#111", marginBottom:14 }}>Get in touch directly</div>
+              {[
+                {icon:"map-pin",bg:"linear-gradient(135deg,#7c3aed,#a78bfa)",label:"Address",value:address},
+                {icon:"phone",bg:"linear-gradient(135deg,#059669,#34d399)",label:"Phone",value:phone,color:"#059669"},
+                {icon:"mail",bg:"linear-gradient(135deg,#1d4ed8,#60a5fa)",label:"Email",value:email,color:"#1d4ed8"},
+                {icon:"clock",bg:"linear-gradient(135deg,#d97706,#fbbf24)",label:"Office hours",value:"Mon–Fri 9:00 AM — 5:00 PM"},
+              ].filter(r=>r.value).map(row=>(
+                <div key={row.label} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"9px 0", borderBottom:"0.5px solid #e5e7eb" }}>
+                  <div style={{ width:36, height:36, borderRadius:9, background:row.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <i className={`ti ti-${row.icon}`} style={{ fontSize:15, color:"#fff" }} />
+                  </div>
+                  <div><div style={{ fontSize:11, color:"#6b7280" }}>{row.label}</div><div style={{ fontSize:13, color:row.color||"#111", wordBreak:"break-all" }}>{row.value}</div></div>
+                </div>
               ))}
+              <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
+                {socials.map(soc=>(
+                  <a key={soc.icon} href={soc.href} target="_blank" rel="noreferrer" style={{ width:38, height:38, borderRadius:"50%", background:soc.bg, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none" }}>
+                    <i className={`ti ti-${soc.icon}`} style={{ fontSize:19, color:"#fff" }} />
+                  </a>
+                ))}
+              </div>
             </div>
           </div>
         </div>
+
+        {/* ── NEARBY CHURCHES ── */}
+        <NearbyChurches currentSlug={slug} city={city} />
+
+        {/* ── CHAT WIDGET ── */}
+        <ListingChatWidget entityType="church" entityId={church.id} entityName={church.name} entityRole={church.denomination||"Church"} entityAvatar={church.logo} isOwner={false} />
+
       </div>
 
-      </div>{/* end contact wrapper */}
-
-      {/* ── NEARBY CHURCHES ── */}
-      <NearbyChurches currentSlug={slug} city={city} />
-
-      {/* ── CHAT WIDGET ── */}
-      <ListingChatWidget
-        entityType="church"
-        entityId={church.id}
-        entityName={church.name}
-        entityRole={church.denomination || "Church"}
-        entityAvatar={church.logo}
-        isOwner={false}
-      />
-
-
-
-      {/* ── FOOTER ── */}
-      </div>{/* end page content wrapper */}
-
-      <div style={{ marginTop:40 }}><Footer /></div>
+      {/* ── FOOTER (full width) ── */}
+      <Footer />
 
     </div>
   );
