@@ -1,6 +1,15 @@
 /* eslint-disable */
 import React from "react";
 
+// Load Tabler Icons if not already loaded
+if (typeof document !== "undefined" && !document.getElementById("tabler-icons-css")) {
+  const link = document.createElement("link");
+  link.id = "tabler-icons-css";
+  link.rel = "stylesheet";
+  link.href = "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css";
+  document.head.appendChild(link);
+}
+
 const API_URL = process.env.REACT_APP_BACKEND_URL || "https://api.churchnavigator.com";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -100,13 +109,25 @@ function BranchesTab({ branches, mainChurch }) {
 function NearbyChurches({ currentSlug, city }) {
   const [churches, setChurches] = React.useState([]);
   React.useEffect(() => {
-    if (!city) return;
-    fetch(`${API_URL}/api/churches?city=${encodeURIComponent(city)}&limit=6`)
-      .then(r=>r.json())
-      .then(data => {
-        const list = Array.isArray(data) ? data : Array.isArray(data.churches) ? data.churches : [];
-        setChurches(list.filter(c=>c.slug!==currentSlug).slice(0,3));
-      }).catch(()=>{});
+    // Try multiple endpoint formats
+    const tryFetch = (urls) => {
+      if (!urls.length) return;
+      fetch(urls[0])
+        .then(r => r.json())
+        .then(data => {
+          let list = [];
+          if (Array.isArray(data)) list = data;
+          else if (Array.isArray(data.churches)) list = data.churches;
+          else if (Array.isArray(data.results)) list = data.results;
+          else if (Array.isArray(data.data)) list = data.data;
+          const filtered = list.filter(c => c.slug !== currentSlug).slice(0, 3);
+          if (filtered.length > 0) setChurches(filtered);
+          else if (urls.length > 1) tryFetch(urls.slice(1));
+        })
+        .catch(() => { if (urls.length > 1) tryFetch(urls.slice(1)); });
+    };
+    if (city) tryFetch(endpoints);
+    }
   },[city,currentSlug]);
   if (!churches.length) return null;
   return (
@@ -209,6 +230,7 @@ export default function ChurchDetailPage() {
 
   return (
     <div style={{ background:"#f9fafb", minHeight:"100vh" }}>
+
 
       {/* ── HERO ── */}
       <div style={{ position:"relative", height:260, overflow:"hidden", background:"#1a0d3d" }}>
