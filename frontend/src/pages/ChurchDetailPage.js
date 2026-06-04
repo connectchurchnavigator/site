@@ -141,7 +141,7 @@ function NearbyChurches({ currentSlug, city }) {
   },[currentSlug, city]);
   if (!churches.length) return null;
   return (
-    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", margin:"0 auto 14px", maxWidth:1100 }}>
+    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", margin:"0 24px 14px" }}>
       {/* Header */}
       <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
         <div style={{ width:28, height:28, borderRadius:7, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -452,7 +452,7 @@ export default function ChurchDetailPage() {
 
       {/* ── BODY ── */}
       <div style={{ background:"#f9fafb" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 300px", gap:12, padding:14 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 300px", gap:12, padding:"14px 24px" }}>
 
           {/* LEFT */}
           <div>
@@ -683,7 +683,7 @@ export default function ChurchDetailPage() {
       </div>
 
       {/* ── FULL WIDTH CONTACT (at bottom) ── */}
-      <div ref={contactRef} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", margin:"0 auto 14px", maxWidth:1100, padding:"0 0" }}>
+      <div ref={contactRef} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", margin:"0 24px 14px" }}>
         <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
           <div style={{ width:30, height:30, borderRadius:8, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-message" style={{ fontSize:16, color:"#7c3aed" }} /></div>
           <span style={{ fontSize:14, fontWeight:500, color:"#5b21b6" }}>Contact This Church</span>
@@ -743,7 +743,7 @@ export default function ChurchDetailPage() {
       />
 
       {/* ── FOOTER ── */}
-      <div style={{ background:"#fff", borderTop:"0.5px solid #e5e7eb", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+      <div style={{ background:"#fff", borderTop:"0.5px solid #e5e7eb", padding:"14px 24px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
         <span style={{ fontSize:12, color:"#9ca3af" }}>© 2026 ChurchNavigator — Finding your spiritual home</span>
         <div style={{ display:"flex", gap:16 }}>
           {["Privacy","Terms","Add your church"].map(l=>(
