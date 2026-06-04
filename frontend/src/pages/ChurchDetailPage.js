@@ -1,4 +1,4 @@
-/* eslint-disable */
+ /* eslint-disable */ // v2
 import React from "react";
 import { Footer } from "../components/Footer";
 import ListingChatWidget from "../components/ListingChatWidget";
