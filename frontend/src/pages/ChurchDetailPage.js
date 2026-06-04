@@ -1,4 +1,4 @@
- /* eslint-disable */ // v2
+/* eslint-disable */
 import React from "react";
 import { Footer } from "../components/Footer";
 import ListingChatWidget from "../components/ListingChatWidget";
@@ -124,7 +124,7 @@ function NearbyChurches({ currentSlug, city }) {
             <div style={{ position:"relative", height:100, overflow:"hidden" }}>
               {c.cover_image
                 ? <img src={c.cover_image} alt={c.name} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} loading="lazy" />
-                : <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg,${["#7c3aed,#a78bfa","#059669,#34d399","#1d4ed8,#60a5fa"][i%3]})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                : <div style={{ width:"100%", height:"100%", background:["linear-gradient(135deg,#7c3aed,#a78bfa)","linear-gradient(135deg,#059669,#34d399)","linear-gradient(135deg,#1d4ed8,#60a5fa)"][i%3], display:"flex", alignItems:"center", justifyContent:"center" }}>
                     <i className="ti ti-building-church" style={{ fontSize:32, color:"rgba(255,255,255,0.8)" }} />
                   </div>}
               <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(0,0,0,0.45) 0%,transparent 60%)" }} />
