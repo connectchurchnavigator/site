@@ -85,6 +85,7 @@ function BranchesTab({ branches, mainChurch }) {
               <i className="ti ti-navigation" style={{ fontSize:12 }} /> Directions
             </a>
           )}
+        </div>
       </div>
     </div>
   );
