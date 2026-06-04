@@ -440,7 +440,7 @@ export default function ChurchDetailPage() {
 
       {/* ── TABS ── */}
       <div style={{ background:"#fff", borderBottom:"0.5px solid #e5e7eb" }}>
-      <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", display:"flex", overflowX:"auto" }}>
+        <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", display:"flex", overflowX:"auto" }}>
         {[
           { key:"profile", icon:"building-church", label:"Profile" },
           { key:"team", icon:"users", label:"Our Team", count:[worship_team,it_media_team,outreach_team].filter(t=>t?.images?.length>0).length },
@@ -454,8 +454,8 @@ export default function ChurchDetailPage() {
         ))}
       </div>
 
-      </div>{/* end tabs inner */}
-      </div>{/* end tabs wrapper */}
+        </div>
+      </div>
 
       {/* ── BODY ── */}
       <div style={{ maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", background:"#f9fafb" }}>
