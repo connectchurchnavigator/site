@@ -1538,7 +1538,8 @@ const ChurchDetailPage = () => {
           listingName={church.name}
         />
       )}
-
+<ChurchChatWidget church={church} />
+     
       <Footer />
     </div>
   );
