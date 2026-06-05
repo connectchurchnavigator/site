@@ -1545,34 +1545,192 @@ const ChurchDetailPage = () => {
   );
 };
 
+// ── AI-Powered ChurchChatWidget ──────────────────────────────────────────────
+// Drop-in replacement for ChurchChatWidget in ChurchDetailPage.js
+// Uses Claude API to respond intelligently based on church data
+// Saves conversations to backend MongoDB
+
 function ChurchChatWidget({ church }) {
   const [open, setOpen] = React.useState(false);
   const [tab, setTab] = React.useState("chat");
-  const [chatMsgs, setChatMsgs] = React.useState([{ id:1, from:"entity", text:"Peace be unto you! 🙏 How can we help you today?" }]);
-  const [prayerMsgs, setPrayerMsgs] = React.useState([{ id:1, from:"entity", text:"Our pastoral team reads every prayer request. Submit yours below." }]);
+  const [chatMsgs, setChatMsgs] = React.useState([
+    { id:1, from:"entity", text:`Peace be unto you! 🙏 I'm the virtual assistant for ${church?.name||"our church"}. I'm here 24/7 to answer your questions. How can I help you today?` }
+  ]);
+  const [prayerMsgs, setPrayerMsgs] = React.useState([
+    { id:1, from:"entity", text:"Our pastoral team reads every prayer request personally. Share what's on your heart — you can stay anonymous if you prefer. 🙏" }
+  ]);
   const [input, setInput] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
   const [anon, setAnon] = React.useState(false);
+  const [conversationId] = React.useState(`conv_${Date.now()}_${Math.random().toString(36).substr(2,9)}`);
+  const [history, setHistory] = React.useState([]);
   const msgsRef = React.useRef(null);
+  const API_URL = process.env.REACT_APP_BACKEND_URL || "https://api.churchnavigator.com";
 
-  React.useEffect(() => { if (msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight; }, [chatMsgs, prayerMsgs]);
+  React.useEffect(() => {
+    if (msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight;
+  }, [chatMsgs, prayerMsgs, loading]);
 
-  const send = () => {
-    if (!input.trim()) return;
-    if (/\b(stupid|idiot|hate|damn|hell)\b/i.test(input)) {
-      toast.info("We kept this one between us 🙏 ChurchNavigator is a place of encouragement and faith. Try sharing something uplifting!");
-      setInput(""); return;
+  // Build system prompt from real church data
+  const buildSystemPrompt = () => {
+    const c = church || {};
+    const services = (c.services||[]).map(s =>
+      `${s.day}: ${s.event_name||"Service"} ${s.start_time||""} — ${s.end_time||""}`
+    ).join(", ") || "Please contact us for service times";
+
+    const ministries = (c.ministries||[]).join(", ") || "Various ministries available";
+    const languages = (c.languages||[]).join(", ") || "English";
+    const facilities = (c.facilities||[]).join(", ") || "";
+    const worshipStyles = (c.worship_styles||[]).join(", ") || "";
+
+    return `You are a warm, helpful and faith-filled virtual assistant for ${c.name||"our church"}, a ${c.denomination||"Christian"} church located in ${c.city||"London"}, UK.
+
+CHURCH DETAILS:
+- Name: ${c.name||"Our Church"}
+- Denomination: ${c.denomination||"Christian"}
+- Address: ${c.address_line1||""} ${c.city||"London"}
+- Phone: ${c.phone||"Please visit our website"}
+- Email: ${c.email||"Please visit our website"}
+- Pastor: ${c.pastor_name||"Our Senior Pastor"}
+- Service Times: ${services}
+- Ministries: ${ministries}
+- Languages Spoken: ${languages}
+- Facilities: ${facilities}
+- Worship Styles: ${worshipStyles}
+- Website: ${c.website||"churchnavigator.com"}
+
+YOUR PERSONALITY:
+- Warm, welcoming and faith-filled
+- Speak as if you truly represent this church community
+- Use gentle religious expressions naturally (🙏 ✝️ God bless)
+- Be honest — if you don't know something specific, say "I'd recommend contacting us directly"
+- Keep responses concise (2-4 sentences max)
+- Always make the person feel welcome and valued
+- If someone seems to be struggling emotionally, be compassionate and offer to connect them with the pastor
+
+CONTACT CAPTURE:
+- If someone says they want to visit, gently ask for their name and email so the welcome team can look out for them
+- If someone has a specific need, offer to pass their details to the relevant team
+
+NEVER:
+- Make up specific details not in the church data above
+- Be preachy or pushy
+- Share personal opinions on theology or denominations
+- Discuss other churches negatively`;
+  };
+
+  const callClaudeAPI = async (userMessage, isPrayer = false) => {
+    // Build conversation history for context
+    const msgs = isPrayer ? prayerMsgs : chatMsgs;
+    const newHistory = [
+      ...history,
+      { role: "user", content: isPrayer ? `[PRAYER REQUEST] ${userMessage}` : userMessage }
+    ];
+
+    try {
+      // Try backend first (saves to MongoDB)
+      const backendRes = await fetch(`${API_URL}/api/chat/ai-reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMessage,
+          church_id: church?.id,
+          church_slug: church?.slug,
+          conversation_id: conversationId,
+          is_prayer: isPrayer,
+          anonymous: anon,
+          history: newHistory,
+          system_prompt: buildSystemPrompt()
+        })
+      });
+
+      if (backendRes.ok) {
+        const data = await backendRes.json();
+        setHistory([...newHistory, { role: "assistant", content: data.reply }]);
+        return data.reply;
+      }
+    } catch (e) {
+      // Backend not available — fall through to direct API
     }
-    const newMsg = { id: Date.now(), from:"user", text: input.trim(), anon };
-    if (tab === "chat") setChatMsgs(m => [...m, newMsg]);
-    else setPrayerMsgs(m => [...m, newMsg]);
+
+    // Direct Claude API call (fallback)
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.REACT_APP_ANTHROPIC_API_KEY || "",
+          "anthropic-version": "2023-06-01"
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 300,
+          system: buildSystemPrompt(),
+          messages: [
+            ...newHistory.slice(-6), // last 3 exchanges for context
+            { role: "user", content: isPrayer ? `[PRAYER REQUEST] ${userMessage}` : userMessage }
+          ]
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.content?.[0]?.text || getSmartFallback(userMessage, isPrayer);
+        setHistory([...newHistory, { role: "assistant", content: reply }]);
+        return reply;
+      }
+    } catch (e) {}
+
+    // Final fallback — smart contextual responses
+    return getSmartFallback(userMessage, isPrayer);
+  };
+
+  // Smart fallback when API unavailable
+  const getSmartFallback = (msg, isPrayer) => {
+    if (isPrayer) return "Thank you for trusting us with your prayer request. 🙏 Our pastoral team will lift this before God. You are not alone — He sees you and loves you deeply. ✝️";
+    const m = msg.toLowerCase();
+    if (m.includes("time") || m.includes("when") || m.includes("sunday") || m.includes("service")) {
+      const s = church?.services?.[0];
+      return s ? `Our ${s.event_name||"Sunday service"} runs ${s.start_time||""} — ${s.end_time||""} on ${s.day}. We'd love to see you there! 🙏` : "Please contact us directly for our current service times. We'd love to see you! 🙏";
+    }
+    if (m.includes("park")) return "There is street parking available near the church. We recommend arriving a few minutes early on Sundays! 🙏";
+    if (m.includes("child") || m.includes("kid") || m.includes("youth")) return `We have a wonderful children's ministry! 🙏 All ages are welcome at ${church?.name||"our church"}. Please contact us for details about our youth programmes.`;
+    if (m.includes("first time") || m.includes("never been") || m.includes("new")) return `Welcome! 🙏 There's nothing to worry about — come as you are. You'll be warmly greeted and can sit wherever you're comfortable. We're so glad you're considering joining us!`;
+    if (m.includes("pastor") || m.includes("speak") || m.includes("meet")) return `${church?.pastor_name||"Our pastor"} would love to meet you! 🙏 You're welcome to reach out via the contact form on this page, or simply come along to a service.`;
+    if (m.includes("wheelchair") || m.includes("disabled") || m.includes("accessible")) return "Our church is accessible and we welcome everyone regardless of mobility needs. 🙏 Please contact us in advance so we can ensure your visit is comfortable.";
+    if (m.includes("volunteer") || m.includes("involved") || m.includes("serve")) return `We'd love for you to get involved! 🙏 ${church?.name||"Our church"} has various teams you can join. Come along to a service and speak to our welcome team!`;
+    return `Thank you for reaching out to ${church?.name||"us"}! 🙏 For the best answer, please contact us directly at ${church?.phone||church?.email||"the details on this page"}. God bless you!`;
+  };
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+
+    // Moderation
+    if (/\b(stupid|idiot|hate|damn|hell|bloody|crap)\b/i.test(text)) {
+      toast.info("We kept this one between us 🙏 ChurchNavigator is a place of encouragement and faith. Try sharing something uplifting!");
+      setInput("");
+      return;
+    }
+
+    const userMsg = { id: Date.now(), from: "user", text, anon: anon && tab === "prayer" };
+    if (tab === "chat") setChatMsgs(m => [...m, userMsg]);
+    else setPrayerMsgs(m => [...m, userMsg]);
     setInput("");
-    setTimeout(() => {
-      const reply = { id: Date.now()+1, from:"entity", text: tab === "chat"
-        ? "Thank you for reaching out! 🙏 A member of our team will get back to you within 24 hours. God bless!"
-        : "Thank you for your prayer request. 🙏 Our team will lift this before God!" };
-      if (tab === "chat") setChatMsgs(m => [...m, reply]);
-      else setPrayerMsgs(m => [...m, reply]);
-    }, 1500);
+    setLoading(true);
+
+    try {
+      const reply = await callClaudeAPI(text, tab === "prayer");
+      const aiMsg = { id: Date.now()+1, from: "entity", text: reply };
+      if (tab === "chat") setChatMsgs(m => [...m, aiMsg]);
+      else setPrayerMsgs(m => [...m, aiMsg]);
+    } catch(e) {
+      const fallback = { id: Date.now()+1, from: "entity", text: getSmartFallback(text, tab === "prayer") };
+      if (tab === "chat") setChatMsgs(m => [...m, fallback]);
+      else setPrayerMsgs(m => [...m, fallback]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const msgs = tab === "chat" ? chatMsgs : prayerMsgs;
@@ -1583,9 +1741,14 @@ function ChurchChatWidget({ church }) {
     <div style={{ position:"fixed", bottom:24, right:24, zIndex:200 }}>
       {open && (
         <div style={{ position:"absolute", bottom:70, right:0, width:320, borderRadius:20, overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", display:"flex", flexDirection:"column", maxHeight:480, background:"#fff" }}>
+
+          {/* Header */}
           <div style={{ background:"linear-gradient(135deg,#0d0520,#1a0d3d)", padding:"14px 16px", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
             <div style={{ position:"relative", width:42, height:42, flexShrink:0 }}>
-              {logo ? <img src={logo} alt={name} style={{ width:42, height:42, borderRadius:"50%", objectFit:"cover", display:"block" }} /> : <div style={{ width:42, height:42, borderRadius:"50%", background:"#6c1cff", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:20, color:"#fff" }} /></div>}
+              {logo
+                ? <img src={logo} alt={name} style={{ width:42, height:42, borderRadius:"50%", objectFit:"cover", display:"block" }} />
+                : <div style={{ width:42, height:42, borderRadius:"50%", background:"#6c1cff", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:20, color:"#fff" }} /></div>
+              }
               <div style={{ position:"absolute", inset:-3, borderRadius:"50%", border:"2px solid #6c1cff", animation:"ringPulse 2s ease-in-out infinite", pointerEvents:"none" }} />
               <div style={{ position:"absolute", bottom:1, right:1, width:10, height:10, borderRadius:"50%", background:"#10b981", border:"2px solid #0d0520" }} />
             </div>
@@ -1593,11 +1756,13 @@ function ChurchChatWidget({ church }) {
               <div style={{ fontSize:13, fontWeight:500, color:"#fff" }}>{name}</div>
               <div style={{ fontSize:10, color:"#6ee7b7", display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
                 <div style={{ width:5, height:5, borderRadius:"50%", background:"#10b981" }} />
-                Usually replies within 24h
+                AI assistant · Available 24/7
               </div>
             </div>
             <button onClick={()=>setOpen(false)} style={{ background:"rgba(255,255,255,0.1)", border:"none", borderRadius:"50%", width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"rgba(255,255,255,0.6)", fontSize:18, fontFamily:"inherit" }}>×</button>
           </div>
+
+          {/* Tabs */}
           <div style={{ display:"flex", background:"#f8fafc", borderBottom:"0.5px solid #e2e8f0", flexShrink:0 }}>
             {["chat","prayer"].map(t=>(
               <div key={t} onClick={()=>setTab(t)} style={{ flex:1, padding:8, fontSize:11, fontWeight:500, cursor:"pointer", textAlign:"center", color:tab===t?"#6c1cff":"#64748b", borderBottom:`2px solid ${tab===t?"#6c1cff":"transparent"}`, background:tab===t?"#fff":"transparent" }}>
@@ -1605,15 +1770,42 @@ function ChurchChatWidget({ church }) {
               </div>
             ))}
           </div>
+
+          {/* Messages */}
           <div ref={msgsRef} style={{ flex:1, overflowY:"auto", padding:12, display:"flex", flexDirection:"column", gap:8 }}>
             {msgs.map(msg=>(
               <div key={msg.id} style={{ maxWidth:"85%", alignSelf:msg.from==="user"?"flex-end":"flex-start" }}>
-                <div style={{ padding:"9px 12px", fontSize:12, lineHeight:1.6, borderRadius:msg.from==="user"?"14px 4px 14px 14px":"4px 14px 14px 14px", background:msg.from==="user"?"#6c1cff":"#f1f5f9", color:msg.from==="user"?"#fff":"#1e293b" }}>
+                {msg.from==="entity" && (
+                  <div style={{ fontSize:10, color:"#94a3b8", marginBottom:3, paddingLeft:4, display:"flex", alignItems:"center", gap:4 }}>
+                    {logo && <img src={logo} alt="" style={{ width:14, height:14, borderRadius:"50%", objectFit:"cover" }} />}
+                    AI Assistant
+                  </div>
+                )}
+                <div style={{
+                  padding:"9px 12px", fontSize:12, lineHeight:1.6,
+                  borderRadius:msg.from==="user"?"14px 4px 14px 14px":"4px 14px 14px 14px",
+                  background:msg.from==="user"?"#6c1cff":tab==="prayer"&&msg.from==="entity"?"linear-gradient(135deg,#fef9ec,#fef3c7)":"#f1f5f9",
+                  color:msg.from==="user"?"#fff":tab==="prayer"&&msg.from==="entity"?"#78350f":"#1e293b",
+                  borderLeft:tab==="prayer"&&msg.from==="entity"?"3px solid #d97706":"none"
+                }}>
+                  {msg.anon && <div style={{ fontSize:10, opacity:.7, marginBottom:2 }}>Anonymous</div>}
                   {msg.text}
+                </div>
+                <div style={{ fontSize:10, color:"#94a3b8", marginTop:2, textAlign:msg.from==="user"?"right":"left", padding:"0 4px" }}>
+                  {msg.from==="user"?"You":"Just now"}
                 </div>
               </div>
             ))}
+            {loading && (
+              <div style={{ alignSelf:"flex-start", display:"flex", gap:4, padding:"10px 14px", background:"#f1f5f9", borderRadius:"4px 14px 14px 14px" }}>
+                {[0,1,2].map(i=>(
+                  <div key={i} style={{ width:6, height:6, borderRadius:"50%", background:"#94a3b8", animation:`dotBounce 1.2s ease-in-out infinite ${i*0.2}s` }} />
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* Anonymous toggle (prayer only) */}
           {tab==="prayer" && (
             <div style={{ padding:"6px 12px", background:"#f8fafc", borderTop:"0.5px solid #e2e8f0", flexShrink:0 }}>
               <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:"#64748b", cursor:"pointer" }}>
@@ -1621,30 +1813,44 @@ function ChurchChatWidget({ church }) {
               </label>
             </div>
           )}
+
+          {/* Input */}
           <div style={{ display:"flex", gap:8, padding:"10px 12px", background:"#fff", borderTop:"0.5px solid #e2e8f0", flexShrink:0 }}>
-            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()}
-              placeholder={tab==="chat"?"Type a message...":"Share your prayer request..."}
-              style={{ flex:1, padding:"8px 12px", fontSize:12, border:"0.5px solid #e2e8f0", borderRadius:20, background:"#f8fafc", fontFamily:"inherit", outline:"none" }} />
-            <button onClick={send} style={{ width:34, height:34, borderRadius:"50%", background:"#6c1cff", border:"none", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
-              <i className="ti ti-send" style={{ fontSize:15, color:"#fff" }} />
+            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()}
+              placeholder={tab==="chat"?"Ask anything about our church...":"Share your prayer request..."}
+              disabled={loading}
+              style={{ flex:1, padding:"8px 12px", fontSize:12, border:"0.5px solid #e2e8f0", borderRadius:20, background:"#f8fafc", fontFamily:"inherit", outline:"none", opacity:loading?0.6:1 }} />
+            <button onClick={send} disabled={loading||!input.trim()} style={{ width:34, height:34, borderRadius:"50%", background:input.trim()&&!loading?"#6c1cff":"#e2e8f0", border:"none", display:"flex", alignItems:"center", justifyContent:"center", cursor:input.trim()&&!loading?"pointer":"default", flexShrink:0, transition:"background 0.2s" }}>
+              <i className="ti ti-send" style={{ fontSize:15, color:input.trim()&&!loading?"#fff":"#94a3b8" }} />
             </button>
           </div>
+
+          <style>{`
+            @keyframes ringPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(108,28,255,0.4)}50%{transform:scale(1.05);box-shadow:0 0 0 6px rgba(108,28,255,0)}}
+            @keyframes dotBounce{0%,100%{transform:translateY(0);opacity:0.4}50%{transform:translateY(-4px);opacity:1}}
+          `}</style>
         </div>
       )}
-      <style>{`@keyframes ringPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(108,28,255,0.4)}50%{transform:scale(1.05);box-shadow:0 0 0 6px rgba(108,28,255,0)}}`}</style>
-      <div onClick={()=>setOpen(o=>!o)} style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", border:"0.5px solid #e2e8f0", borderRadius:50, padding:"8px 16px 8px 8px", boxShadow:"0 8px 30px rgba(108,28,255,0.25)", cursor:"pointer" }}>
+
+      {/* Floating pill */}
+      <div onClick={()=>setOpen(o=>!o)} style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", border:"0.5px solid #e2e8f0", borderRadius:50, padding:"8px 16px 8px 8px", boxShadow:"0 8px 30px rgba(108,28,255,0.25)", cursor:"pointer", userSelect:"none" }}>
         <div style={{ position:"relative", width:44, height:44, flexShrink:0 }}>
-          {logo ? <img src={logo} alt={name} style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", display:"block" }} /> : <div style={{ width:44, height:44, borderRadius:"50%", background:"#6c1cff", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:20, color:"#fff" }} /></div>}
+          {logo
+            ? <img src={logo} alt={name} style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", display:"block" }} />
+            : <div style={{ width:44, height:44, borderRadius:"50%", background:"#6c1cff", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:20, color:"#fff" }} /></div>
+          }
           <div style={{ position:"absolute", inset:-3, borderRadius:"50%", border:"2px solid #6c1cff", animation:"ringPulse 2s ease-in-out infinite", pointerEvents:"none" }} />
           <div style={{ position:"absolute", bottom:1, right:1, width:12, height:12, borderRadius:"50%", background:"#10b981", border:"2px solid #fff" }} />
         </div>
         <div>
           <div style={{ fontSize:12, fontWeight:500, color:"#1e293b" }}>{name}</div>
-          <div style={{ fontSize:11, color:"#6c1cff" }}>Chat with us 👋</div>
+          <div style={{ fontSize:11, color:"#6c1cff" }}>Ask our AI assistant 🤖</div>
         </div>
       </div>
+
     </div>
   );
 }
+
 
 export default ChurchDetailPage;
