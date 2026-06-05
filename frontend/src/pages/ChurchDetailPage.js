@@ -1545,4 +1545,106 @@ const ChurchDetailPage = () => {
   );
 };
 
+function ChurchChatWidget({ church }) {
+  const [open, setOpen] = React.useState(false);
+  const [tab, setTab] = React.useState("chat");
+  const [chatMsgs, setChatMsgs] = React.useState([{ id:1, from:"entity", text:"Peace be unto you! 🙏 How can we help you today?" }]);
+  const [prayerMsgs, setPrayerMsgs] = React.useState([{ id:1, from:"entity", text:"Our pastoral team reads every prayer request. Submit yours below." }]);
+  const [input, setInput] = React.useState("");
+  const [anon, setAnon] = React.useState(false);
+  const msgsRef = React.useRef(null);
+
+  React.useEffect(() => { if (msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight; }, [chatMsgs, prayerMsgs]);
+
+  const send = () => {
+    if (!input.trim()) return;
+    if (/\b(stupid|idiot|hate|damn|hell)\b/i.test(input)) {
+      toast.info("We kept this one between us 🙏 ChurchNavigator is a place of encouragement and faith. Try sharing something uplifting!");
+      setInput(""); return;
+    }
+    const newMsg = { id: Date.now(), from:"user", text: input.trim(), anon };
+    if (tab === "chat") setChatMsgs(m => [...m, newMsg]);
+    else setPrayerMsgs(m => [...m, newMsg]);
+    setInput("");
+    setTimeout(() => {
+      const reply = { id: Date.now()+1, from:"entity", text: tab === "chat"
+        ? "Thank you for reaching out! 🙏 A member of our team will get back to you within 24 hours. God bless!"
+        : "Thank you for your prayer request. 🙏 Our team will lift this before God!" };
+      if (tab === "chat") setChatMsgs(m => [...m, reply]);
+      else setPrayerMsgs(m => [...m, reply]);
+    }, 1500);
+  };
+
+  const msgs = tab === "chat" ? chatMsgs : prayerMsgs;
+  const logo = church?.logo;
+  const name = church?.name || "Church";
+
+  return (
+    <div style={{ position:"fixed", bottom:24, right:24, zIndex:200 }}>
+      {open && (
+        <div style={{ position:"absolute", bottom:70, right:0, width:320, borderRadius:20, overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", display:"flex", flexDirection:"column", maxHeight:480, background:"#fff" }}>
+          <div style={{ background:"linear-gradient(135deg,#0d0520,#1a0d3d)", padding:"14px 16px", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+            <div style={{ position:"relative", width:42, height:42, flexShrink:0 }}>
+              {logo ? <img src={logo} alt={name} style={{ width:42, height:42, borderRadius:"50%", objectFit:"cover", display:"block" }} /> : <div style={{ width:42, height:42, borderRadius:"50%", background:"#6c1cff", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:20, color:"#fff" }} /></div>}
+              <div style={{ position:"absolute", inset:-3, borderRadius:"50%", border:"2px solid #6c1cff", animation:"ringPulse 2s ease-in-out infinite", pointerEvents:"none" }} />
+              <div style={{ position:"absolute", bottom:1, right:1, width:10, height:10, borderRadius:"50%", background:"#10b981", border:"2px solid #0d0520" }} />
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:500, color:"#fff" }}>{name}</div>
+              <div style={{ fontSize:10, color:"#6ee7b7", display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
+                <div style={{ width:5, height:5, borderRadius:"50%", background:"#10b981" }} />
+                Usually replies within 24h
+              </div>
+            </div>
+            <button onClick={()=>setOpen(false)} style={{ background:"rgba(255,255,255,0.1)", border:"none", borderRadius:"50%", width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", color:"rgba(255,255,255,0.6)", fontSize:18, fontFamily:"inherit" }}>×</button>
+          </div>
+          <div style={{ display:"flex", background:"#f8fafc", borderBottom:"0.5px solid #e2e8f0", flexShrink:0 }}>
+            {["chat","prayer"].map(t=>(
+              <div key={t} onClick={()=>setTab(t)} style={{ flex:1, padding:8, fontSize:11, fontWeight:500, cursor:"pointer", textAlign:"center", color:tab===t?"#6c1cff":"#64748b", borderBottom:`2px solid ${tab===t?"#6c1cff":"transparent"}`, background:tab===t?"#fff":"transparent" }}>
+                {t==="chat"?"💬 Chat":"🙏 Prayer"}
+              </div>
+            ))}
+          </div>
+          <div ref={msgsRef} style={{ flex:1, overflowY:"auto", padding:12, display:"flex", flexDirection:"column", gap:8 }}>
+            {msgs.map(msg=>(
+              <div key={msg.id} style={{ maxWidth:"85%", alignSelf:msg.from==="user"?"flex-end":"flex-start" }}>
+                <div style={{ padding:"9px 12px", fontSize:12, lineHeight:1.6, borderRadius:msg.from==="user"?"14px 4px 14px 14px":"4px 14px 14px 14px", background:msg.from==="user"?"#6c1cff":"#f1f5f9", color:msg.from==="user"?"#fff":"#1e293b" }}>
+                  {msg.text}
+                </div>
+              </div>
+            ))}
+          </div>
+          {tab==="prayer" && (
+            <div style={{ padding:"6px 12px", background:"#f8fafc", borderTop:"0.5px solid #e2e8f0", flexShrink:0 }}>
+              <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:"#64748b", cursor:"pointer" }}>
+                <input type="checkbox" checked={anon} onChange={e=>setAnon(e.target.checked)} /> Stay anonymous
+              </label>
+            </div>
+          )}
+          <div style={{ display:"flex", gap:8, padding:"10px 12px", background:"#fff", borderTop:"0.5px solid #e2e8f0", flexShrink:0 }}>
+            <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()}
+              placeholder={tab==="chat"?"Type a message...":"Share your prayer request..."}
+              style={{ flex:1, padding:"8px 12px", fontSize:12, border:"0.5px solid #e2e8f0", borderRadius:20, background:"#f8fafc", fontFamily:"inherit", outline:"none" }} />
+            <button onClick={send} style={{ width:34, height:34, borderRadius:"50%", background:"#6c1cff", border:"none", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0 }}>
+              <i className="ti ti-send" style={{ fontSize:15, color:"#fff" }} />
+            </button>
+          </div>
+        </div>
+      )}
+      <style>{`@keyframes ringPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(108,28,255,0.4)}50%{transform:scale(1.05);box-shadow:0 0 0 6px rgba(108,28,255,0)}}`}</style>
+      <div onClick={()=>setOpen(o=>!o)} style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", border:"0.5px solid #e2e8f0", borderRadius:50, padding:"8px 16px 8px 8px", boxShadow:"0 8px 30px rgba(108,28,255,0.25)", cursor:"pointer" }}>
+        <div style={{ position:"relative", width:44, height:44, flexShrink:0 }}>
+          {logo ? <img src={logo} alt={name} style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", display:"block" }} /> : <div style={{ width:44, height:44, borderRadius:"50%", background:"#6c1cff", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:20, color:"#fff" }} /></div>}
+          <div style={{ position:"absolute", inset:-3, borderRadius:"50%", border:"2px solid #6c1cff", animation:"ringPulse 2s ease-in-out infinite", pointerEvents:"none" }} />
+          <div style={{ position:"absolute", bottom:1, right:1, width:12, height:12, borderRadius:"50%", background:"#10b981", border:"2px solid #fff" }} />
+        </div>
+        <div>
+          <div style={{ fontSize:12, fontWeight:500, color:"#1e293b" }}>{name}</div>
+          <div style={{ fontSize:11, color:"#6c1cff" }}>Chat with us 👋</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default ChurchDetailPage;
