@@ -159,7 +159,4 @@ export function ensureExternalUrl(url) {
   return `https://${url}`;
 }
 
-
-
-export default ChurchDetailPage;
 export default ChurchDetailPage;
