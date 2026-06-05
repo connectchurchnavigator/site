@@ -1,648 +1,1547 @@
-/* eslint-disable */
-import React from "react";
-import { Footer } from "../components/Footer";
-import ListingChatWidget from "../components/ListingChatWidget";
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { 
+  Heart, Share2, MapPin, Clock, Phone, Globe, Users, 
+  Calendar, Info, ChevronRight, MessageSquare, Shield,
+  Layers, Lock, Play, Music, HeartHandshake, Church,
+  Camera, ChevronDown, ChevronUp, ArrowLeft, Mail, Facebook, Linkedin,
+  Instagram, Youtube, Twitter, Navigation, QrCode, Send, 
+  ExternalLink, Bookmark, Star, PhoneCall, Link2, Sparkles, 
+  ChevronLeft, X, User, Building2, Video, Languages, ShieldCheck
+} from 'lucide-react';
+import ClaimListingModal from '../components/ClaimListingModal';
+import GoogleMap from '../components/GoogleMap';
+import { motion, AnimatePresence } from 'framer-motion';
+import { NavbarPremium } from '../components/NavbarPremium';
+import { Footer } from '../components/Footer';
+import { ChurchCard } from '../components/ChurchCard';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
+import { Separator } from '../components/ui/separator';
+import { 
+  churchAPI, 
+  relationshipAPI, 
+  analyticsAPI,
+  taxonomyAPI,
+  pastorAPI,
+  bookmarkAPI,
+  messageAPI
+} from '../lib/api';
+import { getImageUrl, getFallbackImage, ensureExternalUrl, isOpenNow, formatTimeTo12h, getSessionId } from '../lib/utils';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
+import { cn } from '../lib/utils';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || "https://api.churchnavigator.com";
-const fixUrl = (url) => (!url || url === "#") ? null : url.startsWith("http") ? url : `https://${url}`;
-
-// ── Section Card ──────────────────────────────────────────────────────────────
-function SCard({ icon, iconBg, iconColor, hdrBg, title, children, action }) {
-  return (
-    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:12 }}>
-      <div style={{ padding:"11px 14px 10px", display:"flex", alignItems:"center", gap:8, background:hdrBg, borderBottom:"0.5px solid #e5e7eb" }}>
-        <div style={{ width:28, height:28, borderRadius:7, background:iconBg, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <i className={`ti ti-${icon}`} style={{ fontSize:15, color:iconColor }} />
-        </div>
-        <span style={{ fontSize:13, fontWeight:500, color:iconColor }}>{title}</span>
-        {action && <div style={{ marginLeft:"auto" }}>{action}</div>}
-      </div>
-      <div style={{ padding:"12px 14px" }}>{children}</div>
-    </div>
-  );
-}
-
-const Tag = ({ label, bg, color, border }) => (
-  <span style={{ display:"inline-flex", fontSize:11, padding:"4px 9px", borderRadius:10, margin:2, background:bg, color, border:`0.5px solid ${border}` }}>{label}</span>
+const XIcon = ({ size = 24, className = "" }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    className={className}
+  >
+    <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932L18.901 1.153ZM17.61 20.644h2.039L6.486 3.24H4.298L17.61 20.644Z" />
+  </svg>
 );
 
-// ── Branches Tab ──────────────────────────────────────────────────────────────
-function BranchesTab({ branches, mainChurch }) {
-  const [branchData, setBranchData] = React.useState([]);
-  const gradients = ["linear-gradient(135deg,#c4b5fd,#7c3aed)","linear-gradient(135deg,#5DCAA5,#0F6E56)","linear-gradient(135deg,#FAC775,#BA7517)"];
-  const colors = ["#7c3aed","#0f766e","#ca8a04"];
-  const labels = ["Main Branch","East London","North London","South London","West London"];
+// Ported Helper Components from source
+const getYouTubeEmbedUrl = (url) => {
+  if (!url) return "";
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  const id = (match && match[2].length === 11) ? match[2] : null;
+  return id ? `https://www.youtube.com/embed/${id}` : url;
+};
 
-  React.useEffect(() => {
-    if (!branches?.length) return;
-    Promise.all(branches.slice(0,5).map(id =>
-      fetch(`${API_URL}/api/churches/${id}`).then(r=>r.json()).catch(()=>({ id, name:"Branch Church", city:mainChurch.city||"London" }))
-    )).then(data => setBranchData(data.filter(d=>d&&!d.detail)));
-  }, [branches]);
-
-  if (!branches?.length) return (
-    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, padding:30, textAlign:"center", color:"#6b7280", fontSize:13 }}>No branches listed yet.</div>
-  );
-
-  const display = branchData.length > 0 ? branchData : branches.slice(0,5).map((id,i)=>({ id, name:`Branch — ${labels[i+1]||"Location"}`, city:mainChurch.city||"London", slug:id }));
-
-  const BranchCard = ({ branch, idx, isMain }) => (
-    <div style={{ borderRadius:12, overflow:"hidden", marginBottom:10, border:"0.5px solid #e5e7eb", cursor:isMain?"default":"pointer" }}
-      onClick={() => !isMain && branch.slug && (window.location.href=`/church/${branch.slug}`)}>
-      <div style={{ height:100, position:"relative", display:"flex", alignItems:"center", justifyContent:"center", background:gradients[idx%gradients.length] }}>
-        {isMain && branch.logo && (
-          <div style={{ position:"absolute", top:8, left:10, width:36, height:36, borderRadius:"50%", border:"2px solid rgba(255,255,255,0.8)", overflow:"hidden", background:"#fff", zIndex:3 }}>
-            <img src={branch.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-          </div>
-        )}
-        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", zIndex:2 }}>
-          <div style={{ width:36, height:36, borderRadius:"50%", background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", border:"3px solid rgba(255,255,255,0.8)" }}>
-            <i className="ti ti-building-church" style={{ fontSize:18, color:colors[idx%colors.length] }} />
-          </div>
-          <div style={{ width:3, height:12, background:"rgba(255,255,255,0.8)", borderRadius:2, marginTop:2 }} />
-          <div style={{ width:8, height:8, borderRadius:"50%", background:"rgba(255,255,255,0.5)" }} />
-        </div>
-        <span style={{ position:"absolute", top:10, right:10, fontSize:10, fontWeight:500, padding:"2px 8px", borderRadius:8, background:"rgba(255,255,255,0.25)", color:"#fff", border:"0.5px solid rgba(255,255,255,0.3)" }}>
-          {isMain ? "Main Branch" : labels[idx]||`Branch ${idx+1}`}
-        </span>
-      </div>
-      <div style={{ padding:"10px 13px", background:"#fff" }}>
-        <div style={{ fontSize:13, fontWeight:500, color:"#111", marginBottom:5 }}>{branch.name}</div>
-        {branch.address_line1 && <div style={{ fontSize:11, color:"#6b7280", display:"flex", alignItems:"center", gap:3, marginBottom:3 }}><i className="ti ti-map-pin" style={{ fontSize:12, color:colors[idx%colors.length] }} /> {branch.address_line1}</div>}
-        {!branch.address_line1 && branch.city && <div style={{ fontSize:11, color:"#6b7280", display:"flex", alignItems:"center", gap:3, marginBottom:3 }}><i className="ti ti-map-pin" style={{ fontSize:12, color:colors[idx%colors.length] }} /> {branch.city}, UK</div>}
-        {branch.services?.[0] && <div style={{ fontSize:11, color:"#6b7280", display:"flex", alignItems:"center", gap:3, marginBottom:3 }}><i className="ti ti-clock" style={{ fontSize:12, color:"#059669" }} /> {branch.services[0].day} {branch.services[0].start_time}{branch.services[0].end_time?` — ${branch.services[0].end_time}`:""}</div>}
-        <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:7 }}>
-          <span style={{ fontSize:10, padding:"2px 7px", borderRadius:7, background:"#d1fae5", color:"#065f46" }}>{isMain?"Open Sunday":"Active"}</span>
-          {(branch.google_maps_link||mainChurch.google_maps_link) && (
-            <a href={branch.google_maps_link||mainChurch.google_maps_link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
-              style={{ marginLeft:"auto", background:colors[idx%colors.length], color:"#fff", border:"none", borderRadius:7, padding:"5px 10px", fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", gap:4, textDecoration:"none" }}>
-              <i className="ti ti-navigation" style={{ fontSize:12 }} /> Directions
-            </a>
-          )}
-        </div>
-      </div>
+const SectionCard = ({ children, className = "" }) => (
+  <div className={`bg-white rounded-[5px] border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-300 ${className}`}>
+    {children}
+  </div>
+);
+const SectionHeading = ({ icon: Icon, title }) => (
+  <div className="flex items-center gap-2.5 mb-5">
+    <div className="w-8 h-8 rounded-[5px] bg-[#6c1cff]/10 flex items-center justify-center">
+      <Icon size={18} className="text-[#6c1cff]" />
     </div>
-  );
+    <h2 className="text-[1rem] font-semibold text-slate-700">{title}</h2>
+  </div>
+);
+
+
+const Lightbox = ({ isOpen, onClose, images, currentIndex, onNext, onPrev }) => {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowRight') onNext();
+      if (e.key === 'ArrowLeft') onPrev();
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onNext, onPrev, onClose]);
 
   return (
-    <SCard icon="building-community" iconBg="#ede9fe" iconColor="#7c3aed" hdrBg="#faf5ff" title="Church Branches"
-      action={<span style={{ fontSize:11, color:"#6b7280" }}>{branches.length} active branches</span>}>
-      <BranchCard branch={mainChurch} idx={0} isMain={true} />
-      {display.map((branch,i) => <BranchCard key={branch.id||i} branch={branch} idx={i+1} isMain={false} />)}
-    </SCard>
-  );
-}
-
-// ── Nearby Churches ───────────────────────────────────────────────────────────
-function NearbyChurches({ currentSlug, city }) {
-  const [churches, setChurches] = React.useState([]);
-  React.useEffect(() => {
-    fetch(`${API_URL}/api/churches?limit=20`)
-      .then(r=>r.json())
-      .then(data => {
-        const list = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
-        const sorted = [
-          ...list.filter(c=>c.slug!==currentSlug&&c.is_featured),
-          ...list.filter(c=>c.slug!==currentSlug&&!c.is_featured),
-        ];
-        setChurches(sorted.slice(0,3));
-      }).catch(()=>{});
-  },[currentSlug]);
-
-  if (!churches.length) return null;
-
-  return (
-    <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:16 }}>
-      <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
-        <div style={{ width:28, height:28, borderRadius:7, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-building-church" style={{ fontSize:15, color:"#7c3aed" }} /></div>
-        <span style={{ fontSize:13, fontWeight:500, color:"#5b21b6" }}>{city ? `Other Churches in ${city}` : "You might also like"}</span>
-        <a href="/explore" style={{ marginLeft:"auto", fontSize:12, color:"#7c3aed", textDecoration:"none", display:"flex", alignItems:"center", gap:3, fontWeight:500 }}>See all <i className="ti ti-arrow-right" style={{ fontSize:13 }} /></a>
-      </div>
-      <div style={{ padding:"14px", display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
-        {churches.map((c,i) => (
-          <a key={c.id} href={`/church/${c.slug}`} style={{ textDecoration:"none", display:"block", borderRadius:12, overflow:"hidden", border:"0.5px solid #e5e7eb", background:"#fff" }}>
-            <div style={{ position:"relative", height:100, overflow:"hidden" }}>
-              {c.cover_image
-                ? <img src={c.cover_image} alt={c.name} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} loading="lazy" />
-                : <div style={{ width:"100%", height:"100%", background:["linear-gradient(135deg,#7c3aed,#a78bfa)","linear-gradient(135deg,#059669,#34d399)","linear-gradient(135deg,#1d4ed8,#60a5fa)"][i%3], display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    <i className="ti ti-building-church" style={{ fontSize:32, color:"rgba(255,255,255,0.8)" }} />
-                  </div>}
-              <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(0,0,0,0.45) 0%,transparent 60%)" }} />
-              {c.logo && <div style={{ position:"absolute", bottom:8, left:10, width:26, height:26, borderRadius:"50%", overflow:"hidden", border:"2px solid rgba(255,255,255,0.8)", background:"#fff" }}><img src={c.logo} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /></div>}
-              {c.is_featured && <span style={{ position:"absolute", top:8, right:8, fontSize:9, fontWeight:500, padding:"2px 7px", borderRadius:8, background:"rgba(124,58,237,0.85)", color:"#fff" }}>⭐ Featured</span>}
-            </div>
-            <div style={{ padding:"10px 12px" }}>
-              <div style={{ fontSize:13, fontWeight:500, color:"#111", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:4 }}>{c.name}</div>
-              {(c.city||c.address_line1) && <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"#6b7280", marginBottom:4 }}><i className="ti ti-map-pin" style={{ fontSize:11, color:"#7c3aed" }} /><span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.city||c.address_line1}</span></div>}
-              {c.denomination && <div style={{ fontSize:11, color:"#6b7280", marginBottom:8 }}>{c.denomination}</div>}
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                <span style={{ fontSize:10, color:"#059669", background:"#d1fae5", padding:"2px 7px", borderRadius:6 }}>Open Sunday</span>
-                <span style={{ fontSize:11, color:"#7c3aed", display:"flex", alignItems:"center", gap:2 }}>View <i className="ti ti-arrow-right" style={{ fontSize:11 }} /></span>
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Main Component ────────────────────────────────────────────────────────────
-export default function ChurchDetailPage() {
-  const [church, setChurch] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-  const [activeTab, setActiveTab] = React.useState("profile");
-  const [showCoverPanel, setShowCoverPanel] = React.useState(false);
-  const [coverMode, setCoverMode] = React.useState("image");
-  const contactRef = React.useRef(null);
-
-  React.useEffect(() => {
-    if (!document.getElementById("tabler-icons-css")) {
-      const link = document.createElement("link");
-      link.id = "tabler-icons-css";
-      link.rel = "stylesheet";
-      link.href = "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css";
-      document.head.appendChild(link);
-    }
-    const slug = window.location.pathname.split("/church/")[1]?.split("/")[0];
-    if (!slug) { setLoading(false); return; }
-    fetch(`${API_URL}/api/churches/${slug}`)
-      .then(r=>r.json())
-      .then(data=>{ setChurch(data); setLoading(false); })
-      .catch(()=>setLoading(false));
-  },[]);
-
-  if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh" }}>
-      <div style={{ textAlign:"center" }}>
-        <i className="ti ti-building-church" style={{ fontSize:48, color:"#7c3aed", display:"block", marginBottom:12 }} />
-        <div style={{ fontSize:14, color:"#6b7280" }}>Loading church...</div>
-      </div>
-    </div>
-  );
-
-  if (!church) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh" }}>
-      <div style={{ fontSize:14, color:"#6b7280" }}>Church not found</div>
-    </div>
-  );
-
-  const name = church.name||"Church";
-  const description = church.description||"";
-  const cover_image = church.cover_image||"";
-  const logo = church.logo||"";
-  const address = church.address_line1||"";
-  const city = church.city||"";
-  const phone = church.phone||"";
-  const email = church.email||"";
-  const denomination = church.denomination||"";
-  const ministries = Array.isArray(church.ministries)?church.ministries:[];
-  const worship_styles = Array.isArray(church.worship_styles)?church.worship_styles:[];
-  const languages = Array.isArray(church.languages)?church.languages:[];
-  const facilities = Array.isArray(church.facilities)?church.facilities:[];
-  const services = Array.isArray(church.services)?church.services:[];
-  const gallery_images = Array.isArray(church.gallery_images)?church.gallery_images:[];
-  const google_maps_link = church.google_maps_link||"";
-  const facebook = fixUrl(church.facebook);
-  const instagram = fixUrl(church.instagram);
-  const youtube = fixUrl(church.youtube);
-  const twitter = fixUrl(church.twitter);
-  const pastor_name = church.pastor_name||"";
-  const pastor_id = church.pastor_id||"";
-  const other_branches = Array.isArray(church.other_branches)?church.other_branches:[];
-  const worship_team = church.worship_team||{};
-  const it_media_team = church.it_media_team||{};
-  const outreach_team = church.outreach_team||{};
-  const video_url = fixUrl(church.video_url)||youtube;
-  const slug = church.slug||"";
-  const lat = church.latitude;
-  const lng = church.longitude;
-  const socials = [
-    { icon:"brand-facebook", bg:"linear-gradient(135deg,#1877f2,#42a5f5)", href:facebook },
-    { icon:"brand-instagram", bg:"linear-gradient(135deg,#833ab4,#e1306c)", href:instagram },
-    { icon:"brand-youtube", bg:"linear-gradient(135deg,#ff0000,#cc0000)", href:youtube },
-    { icon:"brand-twitter", bg:"linear-gradient(135deg,#111,#333)", href:twitter },
-    { icon:"brand-whatsapp", bg:"linear-gradient(135deg,#25d366,#128c7e)", href:phone?`https://wa.me/${phone.replace(/\D/g,"")}`:null },
-  ].filter(s=>s.href);
-
-  // Centered container style
-  const C = { maxWidth:1280, margin:"0 auto", padding:"0 48px", boxSizing:"border-box", width:"100%" };
-
-  return (
-    <div style={{ background:"#f9fafb", minHeight:"100vh" }}>
-
-      {/* ── HERO (full width) ── */}
-      <div style={{ position:"relative", height:320, overflow:"hidden", background:"#1a0d3d" }}>
-        {cover_image && <img src={cover_image} alt={name} style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />}
-        <div style={{ position:"absolute", width:420, height:420, borderRadius:"50%", background:"#4c1d95", top:-120, right:-60, opacity:0.35 }} />
-        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(10,5,30,0.93) 0%,rgba(10,5,30,0.1) 75%)" }} />
-
-        {/* Badges */}
-        <div style={{ position:"absolute", top:14, left:16, display:"flex", gap:7, zIndex:2 }}>
-          <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, fontWeight:500, padding:"3px 9px", borderRadius:10, background:"rgba(16,185,129,0.2)", color:"#6ee7b7", border:"0.5px solid rgba(16,185,129,0.35)" }}>
-            <i className="ti ti-circle-check" style={{ fontSize:11 }} /> Open Sunday
-          </span>
-          {other_branches.length>0 && (
-            <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, fontWeight:500, padding:"3px 9px", borderRadius:10, background:"rgba(139,92,246,0.25)", color:"#c4b5fd", border:"0.5px solid rgba(139,92,246,0.4)" }}>
-              <i className="ti ti-building-community" style={{ fontSize:11 }} /> {other_branches.length} Branches
-            </span>
-          )}
-        </div>
-
-        {/* Top right */}
-        <div style={{ position:"absolute", top:14, right:16, display:"flex", gap:7, zIndex:5 }}>
-          {["Save","Share"].map((btn,i) => (
-            <button key={btn} style={{ background:"rgba(255,255,255,0.15)", border:"0.5px solid rgba(255,255,255,0.3)", borderRadius:18, padding:"5px 11px", color:"#fff", fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontFamily:"inherit" }}>
-              <i className={`ti ti-${["bookmark","share"][i]}`} style={{ fontSize:13 }} /> {btn}
-            </button>
-          ))}
-          <button onClick={()=>setShowCoverPanel(!showCoverPanel)} style={{ background:"rgba(124,58,237,0.4)", border:"0.5px solid rgba(139,92,246,0.5)", borderRadius:18, padding:"5px 11px", color:"#fff", fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", gap:4, fontFamily:"inherit" }}>
-            <i className="ti ti-photo-edit" style={{ fontSize:13 }} /> Change Cover
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 touch-none"
+          onClick={onClose}
+        >
+          <button 
+            onClick={onClose}
+            className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors z-[110]"
+          >
+            <X size={32} />
           </button>
-        </div>
 
-        {/* Cover panel */}
-        {showCoverPanel && (
-          <div style={{ position:"absolute", top:50, right:14, zIndex:20, background:"rgba(10,5,30,0.96)", border:"0.5px solid rgba(255,255,255,0.12)", borderRadius:12, padding:16, width:240 }}>
-            <div style={{ fontSize:12, fontWeight:500, color:"#fff", marginBottom:10 }}>Choose cover type</div>
-            {[{k:"image",icon:"photo",l:"Image",sub:"Upload or paste URL"},{k:"youtube",icon:"brand-youtube",l:"YouTube video",sub:"Autoplays silently"}].map(opt=>(
-              <div key={opt.k} onClick={()=>setCoverMode(opt.k)} style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 10px", borderRadius:8, cursor:"pointer", marginBottom:5, border:`0.5px solid ${coverMode===opt.k?"rgba(139,92,246,0.4)":"rgba(255,255,255,0.08)"}`, background:coverMode===opt.k?"rgba(124,58,237,0.25)":"transparent" }}>
-                <i className={`ti ti-${opt.icon}`} style={{ fontSize:16, color:coverMode===opt.k?"#c4b5fd":"rgba(255,255,255,0.6)" }} />
-                <div><div style={{ fontSize:12, color:"#fff", fontWeight:500 }}>{opt.l}</div><div style={{ fontSize:10, color:"rgba(255,255,255,0.45)" }}>{opt.sub}</div></div>
-                {coverMode===opt.k && <i className="ti ti-check" style={{ fontSize:14, color:"#a78bfa", marginLeft:"auto" }} />}
-              </div>
-            ))}
-            {coverMode==="youtube" && (
-              <div>
-                <input placeholder="Paste YouTube URL..." style={{ width:"100%", padding:"8px 10px", fontSize:12, border:"0.5px solid rgba(255,255,255,0.15)", borderRadius:7, background:"rgba(255,255,255,0.07)", color:"#fff", fontFamily:"inherit", outline:"none", marginTop:8, boxSizing:"border-box" }} />
-                <button style={{ width:"100%", background:"#dc2626", color:"#fff", border:"none", borderRadius:7, padding:8, fontSize:12, fontWeight:500, cursor:"pointer", marginTop:6, fontFamily:"inherit" }}>Play as Cover</button>
-              </div>
+          <div className="relative w-full max-w-5xl aspect-auto flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            {images.length > 1 && (
+              <>
+                <button 
+                  onClick={onPrev}
+                  className="absolute left-0 lg:-left-20 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all z-[110]"
+                >
+                  <ChevronLeft size={24} />
+                </button>
+                <button 
+                  onClick={onNext}
+                  className="absolute right-0 lg:-right-20 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all z-[110]"
+                >
+                  <ChevronRight size={24} />
+                </button>
+              </>
             )}
-            {coverMode==="image" && (
-              <div>
-                <input placeholder="Paste image URL..." style={{ width:"100%", padding:"8px 10px", fontSize:12, border:"0.5px solid rgba(255,255,255,0.15)", borderRadius:7, background:"rgba(255,255,255,0.07)", color:"#fff", fontFamily:"inherit", outline:"none", marginTop:8, boxSizing:"border-box" }} />
-                <button style={{ width:"100%", background:"#7c3aed", color:"#fff", border:"none", borderRadius:7, padding:8, fontSize:12, fontWeight:500, cursor:"pointer", marginTop:6, fontFamily:"inherit" }}>Apply Image</button>
+
+            <motion.div
+              key={currentIndex}
+              initial={{ opacity: 0, scale: 0.9, x: 20 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.9, x: -20 }}
+              className="relative rounded-[5px] overflow-hidden shadow-2xl"
+            >
+              <img 
+                src={getImageUrl(images[currentIndex])} 
+                alt="Enlarged view" 
+                className="max-h-[85vh] w-auto object-contain select-none"
+              />
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/50 text-white/70 text-xs font-bold backdrop-blur-md">
+                {currentIndex + 1} / {images.length}
               </div>
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+const TeamCard = ({ team, i, onImageClick }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isVideosExpanded, setIsVideosExpanded] = useState(false);
+  const description = team.details?.description || "";
+  const isLong = description.length > 180;
+  const hasImages = team.details?.images?.length > 0;
+
+  return (
+    <SectionCard className="flex flex-col p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 hover:shadow-xl transition-all border-[#6c1cff]/5 group">
+      <div>
+        <SectionHeading icon={team.icon} title={team.name} />
+        
+        {/* Team Description */}
+        {description && (
+          <div className="mb-6">
+            <p className={cn(
+              "text-slate-600 text-sm leading-relaxed transition-all",
+              !isExpanded && "line-clamp-4"
+            )}>
+              {description}
+            </p>
+            {isLong && (
+              <button 
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-[#6c1cff] text-xs font-bold mt-2 hover:underline flex items-center gap-1"
+              >
+                {isExpanded ? (
+                  <>Show Less <ChevronUp size={14} /></>
+                ) : (
+                  <>Show More <ChevronDown size={14} /></>
+                )}
+              </button>
             )}
           </div>
         )}
 
-        {/* Hero bottom */}
-        <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:"16px 20px", zIndex:2 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
-            <div style={{ width:54, height:54, borderRadius:"50%", border:"2.5px solid rgba(255,255,255,0.25)", overflow:"hidden", flexShrink:0, background:"#7c3aed", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              {logo ? <img src={logo} alt={name} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} /> : <i className="ti ti-building-church" style={{ fontSize:24, color:"#fff" }} />}
-            </div>
-            <div>
-              <div style={{ fontSize:22, fontWeight:500, color:"#fff" }}>{name}</div>
-              <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", marginTop:3, display:"flex", alignItems:"center", gap:4 }}>
-                {address && <><i className="ti ti-map-pin" style={{ fontSize:12 }} /> {address}</>}
-                {denomination && <>&nbsp;·&nbsp;{denomination}</>}
-              </div>
-            </div>
-          </div>
-          <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-            {google_maps_link && (
-              <a href={google_maps_link} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:18, fontSize:12, fontWeight:500, background:"#7c3aed", color:"#fff", textDecoration:"none", whiteSpace:"nowrap" }}>
-                <i className="ti ti-navigation" style={{ fontSize:14 }} /> Get Directions
-              </a>
-            )}
-            <a href={`/church/${slug}/visit`} style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:18, fontSize:12, fontWeight:500, color:"#fff", background:"rgba(16,185,129,0.3)", border:"1px solid rgba(16,185,129,0.5)", textDecoration:"none", whiteSpace:"nowrap" }}>
-              <i className="ti ti-qrcode" style={{ fontSize:14 }} /> Check In
-            </a>
-            {phone && (
-              <a href={`tel:${phone}`} style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:18, fontSize:12, fontWeight:500, color:"#fff", background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.35)", textDecoration:"none", whiteSpace:"nowrap" }}>
-                <i className="ti ti-phone" style={{ fontSize:14 }} /> Call
-              </a>
-            )}
-            <button onClick={()=>contactRef.current?.scrollIntoView({behavior:"smooth"})} style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:18, fontSize:12, fontWeight:500, color:"#fff", background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.35)", cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
-              <i className="ti ti-message" style={{ fontSize:14 }} /> Contact Us
-            </button>
-            {video_url && (
-              <a href={video_url} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:18, fontSize:12, fontWeight:500, color:"#fff", background:"rgba(255,255,255,0.18)", border:"1px solid rgba(255,255,255,0.35)", textDecoration:"none", whiteSpace:"nowrap" }}>
-                <i className="ti ti-brand-youtube" style={{ fontSize:14 }} /> Watch Live
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── STATS (full width) ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", background:"#fff", borderBottom:"0.5px solid #e5e7eb" }}>
-        {[{n:ministries.length,l:"Ministries",c:"#7c3aed"},{n:worship_styles.length,l:"Worship Styles",c:"#0891b2"},{n:languages.length,l:"Languages",c:"#d97706"},{n:services.length,l:"Services/Week",c:"#059669"},{n:other_branches.length,l:"Branches",c:"#db2777"}].map((s,i)=>(
-          <div key={i} style={{ textAlign:"center", padding:"12px 4px", borderRight:i<4?"0.5px solid #e5e7eb":"none" }}>
-            <div style={{ fontSize:18, fontWeight:500, color:s.c }}>{s.n}</div>
-            <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>{s.l}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── ALL CONTENT IN CENTERED CONTAINER ── */}
-      <div style={C}>
-
-        {/* ── FIRST TIME VISITOR BAND ── */}
-        <div style={{ background:"#1a0d3d", borderRadius:12, padding:"14px 20px", display:"flex", alignItems:"center", gap:12, position:"relative", overflow:"hidden", marginTop:16, marginBottom:4 }}>
-          <div style={{ position:"absolute", width:160, height:160, borderRadius:"50%", background:"#4c1d95", top:-50, right:70, opacity:0.5 }} />
-          <div style={{ position:"absolute", width:100, height:100, borderRadius:"50%", background:"#0891b2", bottom:-30, right:20, opacity:0.25 }} />
-          <div style={{ width:40, height:40, borderRadius:10, background:"rgba(124,58,237,0.5)", border:"1px solid rgba(139,92,246,0.5)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, position:"relative", zIndex:1 }}>
-            <i className="ti ti-qrcode" style={{ fontSize:20, color:"#c4b5fd" }} />
-          </div>
-          <div style={{ flex:1, position:"relative", zIndex:1 }}>
-            <div style={{ fontSize:13, fontWeight:500, color:"#fff", marginBottom:2 }}>Visiting For The First Time?</div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)" }}>Register your visit — takes 30 seconds</div>
-          </div>
-          <a href={`/church/${slug}/visit`} style={{ background:"#fff", color:"#5b21b6", border:"none", borderRadius:16, padding:"8px 16px", fontSize:12, fontWeight:500, cursor:"pointer", position:"relative", zIndex:1, whiteSpace:"nowrap", textDecoration:"none", display:"flex", alignItems:"center", gap:4 }}>
-            <i className="ti ti-user-plus" style={{ fontSize:13, color:"#5b21b6" }} /> Register My Visit
-          </a>
-        </div>
-
-        {/* ── TABS ── */}
-        <div style={{ display:"flex", background:"#fff", borderBottom:"0.5px solid #e5e7eb", overflowX:"auto", marginBottom:0 }}>
-          {[
-            { key:"profile", icon:"building-church", label:"Profile" },
-            { key:"team", icon:"users", label:"Our Team", count:[worship_team,it_media_team,outreach_team].filter(t=>t?.images?.length>0).length },
-            { key:"branches", icon:"building-community", label:"Branches", count:other_branches.length },
-          ].map(tab=>(
-            <div key={tab.key} onClick={()=>setActiveTab(tab.key)}
-              style={{ padding:"10px 14px", fontSize:13, fontWeight:500, cursor:"pointer", color:activeTab===tab.key?"#7c3aed":"#6b7280", borderBottom:`2px solid ${activeTab===tab.key?"#7c3aed":"transparent"}`, whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:5 }}>
-              <i className={`ti ti-${tab.icon}`} style={{ fontSize:13 }} /> {tab.label}
-              {tab.count>0 && <span style={{ background:"#f5f0ff", color:"#7c3aed", fontSize:10, padding:"1px 6px", borderRadius:8 }}>{tab.count}</span>}
-            </div>
-          ))}
-        </div>
-
-        {/* ── BODY ── */}
-        <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 300px", gap:12, padding:"14px 0" }}>
-
-          {/* LEFT */}
-          <div>
-            {activeTab==="profile" && (
-              <>
-                <SCard icon="building-church" iconBg="#ede9fe" iconColor="#7c3aed" hdrBg="#faf5ff" title="About This Church">
-                  {description && <p style={{ fontSize:13, color:"#6b7280", lineHeight:1.7, marginBottom:12 }}>{description}</p>}
-                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                    {denomination && (
-                      <span style={{ display:"inline-flex", alignItems:"center", gap:7, background:"#f5f0ff", border:"0.5px solid #ddd6fe", borderRadius:9, padding:"8px 12px" }}>
-                        <i className="ti ti-world" style={{ fontSize:14, color:"#7c3aed" }} />
-                        <div><div style={{ fontSize:10, color:"#7c3aed" }}>Denomination</div><div style={{ fontSize:12, color:"#4c1d95", fontWeight:500 }}>{denomination}</div></div>
-                      </span>
-                    )}
-                    {city && (
-                      <span style={{ display:"inline-flex", alignItems:"center", gap:7, background:"#e0f9f3", border:"0.5px solid #99f0d8", borderRadius:9, padding:"8px 12px" }}>
-                        <i className="ti ti-map-pin" style={{ fontSize:14, color:"#059669" }} />
-                        <div><div style={{ fontSize:10, color:"#059669" }}>Location</div><div style={{ fontSize:12, color:"#065f46", fontWeight:500 }}>{city}</div></div>
-                      </span>
-                    )}
-                  </div>
-                </SCard>
-
-                {pastor_name && (
-                  <SCard icon="user" iconBg="#ccfbf1" iconColor="#0f766e" hdrBg="#f0fdfa" title="Senior Pastor">
-                    <a href={pastor_id?`/pastor/${pastor_id}`:"#"} style={{ display:"flex", alignItems:"center", gap:10, background:"#f5f0ff", border:"0.5px solid #ddd6fe", borderRadius:9, padding:10, cursor:"pointer", textDecoration:"none" }}>
-                      <div style={{ width:46, height:46, borderRadius:"50%", background:"#7c3aed", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                        <i className="ti ti-user" style={{ fontSize:22, color:"#fff" }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize:13, fontWeight:500, color:"#111" }}>{pastor_name}</div>
-                        <div style={{ fontSize:11, color:"#7c3aed", marginTop:2 }}>Senior Pastor · {denomination}</div>
-                      </div>
-                      <i className="ti ti-arrow-right" style={{ fontSize:15, color:"#d1d5db", marginLeft:"auto" }} />
-                    </a>
-                  </SCard>
-                )}
-
-                {worship_styles.length>0 && (
-                  <SCard icon="sparkles" iconBg="#fef08a" iconColor="#ca8a04" hdrBg="#fefce8" title="Worship Styles">
-                    {worship_styles.map(w=><Tag key={w} label={w} bg="#fef9ec" color="#78350f" border="#fde68a" />)}
-                  </SCard>
-                )}
-
-                {ministries.length>0 && (
-                  <SCard icon="users" iconBg="#fecdd3" iconColor="#be123c" hdrBg="#fff1f2" title="Ministries & Outreach">
-                    {ministries.map(m=><Tag key={m} label={m} bg="#fff1ee" color="#9f1239" border="#fecdc7" />)}
-                  </SCard>
-                )}
-
-                {languages.length>0 && (
-                  <SCard icon="language" iconBg="#ccfbf1" iconColor="#0f766e" hdrBg="#f0fdfa" title="Languages Spoken">
-                    {languages.map(l=><Tag key={l} label={l} bg="#e0f9f3" color="#065f46" border="#99f0d8" />)}
-                  </SCard>
-                )}
-
-                {facilities.length>0 && (
-                  <SCard icon="building" iconBg="#bfdbfe" iconColor="#1d4ed8" hdrBg="#eff6ff" title="Facilities">
-                    {facilities.map(f=><Tag key={f} label={f} bg="#eff6ff" color="#1e40af" border="#bfdbfe" />)}
-                  </SCard>
-                )}
-
-                {gallery_images.length>0 && (
-                  <SCard icon="photo" iconBg="#bfdbfe" iconColor="#1d4ed8" hdrBg="#eff6ff" title="Gallery">
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
-                      {gallery_images.slice(0,8).map((img,i)=>(
-                        <div key={i} style={{ aspectRatio:"4/3", borderRadius:8, overflow:"hidden", border:"0.5px solid #e5e7eb", cursor:"pointer" }}>
-                          <img src={img} alt={`gallery ${i}`} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} loading="lazy" />
-                        </div>
-                      ))}
-                      {gallery_images.length>8 && (
-                        <div style={{ aspectRatio:"4/3", borderRadius:8, background:"#f5f0ff", border:"0.5px solid #ddd6fe", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
-                          <span style={{ fontSize:12, color:"#5b21b6", fontWeight:500 }}>+{gallery_images.length-8} more</span>
-                        </div>
-                      )}
-                    </div>
-                  </SCard>
-                )}
-              </>
-            )}
-
-            {activeTab==="team" && (
-              <>
-                {[
-                  {team:worship_team,label:"Worship Team",icon:"music",color:"#7c3aed",bg:"rgba(124,58,237,0.3)",tc:"#c4b5fd",border:"rgba(139,92,246,0.4)"},
-                  {team:it_media_team,label:"IT & Media Team",icon:"device-tv",color:"#1d4ed8",bg:"rgba(29,78,216,0.3)",tc:"#93c5fd",border:"rgba(59,130,246,0.4)"},
-                  {team:outreach_team,label:"Outreach Team",icon:"heart",color:"#15803d",bg:"rgba(21,128,61,0.3)",tc:"#86efac",border:"rgba(34,197,94,0.4)"},
-                ].filter(({team})=>team?.images?.length>0).map(({team,label,icon,color,bg,tc,border})=>(
-                  <div key={label} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:12 }}>
-                    <div style={{ height:140, position:"relative", overflow:"hidden", background:"#1a0d3d" }}>
-                      <img src={team.images[0]} alt={label} style={{ width:"100%", height:"100%", objectFit:"cover", opacity:0.7, display:"block" }} />
-                      <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top,rgba(0,0,0,0.75) 0%,rgba(0,0,0,0.05) 65%)" }} />
-                      <span style={{ position:"absolute", top:10, right:10, display:"flex", alignItems:"center", gap:5, fontSize:11, fontWeight:500, padding:"3px 10px", borderRadius:10, background:bg, color:tc, border:`0.5px solid ${border}` }}>
-                        <i className={`ti ti-${icon}`} style={{ fontSize:11 }} /> {label}
-                      </span>
-                      <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:"12px 14px", display:"flex", alignItems:"flex-end", gap:10 }}>
-                        <div style={{ display:"flex" }}>
-                          {team.images.slice(0,3).map((img,i)=>(
-                            <div key={i} style={{ width:34, height:34, borderRadius:"50%", border:"2px solid rgba(255,255,255,0.4)", overflow:"hidden", marginRight:-8, zIndex:3-i }}>
-                              <img src={img} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
-                            </div>
-                          ))}
-                        </div>
-                        <div>
-                          <div style={{ fontSize:14, fontWeight:500, color:"#fff" }}>{label}</div>
-                          <div style={{ fontSize:11, color:"rgba(255,255,255,0.65)" }}>{team.images.length} members</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ padding:"12px 14px" }}>
-                      {team.description && <p style={{ fontSize:12, color:"#6b7280", lineHeight:1.6, marginBottom:10 }}>{team.description}</p>}
-                      {team.video_urls?.slice(0,2).map((url,i)=>(
-                        <a key={i} href={fixUrl(url)||"#"} target="_blank" rel="noreferrer"
-                          style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize:11, fontWeight:500, padding:"5px 12px", borderRadius:16, cursor:"pointer", border:`0.5px solid ${border}`, background:"#f5f0ff", color, textDecoration:"none", marginRight:6, marginTop:4 }}>
-                          <i className="ti ti-brand-youtube" style={{ fontSize:13 }} /> Watch Video {i+1}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {activeTab==="branches" && <BranchesTab branches={other_branches} mainChurch={church} />}
-          </div>
-
-          {/* ── SIDEBAR ── */}
-          <div>
-            {services.length>0 && (
-              <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:10 }}>
-                <div style={{ padding:"11px 14px 10px", display:"flex", alignItems:"center", gap:8, background:"#f0fdf4", borderBottom:"0.5px solid #bbf7d0" }}>
-                  <div style={{ width:28, height:28, borderRadius:7, background:"#bbf7d0", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-clock" style={{ fontSize:15, color:"#15803d" }} /></div>
-                  <span style={{ fontSize:13, fontWeight:500, color:"#15803d" }}>Service Schedule</span>
-                </div>
-                <div style={{ padding:"8px 14px 12px" }}>
-                  {services.map((s,i)=>{
-                    const st=s.start_time||""; const et=s.end_time||""; const en=s.event_name||s.name||"";
-                    const isToday=s.day?.toLowerCase()===new Date().toLocaleDateString("en-GB",{weekday:"long"}).toLowerCase();
-                    return (
-                      <div key={i} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 0", borderBottom:i<services.length-1?"0.5px solid #e5e7eb":"none", fontSize:12 }}>
-                        <span style={{ minWidth:60, fontWeight:500, color:"#111", flexShrink:0 }}>{s.day}</span>
-                        <span style={{ flex:1, color:"#6b7280", fontSize:11, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {en}{isToday&&<span style={{ background:"#d1fae5", color:"#065f46", fontSize:9, padding:"1px 5px", borderRadius:5, marginLeft:3 }}>Today</span>}
+        {/* Team Photos */}
+        {hasImages && (
+          <div className="mb-6">
+            <h4 className="text-[16px] font-semibold text-slate-800 mb-4">Team Gallery</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {team.details.images.slice(0, 4).map((img, j) => {
+                const isLast = j === 3 && team.details.images.length > 4;
+                return (
+                  <div 
+                    key={j} 
+                    className="aspect-[3/2] rounded-[5px] overflow-hidden border border-slate-100 group/img cursor-pointer shadow-sm hover:shadow-md transition-shadow relative"
+                    onClick={() => onImageClick(team.details.images, j)}
+                  >
+                    <img 
+                      src={getImageUrl(img)} 
+                      alt={`${team.name} ${j}`} 
+                      className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-500" 
+                    />
+                    {isLast && (
+                      <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center transition-opacity group-hover/img:bg-black/70">
+                        <span className="text-white text-base font-semibold">
+                          +{team.details.images.length - 3}
                         </span>
-                        <span style={{ color:"#7c3aed", fontWeight:500, fontSize:10, background:"#f5f0ff", padding:"3px 6px", borderRadius:7, whiteSpace:"nowrap", flexShrink:0 }}>{st}{et?` — ${et}`:""}</span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:10 }}>
-              <div style={{ padding:"11px 14px 10px", display:"flex", alignItems:"center", gap:8, background:"#eff6ff", borderBottom:"0.5px solid #bfdbfe" }}>
-                <div style={{ width:28, height:28, borderRadius:7, background:"#bfdbfe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-map" style={{ fontSize:15, color:"#1d4ed8" }} /></div>
-                <span style={{ fontSize:13, fontWeight:500, color:"#1d4ed8" }}>Location</span>
-              </div>
-              <div style={{ padding:"12px 14px" }}>
-                {lat && lng ? (
-                  <iframe src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY&q=${lat},${lng}&zoom=15`}
-                    style={{ width:"100%", height:150, borderRadius:8, border:"0.5px solid #bfdbfe", marginBottom:10, display:"block" }}
-                    allowFullScreen loading="lazy" title="church location" />
-                ) : (
-                  <div style={{ height:150, background:"#eff6ff", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", border:"0.5px solid #bfdbfe", marginBottom:10 }}>
-                    <i className="ti ti-map" style={{ fontSize:32, color:"#93c5fd" }} />
+                    )}
                   </div>
-                )}
-                {address && <div style={{ fontSize:12, color:"#6b7280", display:"flex", alignItems:"center", gap:4, marginBottom:8 }}><i className="ti ti-map-pin" style={{ fontSize:13, color:"#7c3aed" }} /> {address}</div>}
-                {google_maps_link && (
-                  <a href={google_maps_link} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, width:"100%", background:"#7c3aed", color:"#fff", border:"none", borderRadius:8, padding:8, fontSize:12, fontWeight:500, cursor:"pointer", textDecoration:"none" }}>
-                    <i className="ti ti-navigation" style={{ fontSize:14 }} /> Open in Google Maps
-                  </a>
-                )}
-              </div>
-            </div>
-
-            {video_url && (
-              <div style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:10 }}>
-                <div style={{ padding:"11px 14px 10px", display:"flex", alignItems:"center", gap:8, background:"#fff1f2", borderBottom:"0.5px solid #fecdd3" }}>
-                  <div style={{ width:28, height:28, borderRadius:7, background:"#fecdd3", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-brand-youtube" style={{ fontSize:15, color:"#be123c" }} /></div>
-                  <span style={{ fontSize:13, fontWeight:500, color:"#be123c" }}>Watch Live</span>
-                </div>
-                <div style={{ padding:"12px 14px" }}>
-                  <a href={video_url} target="_blank" rel="noreferrer" style={{ display:"block", textDecoration:"none" }}>
-                    <div style={{ height:100, borderRadius:8, overflow:"hidden", position:"relative", background:"#1a0d3d" }}>
-                      {gallery_images[0] && <img src={gallery_images[0]} alt="video" style={{ width:"100%", height:"100%", objectFit:"cover", opacity:0.65, display:"block" }} />}
-                      <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.25)" }}>
-                        <div style={{ width:40, height:40, borderRadius:"50%", background:"rgba(255,255,255,0.9)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                          <i className="ti ti-player-play" style={{ fontSize:18, color:"#be123c", marginLeft:2 }} />
-                        </div>
-                      </div>
-                    </div>
-                  </a>
-                  <div style={{ fontSize:11, color:"#6b7280", marginTop:7, textAlign:"center" }}>Watch our latest service</div>
-                </div>
-              </div>
-            )}
-
-            <div style={{ background:"#f5f0ff", border:"0.5px solid #ddd6fe", borderRadius:12, padding:"10px 13px", display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-              <div style={{ width:40, height:40, background:"#fff", borderRadius:7, border:"0.5px solid #ddd6fe", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <i className="ti ti-qrcode" style={{ fontSize:24, color:"#c4b5fd" }} />
-              </div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:500, color:"#4c1d95" }}>Scan & Share</div>
-                <div style={{ fontSize:11, color:"#7c3aed", marginTop:1 }}>Share this church listing</div>
-              </div>
-              <button style={{ background:"#7c3aed", border:"none", borderRadius:7, padding:"6px 11px", color:"#fff", fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
-                <i className="ti ti-qrcode" style={{ fontSize:12 }} /> Get QR
-              </button>
+                );
+              })}
             </div>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* ── CONTACT ── */}
-        <div ref={contactRef} style={{ background:"#fff", border:"0.5px solid #e5e7eb", borderRadius:12, overflow:"hidden", marginBottom:16 }}>
-          <div style={{ padding:"13px 16px 11px", display:"flex", alignItems:"center", gap:10, background:"#faf5ff", borderBottom:"0.5px solid #ede9fe" }}>
-            <div style={{ width:30, height:30, borderRadius:8, background:"#ede9fe", display:"flex", alignItems:"center", justifyContent:"center" }}><i className="ti ti-message" style={{ fontSize:16, color:"#7c3aed" }} /></div>
-            <span style={{ fontSize:14, fontWeight:500, color:"#5b21b6" }}>Contact This Church</span>
-            <span style={{ marginLeft:"auto", fontSize:12, color:"#6b7280" }}>We'll get back to you soon</span>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr" }}>
-            <div style={{ padding:"20px 24px", borderRight:"0.5px solid #e5e7eb" }}>
-              <div style={{ fontSize:13, fontWeight:500, color:"#111", marginBottom:14 }}>Send a message</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:9, marginBottom:9 }}>
-                <input placeholder="Your name *" style={{ padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none" }} />
-                <input type="email" placeholder="Your email *" style={{ padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none" }} />
-              </div>
-              <input placeholder="Subject" style={{ width:"100%", padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none", marginBottom:9, boxSizing:"border-box" }} />
-              <textarea placeholder="Your message *" style={{ width:"100%", height:88, padding:"9px 12px", fontSize:13, border:"0.5px solid #e5e7eb", borderRadius:8, background:"#f9fafb", fontFamily:"inherit", outline:"none", resize:"vertical", marginBottom:9, boxSizing:"border-box" }} />
-              <button style={{ width:"100%", background:"#7c3aed", color:"#fff", border:"none", borderRadius:8, padding:10, fontSize:13, fontWeight:500, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"inherit" }}>
-                <i className="ti ti-send" style={{ fontSize:15 }} /> Send Message
-              </button>
-            </div>
-            <div style={{ padding:"20px 24px" }}>
-              <div style={{ fontSize:13, fontWeight:500, color:"#111", marginBottom:14 }}>Get in touch directly</div>
-              {[
-                {icon:"map-pin",bg:"linear-gradient(135deg,#7c3aed,#a78bfa)",label:"Address",value:address},
-                {icon:"phone",bg:"linear-gradient(135deg,#059669,#34d399)",label:"Phone",value:phone,color:"#059669"},
-                {icon:"mail",bg:"linear-gradient(135deg,#1d4ed8,#60a5fa)",label:"Email",value:email,color:"#1d4ed8"},
-                {icon:"clock",bg:"linear-gradient(135deg,#d97706,#fbbf24)",label:"Office hours",value:"Mon–Fri 9:00 AM — 5:00 PM"},
-              ].filter(r=>r.value).map(row=>(
-                <div key={row.label} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"9px 0", borderBottom:"0.5px solid #e5e7eb" }}>
-                  <div style={{ width:36, height:36, borderRadius:9, background:row.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                    <i className={`ti ti-${row.icon}`} style={{ fontSize:15, color:"#fff" }} />
-                  </div>
-                  <div><div style={{ fontSize:11, color:"#6b7280" }}>{row.label}</div><div style={{ fontSize:13, color:row.color||"#111", wordBreak:"break-all" }}>{row.value}</div></div>
+      {/* Team Video Highlights */}
+      {(() => {
+        const urls = team.details?.video_urls?.filter(Boolean) || (team.details?.video_url ? [team.details.video_url] : []);
+        if (urls.length === 0) return null;
+
+        const displayedUrls = isVideosExpanded ? urls : urls.slice(0, 2);
+
+        return (
+          <div className={cn(
+            "pb-2",
+            hasImages && "pt-6 border-t border-slate-50 mt-2"
+          )}>
+            <h4 className="text-[16px] font-semibold text-slate-800 mb-4">Highlights</h4>
+            <div className="grid grid-cols-1 gap-4">
+              {displayedUrls.map((url, idx) => (
+                <div key={idx} className="rounded-[5px] overflow-hidden aspect-video border border-slate-100 shadow-sm relative">
+                  <iframe
+                    className="w-full h-full border-0"
+                    src={getYouTubeEmbedUrl(url)}
+                    title={`${team.name} Video ${idx + 1}`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
                 </div>
               ))}
-              <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
-                {socials.map(soc=>(
-                  <a key={soc.icon} href={soc.href} target="_blank" rel="noreferrer" style={{ width:38, height:38, borderRadius:"50%", background:soc.bg, display:"flex", alignItems:"center", justifyContent:"center", textDecoration:"none" }}>
-                    <i className={`ti ti-${soc.icon}`} style={{ fontSize:19, color:"#fff" }} />
-                  </a>
-                ))}
-              </div>
             </div>
+            
+            {urls.length > 2 && (
+              <button 
+                onClick={() => setIsVideosExpanded(!isVideosExpanded)}
+                className="text-[#6c1cff] text-xs font-bold mt-4 hover:underline flex items-center gap-1 w-full justify-center py-2 bg-slate-50 rounded-[5px] border border-slate-100"
+              >
+                {isVideosExpanded ? (
+                  <>Show Less <ChevronUp size={14} /></>
+                ) : (
+                  <>View More (+{urls.length - 2}) <ChevronDown size={14} /></>
+                )}
+              </button>
+            )}
           </div>
-        </div>
+        );
+      })()}
+    </SectionCard>
+  );
+};
 
-        {/* ── NEARBY CHURCHES ── */}
-        <NearbyChurches currentSlug={slug} city={city} />
+const ChurchDetailPage = () => {
+  const { slug } = useParams();
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+  const [church, setChurch] = useState(null);
+  const [churches, setChurches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("profile");
+  const [pastorProfiles, setPastorProfiles] = useState([]);
+  const [groupedServices, setGroupedServices] = useState({});
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [bookmarkId, setBookmarkId] = useState(null);
+  const [lightbox, setLightbox] = useState({ isOpen: false, images: [], currentIndex: 0 });
+  const [messageData, setMessageData] = useState({ name: '', email: '', phone: '', message: '' });
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [recommendations, setRecommendations] = useState([]);
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
+  const [isBranchesExpanded, setIsBranchesExpanded] = useState(false);
+  // ===== SEO Metadata =====
+  useEffect(() => {
+    if (!church) return;
 
-        {/* ── CHAT WIDGET ── */}
-        <ListingChatWidget entityType="church" entityId={church.id} entityName={church.name} entityRole={church.denomination||"Church"} entityAvatar={church.logo} isOwner={false} />
+    const siteName = 'ChurchNavigator';
+    const title = `${church.name} | ${siteName}`;
+    const description = church.description
+      ? church.description.replace(/<[^>]+>/g, '').slice(0, 155) + '...'
+      : `Find ${church.name} in ${[church.city, church.state].filter(Boolean).join(', ')}. ${church.denomination || ''} church listed on ChurchNavigator.`;
+    const canonical = `https://churchnavigator.com/church/${church.slug}`;
+    const image = church.cover_image || church.logo || 'https://churchnavigator.com/logo.png';
 
+    document.title = title;
+
+    const setMeta = (attr, key, value) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', value);
+    };
+
+    setMeta('name', 'description', description);
+
+    let canonicalEl = document.querySelector('link[rel="canonical"]');
+    if (!canonicalEl) {
+      canonicalEl = document.createElement('link');
+      canonicalEl.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalEl);
+    }
+    canonicalEl.setAttribute('href', canonical);
+
+    setMeta('property', 'og:title', title);
+    setMeta('property', 'og:description', description);
+    setMeta('property', 'og:image', image);
+    setMeta('property', 'og:url', canonical);
+    setMeta('property', 'og:type', 'place');
+    setMeta('property', 'og:site_name', siteName);
+
+    setMeta('name', 'twitter:card', 'summary_large_image');
+    setMeta('name', 'twitter:title', title);
+    setMeta('name', 'twitter:description', description);
+    setMeta('name', 'twitter:image', image);
+
+    return () => {
+      document.title = siteName;
+    };
+  }, [church]);
+
+  // ===== JSON-LD Structured Data =====
+  useEffect(() => {
+    if (!church) return;
+
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "Church",
+      "name": church.name,
+      "description": church.description
+        ? church.description.replace(/<[^>]+>/g, '').slice(0, 200)
+        : `${church.name} is a ${church.denomination || ''} church listed on ChurchNavigator.`,
+      "url": `https://churchnavigator.com/church/${church.slug}`,
+      "telephone": church.phone || undefined,
+      "email": church.email || undefined,
+      "sameAs": [
+        church.website,
+        church.facebook,
+        church.instagram,
+        church.youtube,
+        church.twitter,
+        church.linkedin,
+      ].filter(Boolean),
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": church.address_line1 || undefined,
+        "addressLocality": church.city || undefined,
+        "addressRegion": church.state || undefined,
+        "postalCode": church.zip_code || undefined,
+        "addressCountry": church.country || "GB"
+      },
+      "geo": church.latitude && church.longitude ? {
+        "@type": "GeoCoordinates",
+        "latitude": church.latitude,
+        "longitude": church.longitude
+      } : undefined,
+      "logo": church.logo
+        ? { "@type": "ImageObject", "url": church.logo }
+        : undefined,
+      "image": church.cover_image || church.logo || undefined,
+      "denomination": church.denomination || undefined,
+    };
+
+    // Remove undefined values
+    const cleanSchema = JSON.parse(JSON.stringify(schema));
+
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'church-jsonld';
+    script.textContent = JSON.stringify(cleanSchema);
+    document.head.appendChild(script);
+
+    return () => {
+      const el = document.getElementById('church-jsonld');
+      if (el) el.remove();
+    };
+  }, [church]);
+
+  useEffect(() => {
+    if (church) {
+      fetchRecommendations();
+    }
+  }, [church]);
+
+  const fetchRecommendations = async () => {
+    try {
+      const res = await churchAPI.getAll({ 
+        denomination: church.denomination,
+        limit: 10 
+      });
+      
+      let items = res.data.data || [];
+      items = items.filter(c => c.id !== church.id);
+
+      if (church.latitude && church.longitude) {
+        items.sort((a, b) => {
+          const getDist = (c) => (c.latitude && c.longitude) 
+            ? Math.sqrt(Math.pow(c.latitude - church.latitude, 2) + Math.pow(c.longitude - church.longitude, 2))
+            : Infinity;
+          return getDist(a) - getDist(b);
+        });
+      }
+
+      setRecommendations(items.slice(0, 4));
+    } catch (e) {
+      console.error("Failed to fetch recommendations", e);
+    }
+  };
+
+  const openLightbox = (images, index) => {
+    setLightbox({ isOpen: true, images, currentIndex: index });
+  };
+
+  const nextImage = () => {
+    setLightbox(prev => ({
+      ...prev,
+      currentIndex: (prev.currentIndex + 1) % prev.images.length
+    }));
+  };
+
+  const prevImage = () => {
+    setLightbox(prev => ({
+      ...prev,
+      currentIndex: (prev.currentIndex - 1 + prev.images.length) % prev.images.length
+    }));
+  };
+
+  const scrollToSchedule = () => {
+    if (activeTab !== 'profile') {
+      setActiveTab('profile');
+      // Give React a moment to render the profile tab content/sidebar
+      setTimeout(() => {
+        const element = document.getElementById('service-schedule');
+        if (element) {
+          const offset = 100; // Account for sticky navbar
+          const bodyRect = document.body.getBoundingClientRect().top;
+          const elementRect = element.getBoundingClientRect().top;
+          const elementPosition = elementRect - bodyRect;
+          const offsetPosition = elementPosition - offset;
+
+          window.scrollTo({
+            top: offsetPosition,
+            behavior: 'smooth'
+          });
+        }
+      }, 100);
+      return;
+    }
+
+    const element = document.getElementById('service-schedule');
+    if (element) {
+      const offset = 100; // Account for sticky navbar
+      const bodyRect = document.body.getBoundingClientRect().top;
+      const elementRect = element.getBoundingClientRect().top;
+      const elementPosition = elementRect - bodyRect;
+      const offsetPosition = elementPosition - offset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchChurchDetails();
+    fetchAllChurches();
+  }, [slug]);
+
+  const fetchAllChurches = async () => {
+    try {
+      const res = await churchAPI.getAll({ limit: 500 });
+      setChurches(res.data.data || []);
+    } catch (e) {
+      console.error("Error fetching all churches for lookup:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (church && isAuthenticated) {
+      checkBookmarkStatus();
+    }
+  }, [church, isAuthenticated]);
+
+  const { mainBranch, otherSisterChurches } = React.useMemo(() => {
+    if (!church || !churches.length) return { mainBranch: null, otherSisterChurches: [] };
+    
+    const currentId = church.id;
+    const churchMainId = church.main_branch_id;
+    const hiddenIds = church.hidden_branches || [];
+    
+    const isExplicitExcluded = (id) => !id || id === 'independent' || id === 'none';
+    const isHidden = (c) => hiddenIds.includes(c.id) || hiddenIds.includes(c._id) || hiddenIds.includes(c.slug);
+
+    let main = null;
+    const others = [];
+    const seenIds = new Set();
+
+    const addChurch = (c) => {
+      if (!c) return;
+      const id = c.id || c._id;
+      if (id === currentId || id === church._id || c.slug === church.slug) return;
+      if (seenIds.has(id) || isHidden(c)) return;
+      
+      seenIds.add(id);
+      others.push(c);
+    };
+
+    const findMatch = (idOrSlug) => {
+      if (isExplicitExcluded(idOrSlug)) return null;
+      return churches.find(c => c.id === idOrSlug || c._id === idOrSlug || c.slug === idOrSlug);
+    };
+
+    // 1. Find the Main Branch (if it's not hidden)
+    main = findMatch(churchMainId);
+    if (main && isHidden(main)) main = null;
+
+    // 1.5 Fallback to bidirectional main branch from backend
+    if (!main && church.main_branch_info) {
+      main = church.main_branch_info;
+    }
+
+    churches.forEach(c => {
+      const cMainId = c.main_branch_id;
+      const cId = c.id || c._id;
+      
+      // 2. Is current the main church for 'c'? (Reciprocal)
+      // Check if c.main_branch_id matches current church's ID or Slug
+      if (!isExplicitExcluded(cMainId) && (cMainId === currentId || cMainId === church.slug || cMainId === church._id)) {
+        addChurch(c);
+        return;
+      }
+      
+      // 3. Are they siblings?
+      // Do they share the same parent? (Match parent ID or Slug)
+      if (!isExplicitExcluded(churchMainId) && !isExplicitExcluded(cMainId)) {
+        if (cMainId === churchMainId) {
+          addChurch(c);
+          return;
+        }
+        // Fuzzy sibling: Check if their parent objects are the same
+        const parentOfC = findMatch(cMainId);
+        if (parentOfC && main && (parentOfC.id === main.id || parentOfC.slug === main.slug)) {
+          addChurch(c);
+          return;
+        }
+      }
+      
+      // 4. Other branches explicit links
+      if (church.other_branches?.some(b => {
+        const bId = typeof b === 'string' ? b : (b.id || b._id || b.slug);
+        return bId === cId || bId === c.slug;
+      })) {
+        addChurch(c);
+        return;
+      }
+    });
+
+    const sortedOthers = others.sort((a, b) => {
+      const aIsMain = a.main_branch_id === 'none';
+      const bIsMain = b.main_branch_id === 'none';
+      if (aIsMain && !bIsMain) return -1;
+      if (!aIsMain && bIsMain) return 1;
+      return 0;
+    });
+
+    return { mainBranch: main, otherSisterChurches: sortedOthers };
+  }, [church, churches]);
+
+  const checkBookmarkStatus = async () => {
+    if (!church) return;
+    try {
+      const response = await bookmarkAPI.getAll();
+      const existing = response.data.find(b => b.listing && b.listing.id === church.id);
+      if (existing) {
+        setIsBookmarked(true);
+        setBookmarkId(existing.bookmark_id);
+      } else {
+        setIsBookmarked(false);
+        setBookmarkId(null);
+      }
+    } catch (error) {
+      console.error("Error checking bookmark status:", error);
+    }
+  };
+
+  const handleBookmarkToggle = async () => {
+    if (!isAuthenticated) {
+      toast.info("Please sign in to bookmark churches");
+      navigate('/auth/login', { state: { from: { pathname: `/church/${slug}` } } });
+      return;
+    }
+
+    try {
+      if (isBookmarked) {
+        await bookmarkAPI.remove(bookmarkId);
+        setIsBookmarked(false);
+        setBookmarkId(null);
+        toast.success("Removed from bookmarks");
+      } else {
+        await bookmarkAPI.add(church.id, 'church');
+        await checkBookmarkStatus();
+        toast.success("Saved to bookmarks");
+      }
+    } catch (error) {
+      console.error("Bookmark operation failed:", error);
+      toast.error("Failed to update bookmark");
+    }
+  };
+
+  const fetchChurchDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await churchAPI.getById(slug);
+      if (response.data) {
+        const churchData = response.data;
+        setChurch(churchData);
+        groupServicesByDay(churchData.services || []);
+        fetchPastorProfiles(churchData);
+      }
+    } catch (error) {
+      console.error("Error fetching church details:", error);
+      toast.error("Could not load church details");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const trackView = async () => {
+    if (!church) return;
+    try {
+      await analyticsAPI.track({
+        listing_id: church.id,
+        listing_type: 'church',
+        event_type: 'view',
+        session_id: getSessionId(),
+        referrer: document.referrer
+      });
+    } catch (error) {
+      console.error("Error tracking view:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (church) {
+      trackView();
+    }
+  }, [church]);
+
+  const groupServicesByDay = (services) => {
+    const formatRange = (start, end, endsNextDay) => {
+      const s = formatTimeTo12h(start);
+      const e = formatTimeTo12h(end);
+      if (!s) return e ? (e + (endsNextDay ? " (+1 day)" : "")) : "";
+      if (!e) return s;
+      return `${s} — ${e}${endsNextDay ? " (+1 day)" : ""}`;
+    };
+
+    // Filter out services that are effectively empty (no day, no event name, and default time)
+    const validServices = (services || []).filter(s => {
+      const hasDay = !!s.day;
+      const hasName = !!(s.event_name || s.name || s.title);
+      const hasTime = s.start_time && s.start_time !== '::PM';
+      return hasDay || hasName || hasTime;
+    });
+
+    const grouped = validServices.reduce((acc, service) => {
+      const day = service.day || 'Special';
+      if (!acc[day]) acc[day] = [];
+      const rawTitle = service.event_name || service.name || service.title || 'Service';
+      const capitalizedTitle = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+      
+      acc[day].push({
+        time: formatRange(service.start_time, service.end_time, service.ends_next_day),
+        title: capitalizedTitle
+      });
+      return acc;
+    }, {});
+    setGroupedServices(grouped);
+  };
+
+  const fetchPastorProfiles = async (churchData) => {
+    try {
+      let profiles = [];
+
+      // 1. Try relationships
+      const relResponse = await relationshipAPI.getByChurch(churchData.id);
+      const relationships = relResponse.data || [];
+      
+      if (relationships.length > 0) {
+        profiles = await Promise.all(
+          relationships
+            .filter(r => r.status === 'approved' && (r.pastor_id || r.pastor_details))
+            .map(async (r) => {
+              try {
+                const fullPastor = await pastorAPI.getById(r.pastor_id);
+                return { ...fullPastor.data, role: r.role };
+              } catch (e) {
+                return { ...r.pastor_details, id: r.pastor_id, role: r.role };
+              }
+            })
+        );
+      }
+
+      // 2. Try direct church record pastor_id if profiles still empty
+      if (profiles.length === 0 && (churchData.pastor_id || churchData.pastor_slug)) {
+        try {
+          const directPastor = await pastorAPI.getById(churchData.pastor_id || churchData.pastor_slug);
+          if (directPastor.data) {
+            profiles.push({ ...directPastor.data, role: 'Senior Pastor' });
+          }
+        } catch (e) {}
+      }
+
+      // 3. Fallback to basic names
+      if (profiles.length === 0 && churchData.pastor_name) {
+        setPastorProfiles([{
+          name: churchData.pastor_name,
+          role: 'Pastor',
+          profile_picture: churchData.pastor_image
+        }]);
+      } else {
+        setPastorProfiles(profiles.slice(0, 1));
+      }
+    } catch (error) {
+      console.error("Error fetching pastor profiles:", error);
+    }
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: church.name,
+        text: church.tagline,
+        url: window.location.href,
+      }).catch(console.error);
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copied to clipboard!");
+    }
+  };
+
+  const handleDownloadQR = () => {
+    const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`;
+    const link = document.createElement('a');
+    link.href = qrImage;
+    link.download = `${church.name.replace(/\s+/g, '_')}_QR.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!messageData.name || !messageData.email || !messageData.phone || !messageData.message) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    const cleanPhone = messageData.phone.trim().replace(/[\s\-\(\)]/g, '');
+    if (!/^\+?[0-9]{8,15}$/.test(cleanPhone)) {
+      toast.error("Please enter a valid phone number (8 to 15 digits)");
+      return;
+    }
+
+    try {
+      setSendingMessage(true);
+      await messageAPI.submit(slug, messageData);
+      toast.success("Message sent successfully!");
+      setMessageData({ name: '', email: '', phone: '', message: '' });
+    } catch (error) {
+      toast.error("Failed to send message. Please try again.");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-4">
+        <Sparkles className="w-12 h-12 text-[#6c1cff] animate-pulse" />
+        <p className="text-slate-400 font-medium animate-pulse">Gathering community details...</p>
       </div>
-
-      {/* ── FOOTER (full width) ── */}
-      <Footer />
-
     </div>
   );
-}
+
+  if (!church) return null;
+
+  const currentStatus = isOpenNow(church?.services || []);
+
+  const teams = [
+    { 
+      name: "Praise & Worship Team", 
+      icon: Music, 
+      details: church.worship_team 
+    },
+    { 
+      name: "IT & Media Team", 
+      icon: Camera, 
+      details: church.it_media_team 
+    },
+    { 
+      name: "Outreach Team", 
+      icon: Users, 
+      details: church.outreach_team 
+    }
+  ].filter(t => t.details && (t.details.description || (t.details.images && t.details.images.length > 0) || t.details.video_url));
+
+  // Handle ministries (can be strings or objects)
+  const otherTeams = (church.ministries || [])
+    .map(m => {
+      // If it's a string, normalize to object-like structure
+      if (typeof m === 'string') {
+        return {
+          name: m,
+          icon: Users,
+          details: { description: '', images: [], video_url: '' }
+        };
+      }
+      // If it's an object from WordPress/other source
+      return {
+        name: m.name,
+        icon: Users,
+        details: { 
+          description: m.description, 
+          images: m.images || [], 
+          video_url: m.video_url 
+        }
+      };
+    })
+    // 1. Filter out primary teams to avoid duplication (keyword-based)
+    .filter(t => {
+      const n = t.name?.toLowerCase() || "";
+      const isPrimary = ["praise", "worship", "it", "media", "outreach", "sound"].some(k => n.includes(k));
+      return !isPrimary;
+    })
+    // 2. Strict Filter: Only show if it has rich details (for the Our Team tab)
+    // Simple ministries stay in the Profile tab as badges
+    .filter(t => t.details && (t.details.description || (t.details.images && t.details.images.length > 0) || t.details.video_url));
+
+  const allTeams = [...teams, ...otherTeams];
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: '#f4f4f4' }}>
+      <NavbarPremium />
+
+      {/* Banner */}
+      <div className="relative">
+        <div className="h-56 sm:h-72 md:h-80 overflow-hidden">
+          {church.cover_image ? (
+            <img 
+              src={getImageUrl(church.cover_image, 1200)} 
+              alt={church.name} 
+              className="w-full h-full object-cover" 
+            />
+          ) : (
+            <div className="w-full h-full bg-slate-200 flex items-center justify-center">
+              <Church className="h-20 w-20 text-slate-400/20" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/50 via-transparent to-slate-900/10" />
+        </div>
+        <div className="max-w-7xl mx-auto px-4 relative">
+          <div className={cn(
+            "absolute -bottom-12 left-4 w-24 h-24 rounded-full bg-white border-4 border-white shadow-xl flex items-center justify-center overflow-hidden ring-2 ring-[#6c1cff]/20",
+            !church.logo && "p-5"
+          )}>
+            {church.logo ? (
+              <img src={getImageUrl(church.logo, 200, 200)} alt={church.name} className="w-full h-full object-cover" />
+            ) : (
+              <img src={getFallbackImage('church')} alt={church.name} className="w-full h-full object-cover" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Header info */}
+      <div className="max-w-7xl mx-auto px-4 pt-16 pb-0 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-700">{church.name}</h1>
+              {church.is_verified && (
+                <span className="px-2.5 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Verified
+                </span>
+              )}
+            </div>
+            {church.tagline && (
+              <p className="text-slate-500 text-sm mt-1.5 italic">{church.tagline}</p>
+            )}
+            <div className="flex items-center gap-3 mt-2 text-sm text-slate-500 flex-wrap">
+              <span className="flex items-center gap-1"><MapPin size={14} /> {[church.city, church.state].filter(Boolean).join(', ')}</span>
+            </div>
+          </div>
+          <Button 
+            onClick={scrollToSchedule}
+            className={cn(
+              "gap-2 shrink-0 self-start shadow-xl transition-all font-medium px-6 h-11 rounded-full border-none",
+              currentStatus 
+                ? "bg-green-600 hover:bg-green-700 text-white shadow-green-600/20" 
+                : "bg-[#f6c5ff] hover:bg-[#efb1f9] text-slate-600 shadow-[#f6c5ff]/40"
+            )}
+          >
+            <Clock size={16} /> 
+            {currentStatus ? "Open Now" : "See Open Hours"}
+          </Button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-6 mt-6 border-b border-slate-200">
+          <button
+            onClick={() => setActiveTab("profile")}
+            className={`pb-3 text-sm font-semibold transition-all border-b-2 ${activeTab === "profile" ? "border-[#6c1cff] text-[#6c1cff]" : "border-transparent text-slate-400 hover:text-slate-600"}`}
+          >
+            Profile
+          </button>
+          {allTeams.length > 0 && (
+            <button
+              onClick={() => setActiveTab("our-team")}
+              className={`pb-3 text-sm font-semibold transition-all border-b-2 flex items-center gap-1.5 ${activeTab === "our-team" ? "border-[#6c1cff] text-[#6c1cff]" : "border-transparent text-slate-400 hover:text-slate-600"}`}
+            >
+              Our Team
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Action buttons row */}
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          {[
+            { 
+              icon: Navigation, 
+              label: "Get directions", 
+              primary: true, 
+              onClick: () => {
+                const query = (church.latitude && church.longitude) 
+                  ? `${church.latitude},${church.longitude}` 
+                  : `${church.address_line1}, ${church.city}`;
+                window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}`);
+              } 
+            },
+            { icon: PhoneCall, label: "Call now", onClick: () => church.phone && window.open(`tel:${church.phone}`) },
+            { icon: Link2, label: "Website", onClick: () => church.website && window.open(ensureExternalUrl(church.website)) },
+            { 
+              icon: isBookmarked ? Heart : Bookmark, 
+              label: isBookmarked ? "Saved" : "Bookmark", 
+              active: isBookmarked,
+              onClick: handleBookmarkToggle 
+            },
+            { icon: Share2, label: "Share", onClick: handleShare },
+            { 
+              icon: ShieldCheck,
+              label: "Claim listing",
+              primary: false,
+              onClick: () => {
+                if (!isAuthenticated) {
+                  toast.info("Please sign in to claim this listing");
+                  navigate('/auth/login', { state: { from: { pathname: `/church/${slug}` } } });
+                  return;
+                }
+                setIsClaimModalOpen(true);
+              }
+            },
+          ].map((btn) => (
+            <button
+              key={btn.label}
+              onClick={btn.onClick}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-sm whitespace-nowrap shrink-0 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+                btn.primary
+                  ? "bg-[#6c1cff] text-white border-[#6c1cff] shadow-md shadow-[#6c1cff]/20 hover:shadow-lg hover:shadow-[#6c1cff]/30"
+                  : btn.active
+                    ? "bg-[#6c1cff]/10 text-[#6c1cff] border-[#6c1cff] font-semibold"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-[#6c1cff] hover:text-[#6c1cff] hover:shadow-sm"
+              }`}
+            >
+              <btn.icon size={16} className={btn.active ? "fill-[#6c1cff]" : ""} /> {btn.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Layout Container */}
+      <div className="max-w-7xl mx-auto px-4 pb-12 transition-all duration-500">
+        <div className={activeTab === 'profile' ? "grid lg:grid-cols-5 gap-6" : "block"}>
+
+          {/* LEFT COLUMN — Main content */}
+          <div className={cn("space-y-6", activeTab === 'profile' && "lg:col-span-3")}>
+            {activeTab === "profile" ? (
+              <>
+                {/* About Church */}
+                <SectionCard className="p-6">
+                  <SectionHeading 
+                    icon={Church} 
+                    title="About Church" 
+                  />
+                  <div 
+                    className="text-slate-700 text-sm leading-relaxed mb-5" 
+                    dangerouslySetInnerHTML={{ __html: church.description || "Welcome to our spiritual community." }} 
+                  />
+                  <div className="grid sm:grid-cols-1 gap-3">
+                    <div className="flex items-center gap-3 p-4 rounded-[5px] bg-gradient-to-r from-[#6c1cff]/5 to-slate-50 border border-[#6c1cff]/10 hover:border-[#6c1cff]/25 transition-colors w-fit">
+                      <div className="w-10 h-10 rounded-[5px] bg-[#6c1cff]/10 flex items-center justify-center shrink-0">
+                        <Globe size={18} className="text-[#6c1cff]" />
+                      </div>
+                      <div className="min-w-0 pr-4">
+                        <p className="text-xs text-slate-400 font-medium tracking-tight">Denomination</p>
+                        <p className="text-sm text-slate-800 font-medium truncate">
+                          {church.denomination || 'Apostolic'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </SectionCard>
+
+                {/* Pastor Section */}
+                {(pastorProfiles.length > 0 || church.pastor_name) && (
+                  <SectionCard className="p-6">
+                    <SectionHeading 
+                      icon={User} 
+                      title="Pastor" 
+                    />
+                    <div className="space-y-5 mt-2">
+                      {pastorProfiles.map((p, idx) => {
+                        const linkId = p?.slug || church.pastor_slug || p?.id || p?._id || church.pastor_id;
+                        const hasLink = !!linkId;
+                        const displayName = p?.name || church.pastor_name || 'Senior Pastor';
+                        const profilePic = p?.profile_picture || church.pastor_image;
+
+                        return (
+                          <div 
+                            key={idx}
+                            onClick={() => hasLink && navigate(`/pastor/${linkId}`)}
+                            className={cn(
+                              "flex items-center gap-4 transition-all group",
+                              hasLink && "cursor-pointer"
+                            )}
+                          >
+                              <div className={cn(
+                                "w-16 h-16 rounded-full overflow-hidden border-2 border-[#6c1cff]/10 group-hover:border-[#6c1cff]/30 transition-all bg-slate-100 flex items-center justify-center",
+                                !profilePic && "p-3"
+                              )}>
+                                {profilePic ? (
+                                  <img 
+                                    src={getImageUrl(profilePic, 120, 120)} 
+                                    alt={displayName} 
+                                    className="w-full h-full object-cover transition-transform group-hover:scale-105" 
+                                  />
+                                ) : (
+                                  <img 
+                                    src={getFallbackImage('pastor')} 
+                                    alt={displayName} 
+                                    className="w-full h-full object-cover transition-transform group-hover:scale-105" 
+                                  />
+                                )}
+                              </div>
+                            <div className="min-w-0">
+                              <h3 className={cn(
+                                "text-[16px] font-bold text-slate-800 transition-colors",
+                                hasLink && "group-hover:text-[#6c1cff]"
+                              )}>
+                                {displayName}
+                              </h3>
+                              <p className="text-xs text-slate-400 font-medium">{p.role || (idx === 0 ? "Senior Pastor" : "Pastor")}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </SectionCard>
+                )}
+
+                {/* Worship Styles Section */}
+                {church.worship_styles?.length > 0 && (
+                  <div className="mb-6">
+                    <SectionCard className="p-6">
+                      <SectionHeading icon={Sparkles} title="Worship Styles" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-3 mt-4">
+                        {church.worship_styles.map(s => (
+                          <div key={s} className="flex items-center gap-3 group" title={s}>
+                            <div className="w-9 h-9 rounded-full bg-[#6c1cff]/5 flex items-center justify-center group-hover:bg-[#6c1cff]/10 transition-colors flex-shrink-0">
+                              <Sparkles size={15} className="text-[#6c1cff]" />
+                            </div>
+                            <span className="text-[13px] font-medium text-slate-800 truncate">{s}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  </div>
+                )}
+
+                {/* Facilities Section */}
+                {church.facilities?.length > 0 && (
+                  <div className="mb-6">
+                    <SectionCard className="p-6">
+                      <SectionHeading icon={Building2} title="Facilities" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-3 mt-4">
+                        {church.facilities.map(f => (
+                          <div key={f} className="flex items-center gap-3 group" title={f}>
+                            <div className="w-9 h-9 rounded-full bg-[#6c1cff]/5 flex items-center justify-center group-hover:bg-[#6c1cff]/10 transition-colors flex-shrink-0">
+                              <Building2 size={15} className="text-[#6c1cff]" />
+                            </div>
+                            <span className="text-[13px] font-medium text-slate-800 truncate">{f}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  </div>
+                )}
+
+                {/* Ministries Section */}
+                {church.ministries && church.ministries.length > 0 && (
+                  <SectionCard className="p-6">
+                    <SectionHeading icon={HeartHandshake} title="Ministries" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-3 mt-4">
+                      {church.ministries.map(m => (
+                        <div key={m} className="flex items-center gap-3 group" title={m}>
+                          <div className="w-9 h-9 rounded-full bg-[#6c1cff]/5 flex items-center justify-center group-hover:bg-[#6c1cff]/10 transition-colors flex-shrink-0">
+                            <HeartHandshake size={15} className="text-[#6c1cff]" />
+                          </div>
+                          <span className="text-[13px] font-medium text-slate-800 truncate">{m}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </SectionCard>
+                )}
+
+                {/* Languages Section */}
+                {church.languages?.length > 0 && (
+                  <div className="mb-6">
+                    <SectionCard className="p-6">
+                      <SectionHeading icon={Languages} title="Languages" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-3 mt-4">
+                        {church.languages.map(l => (
+                          <div key={l} className="flex items-center gap-3 group" title={l}>
+                            <div className="w-9 h-9 rounded-full bg-[#6c1cff]/5 flex items-center justify-center group-hover:bg-[#6c1cff]/10 transition-colors flex-shrink-0">
+                              <Languages size={15} className="text-[#6c1cff]" />
+                            </div>
+                            <span className="text-[13px] font-medium text-slate-800 truncate">{l}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  </div>
+                )}
+
+                {/* Gallery */}
+                {church.gallery_images?.length > 0 && (
+                  <div className="mb-6">
+                    <SectionCard className="p-6">
+                      <SectionHeading icon={Camera} title="Gallery" />
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {church.gallery_images.slice(0, 6).map((img, i) => {
+                          const isLast = i === 5 && church.gallery_images.length > 6;
+                          return (
+                            <div 
+                              key={i} 
+                              className="aspect-[4/3] rounded-[5px] overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-all group relative" 
+                              onClick={() => openLightbox(church.gallery_images, i)}
+                            >
+                              <img
+                                src={getImageUrl(img)}
+                                alt={`Gallery ${i}`}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                              />
+                              {isLast && (
+                                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center transition-opacity group-hover:bg-black/70">
+                                  <span className="text-white text-xl md:text-2xl font-bold">
+                                    +{church.gallery_images.length - 5}
+                                  </span>
+                                  <span className="text-white/80 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mt-1">
+                                    View More
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </SectionCard>
+                  </div>
+                )}
+
+                {/* Video */}
+                {church.video_url && (
+                  <SectionCard className="p-6">
+                    <SectionHeading icon={Video} title="Featured Video" />
+                    <div className="rounded-[5px] overflow-hidden aspect-video shadow-lg">
+                      <iframe
+                        className="w-full h-full border-0"
+                        src={getYouTubeEmbedUrl(church.video_url)}
+                        title="Church Video"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  </SectionCard>
+                )}
+              </>
+            ) : (
+              /* Our Team Tab Content - Dynamic Grid (1, 2, or 3 Columns) */
+              <div className={cn(
+                "grid gap-6 animate-in fade-in duration-500",
+                allTeams.length === 1 ? "grid-cols-1 max-w-2xl mx-auto" : 
+                allTeams.length === 2 ? "grid-cols-1 md:grid-cols-2" : 
+                "grid-cols-1 md:grid-cols-3"
+              )}>
+                {allTeams.length > 0 ? (
+                  allTeams.map((team, i) => (
+                    <TeamCard key={i} team={team} i={i} onImageClick={openLightbox} />
+                  ))
+                ) : (
+                  <div className="col-span-full">
+                    <SectionCard className="p-12 text-center text-slate-400">
+                      <Users className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                      <p className="font-medium">No team details available yet.</p>
+                    </SectionCard>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT COLUMN — Sidebar (Conditional) */}
+          {activeTab === 'profile' && (
+            <div className="space-y-6 sticky top-24 self-start lg:col-span-2">
+              {/* Service Schedule */}
+              {Object.keys(groupedServices).length > 0 && (
+                <div id="service-schedule">
+                  <SectionCard className="p-5">
+                    <SectionHeading icon={Clock} title="Service Schedule" />
+                    <div className="space-y-2.5">
+                      {Object.entries(groupedServices).map(([day, times]) => (
+                        <div key={day} className="space-y-2 last:pb-0 border-b last:border-0 border-slate-50 pb-2">
+                          <div className="space-y-1.5">
+                            {times.map((t, idx) => (
+                              <div key={idx} className="flex gap-1.5 text-[13px] text-slate-600 font-medium leading-relaxed items-center">
+                                <span className="w-[84px] shrink-0 tracking-tight">{day}</span>
+                                <span className="text-slate-200 text-[10px] shrink-0 font-normal">|</span>
+                                <span className="flex-1 truncate font-medium text-slate-500 pl-1">{t.title}</span>
+                                {t.time && (
+                                  <>
+                                    <span className="text-slate-200 text-[10px] shrink-0 font-normal">•</span>
+                                    <span className="shrink-0 font-medium text-slate-700">{t.time}</span>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </SectionCard>
+                </div>
+              )}
+
+
+
+              {/* Location Map */}
+              <SectionCard className="overflow-hidden p-5">
+                <SectionHeading icon={MapPin} title="Location" />
+                <div className="h-48 relative rounded-[5px] overflow-hidden mb-5">
+                  <GoogleMap 
+                    address={church.address_line1}
+                    city={church.city}
+                    state={church.state}
+                    latitude={church.latitude}
+                    longitude={church.longitude}
+                    churchName={church.name}
+                  />
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { icon: MapPin, text: [church.address_line1, church.city, church.state].filter(Boolean).join(', ') + (church.zip_code ? ` ${church.zip_code}` : ''), isLink: false, show: !!(church.address_line1 || church.city || church.state) },
+                    { icon: Phone, text: church.phone, isLink: true, href: `tel:${church.phone}`, show: !!church.phone },
+                    { icon: Mail, text: church.email, isLink: true, href: `mailto:${church.email}`, show: !!church.email },
+                    { icon: Globe, text: church.website, isLink: true, href: church.website?.startsWith('http') ? church.website : `https://${church.website}`, show: !!church.website },
+                  ].filter(item => item.show).map((item, idx) => (
+                    <div key={idx} className="flex items-start gap-3 group">
+                      <div className="w-8 h-8 rounded-[5px] bg-[#6c1cff]/10 flex items-center justify-center shrink-0 group-hover:bg-[#6c1cff]/20 transition-colors">
+                        <item.icon size={14} className="text-[#6c1cff]" />
+                      </div>
+                      {item.isLink ? (
+                        <a href={item.href} target="_blank" rel="noreferrer" className="text-sm text-[#6c1cff] hover:underline pt-1.5 transition-colors break-all">{item.text}</a>
+                      ) : (
+                        <p className="text-sm text-slate-800 pt-1.5 leading-tight break-words">{item.text}</p>
+                      )}
+                    </div>
+                  ))}
+                  <div className="pt-3 mt-1 border-t border-slate-100 flex flex-wrap gap-2">
+                    {[
+                      { icon: Instagram, url: church.instagram, label: "Instagram", hover: "hover:bg-[#E4405F] hover:border-[#E4405F]" },
+                      { icon: Youtube, url: church.youtube, label: "YouTube", hover: "hover:bg-[#FF0000] hover:border-[#FF0000]" },
+                      { icon: Facebook, url: church.facebook, label: "Facebook", hover: "hover:bg-[#1877F2] hover:border-[#1877F2]" },
+                      { icon: Linkedin, url: church.linkedin, label: "LinkedIn", hover: "hover:bg-[#0A66C2] hover:border-[#0A66C2]" },
+                      { icon: XIcon, url: church.twitter, label: "X", hover: "hover:bg-black hover:border-black" },
+                    ].map((s) => (
+                      <a
+                        key={s.label}
+                        href={ensureExternalUrl(s.url)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn(
+                          "w-11 h-11 rounded-full border border-slate-100 flex items-center justify-center transition-all duration-300 text-slate-500 hover:text-white hover:scale-110 active:scale-95 shadow-sm hover:shadow-md",
+                          s.hover,
+                          !s.url && "hidden"
+                        )}
+                        title={s.label}
+                      >
+                        <s.icon size={22} />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </SectionCard>
+
+              {/* QR Code */}
+              <SectionCard className="p-5">
+                <SectionHeading icon={QrCode} title="Scan Now" />
+                <div className="flex justify-center mb-6">
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.href)}`} 
+                    alt="QR" 
+                    className="w-32 h-32"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={handleDownloadQR}
+                    className="flex-1 gap-1.5 border-[#6c1cff] text-[#6c1cff] hover:bg-[#6c1cff] hover:text-white text-[11px] transition-all h-10 rounded-[5px] font-normal px-2"
+                  >
+                    <ExternalLink size={14} /> Download
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleShare}
+                    className="flex-1 gap-1.5 border-slate-200 text-slate-600 hover:border-[#6c1cff] hover:text-[#6c1cff] text-[11px] transition-all h-10 rounded-[5px] font-normal px-2"
+                  >
+                    <Share2 size={14} /> Share
+                  </Button>
+                </div>
+              </SectionCard>
+
+              {/* Contact Form */}
+              <div className="bg-white rounded-[5px] p-5 border border-slate-200 shadow-sm">
+                <SectionHeading icon={Mail} title="Contact Form" />
+                <form className="space-y-3" onSubmit={handleSendMessage}>
+                  <input 
+                    type="text" 
+                    placeholder="Your Name" 
+                    value={messageData.name}
+                    onChange={(e) => setMessageData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-[5px] border border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#6c1cff]/10 focus:border-[#6c1cff] transition-all text-sm outline-none"
+                  />
+                  <div className="space-y-1">
+                    <input 
+                      type="email" 
+                      placeholder="Your Email" 
+                      value={messageData.email}
+                      onChange={(e) => setMessageData(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-[5px] border border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#6c1cff]/10 focus:border-[#6c1cff] transition-all text-sm outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <input 
+                      type="tel" 
+                      placeholder="Your Phone Number" 
+                      value={messageData.phone || ''}
+                      onChange={(e) => setMessageData(prev => ({ ...prev, phone: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-[5px] border border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#6c1cff]/10 focus:border-[#6c1cff] transition-all text-sm outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <textarea 
+                      placeholder="Write your message..." 
+                      rows={4}
+                      value={messageData.message}
+                      onChange={(e) => setMessageData(prev => ({ ...prev, message: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-[5px] border border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#6c1cff]/10 focus:border-[#6c1cff] transition-all text-sm outline-none resize-none"
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={sendingMessage}
+                    className="w-full bg-[#6c1cff] text-white hover:bg-[#5a15d4] h-11 rounded-[5px] font-bold shadow-lg shadow-[#6c1cff]/10 gap-2 transition-all active:scale-95"
+                  >
+                    <Send size={15} /> Send
+                  </Button>
+                </form>
+              </div>
+
+              {/* Network & Branches */}
+              {(mainBranch || otherSisterChurches.length > 0 || church.main_branch_id === 'none') && (
+                <SectionCard className="p-5">
+                  <SectionHeading icon={Layers} title="Branch Churches" />
+                  
+                  {/* Status Indicator removed */}
+                  {mainBranch && (
+                    <div className="mb-6">
+                      <div 
+                        onClick={() => navigate(`/church/${mainBranch.slug || mainBranch.id}`)}
+                        className="relative flex items-center gap-3 p-4 rounded-[5px] bg-white border border-slate-100 hover:border-[#6c1cff]/30 hover:bg-[#6c1cff]/5 transition-all cursor-pointer group"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-white border border-[#6c1cff]/10 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                          {mainBranch.logo ? (
+                            <img src={getImageUrl(mainBranch.logo)} alt={mainBranch.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <img src={getFallbackImage('church')} alt={mainBranch.name} className="w-full h-full object-cover" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 group-hover:text-[#6c1cff] transition-colors line-clamp-1 pr-16">
+                            {mainBranch.name}
+                          </p>
+                          {(mainBranch.city || mainBranch.state) && (
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {[mainBranch.city, mainBranch.state].filter(Boolean).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sister/Sibling Churches */}
+                  {otherSisterChurches.length > 0 && (
+                    <div className="space-y-3">
+                      {(isBranchesExpanded ? otherSisterChurches : otherSisterChurches.slice(0, 3)).map((resolvedBranch, idx) => {
+                        const branchName = resolvedBranch?.name || 
+                                         resolvedBranch?.church_name || 
+                                         'Secondary Branch';
+                        
+                        const branchSlug = resolvedBranch?.slug || resolvedBranch?.id;
+                        
+                        return (
+                          <div 
+                            key={idx} 
+                            onClick={() => branchSlug && navigate(`/church/${branchSlug}`)}
+                            className={cn(
+                              "relative flex items-center gap-3 transition-all group rounded-[5px] border p-4",
+                              branchSlug && "cursor-pointer",
+                              "border-slate-100 hover:border-[#6c1cff]/30 hover:bg-[#6c1cff]/5"
+                            )}
+                          >
+                            <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                              {resolvedBranch.logo ? (
+                                <img src={getImageUrl(resolvedBranch.logo)} alt={branchName} className="w-full h-full object-cover" />
+                              ) : (
+                                <img src={getFallbackImage('church')} alt={branchName} className="w-full h-full object-cover" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold transition-colors line-clamp-1 text-slate-700 font-medium">
+                                {branchName}
+                              </p>
+                              {(resolvedBranch?.city || resolvedBranch?.state) && (
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  {[resolvedBranch.city, resolvedBranch.state].filter(Boolean).join(', ')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {otherSisterChurches.length > 3 && (
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => setIsBranchesExpanded(!isBranchesExpanded)}
+                          className="w-full text-[#6c1cff] hover:text-[#5a15d4] hover:bg-[#6c1cff]/5 text-xs font-bold gap-1.5 h-9 rounded-[5px]"
+                        >
+                          {isBranchesExpanded ? (
+                            <>Show Less <ChevronUp size={14} /></>
+                          ) : (
+                            <>View More ({otherSisterChurches.length - 3}) <ChevronDown size={14} /></>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </SectionCard>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Recommended Churches Section */}
+      <div className="max-w-7xl mx-auto px-4 py-16 border-t border-slate-100">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-slate-800">You may also be interested in</h2>
+          <p className="text-slate-500 mt-1">Discover more churches within the {church.denomination} community</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {recommendations.slice(0, 3).map(item => (
+            <ChurchCard key={item.id} church={item} />
+          ))}
+          
+          {/* Explore All Card */}
+          <Link 
+            to="/explore"
+            className="group block h-full min-h-[350px]"
+          >
+            <div className="h-full rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 flex flex-col items-center justify-center p-6 text-center transition-all duration-300 group-hover:bg-white group-hover:border-[#6c1cff] group-hover:border-solid hover:shadow-md">
+              <div className="w-16 h-16 rounded-full bg-[#6c1cff]/10 flex items-center justify-center text-[#6c1cff] mb-4 group-hover:scale-110 transition-transform">
+                <Globe size={30} />
+              </div>
+              <h3 className="font-bold text-lg text-slate-800 mb-2">Explore All</h3>
+              <p className="text-sm text-slate-500">View our entire directory of spiritual communities</p>
+              <div className="mt-6 flex items-center justify-center w-10 h-10 rounded-full bg-white border border-slate-200 text-[#6c1cff] group-hover:bg-[#6c1cff] group-hover:text-white transition-colors">
+                <ChevronRight size={20} />
+              </div>
+            </div>
+          </Link>
+        </div>
+      </div>
+
+      <Lightbox 
+        isOpen={lightbox.isOpen}
+        images={lightbox.images}
+        currentIndex={lightbox.currentIndex}
+        onClose={() => setLightbox(prev => ({ ...prev, isOpen: false }))}
+        onNext={nextImage}
+        onPrev={prevImage}
+      />
+
+      {church && (
+        <ClaimListingModal 
+          isOpen={isClaimModalOpen}
+          onClose={() => setIsClaimModalOpen(false)}
+          listingId={church.id}
+          listingType="church"
+          listingName={church.name}
+        />
+      )}
+
+      <Footer />
+    </div>
+  );
+};
+
+export default ChurchDetailPage;
