@@ -1550,6 +1550,11 @@ const ChurchDetailPage = () => {
 // Uses Claude API to respond intelligently based on church data
 // Saves conversations to backend MongoDB
 
+// ── AI-Powered ChurchChatWidget ──────────────────────────────────────────────
+// Drop-in replacement for ChurchChatWidget in ChurchDetailPage.js
+// Uses Claude API to respond intelligently based on church data
+// Saves conversations to backend MongoDB
+
 function ChurchChatWidget({ church }) {
   const [open, setOpen] = React.useState(false);
   const [tab, setTab] = React.useState("chat");
@@ -1851,6 +1856,5 @@ NEVER:
     </div>
   );
 }
-
 
 export default ChurchDetailPage;
