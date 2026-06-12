@@ -1,23 +1,25 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import HomePage from './pages/HomePage';
-import ChurchListPage from './pages/ChurchListPage';
 import ChurchDetailPage from './pages/ChurchDetailPage';
-import VisitorRegisterPage from './pages/VisitorRegisterPage';
-import VisitorDashboard from './pages/admin/VisitorDashboard';
+import SearchPage from './pages/SearchPage';
+import AISearchChatbot from './components/AISearchChatbot';
 import './App.css';
 
 function App() {
   return (
     <Router>
       <div className="App">
+        <Navbar />
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/churches" element={<ChurchListPage />} />
-          <Route path="/church/:slug" element={<ChurchDetailPage />} />
-          <Route path="/church/:slug/visit" element={<VisitorRegisterPage />} />
-          <Route path="/admin/visitors" element={<VisitorDashboard />} />
+          <Route path="/churches/:id" element={<ChurchDetailPage />} />
+          <Route path="/search" element={<SearchPage />} />
         </Routes>
+        <Footer />
+        <AISearchChatbot />
       </div>
     </Router>
   );
