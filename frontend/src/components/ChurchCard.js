@@ -1,98 +1,33 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Phone } from 'lucide-react';
-import { Badge } from './ui/badge';
-import { getImageUrl, getFallbackImage, isOpenNow } from '../lib/utils';
+import { getOptimizedImageUrl } from '../utils/imageUtils';
 
-export const ChurchCard = ({ church, dark }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const openStatus = isOpenNow(church.service_timings || church.services);
+const ChurchCard = ({ church }) => {
+  const imageUrl = church.image_url || 'https://ik.imagekit.io/cuizrvzly/church_navigator/default-church.jpg';
+  const optimizedUrl = getOptimizedImageUrl(imageUrl, 400, 80);
 
   return (
-    <div
-      className="relative group"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <Link
-        to={`/church/${church.slug || church.id}`}
-        className="absolute inset-0 z-10"
-        data-testid={`church-card-${church.id}`}
-        aria-label={church.name}
-      />
-      <div className={`rounded-2xl border transition-all duration-300 overflow-hidden group-hover:-translate-y-1 ${
-        dark 
-          ? 'bg-white/7 border-white/10 text-white shadow-2xl backdrop-blur-md' 
-          : 'bg-white border-slate-100 shadow-sm hover:shadow-md'
-      }`}>
-        <div className="relative h-48 bg-slate-100 overflow-hidden">
-          {church.cover_image ? (
-            <img
-              src={getImageUrl(church.cover_image, 400, 224)}
-              alt={church.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          ) : (
-            <img
-              src={getFallbackImage('church')}
-              alt={church.name}
-              className="w-full h-full object-contain p-12 group-hover:scale-105 transition-transform duration-300 opacity-40"
-            />
-          )}
-          
-          {/* Logo Overlay */}
-          <div className={`absolute bottom-4 left-4 w-16 h-16 bg-white rounded-xl shadow-lg overflow-hidden border-2 border-white flex items-center justify-center ${!church.logo ? 'p-3' : ''}`}>
-            <img
-              src={church.logo ? getImageUrl(church.logo, 100, 100) : getFallbackImage('church')}
-              alt={`${church.name} logo`}
-              className="w-full h-full object-cover"
-            />
-          </div>
-
-          {/* Open Status */}
-          {openStatus !== null && (
-            <div className="absolute top-4 right-4">
-              <Badge className={openStatus ? 'bg-green-500 text-white' : 'bg-slate-500 text-white'}>
-                {openStatus ? 'Open Now' : 'Closed'}
-              </Badge>
-            </div>
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="p-4">
-          <h3 className="font-semibold text-lg mb-1 line-clamp-1" data-testid="church-card-name">
-            {church.name}
-          </h3>
-          
-
-
-          {/* Location */}
-          <div className="flex items-center text-sm text-slate-500 mb-3">
-            <MapPin className="h-4 w-4 mr-1" />
-            <span className="line-clamp-1">{[church.city, church.state].filter(Boolean).join(', ')}</span>
-          </div>
-
-          {/* Denomination Badge */}
-          {church.denomination && (
-            <div className="mb-3">
-              <Badge variant="secondary" className="text-xs">
-                {church.denomination}
-              </Badge>
-            </div>
-          )}
-
-          {/* Phone on Hover */}
-          {isHovered && church.phone && (
-            <div className="relative z-20 flex items-center text-sm text-brand animate-fade-in">
-              <Phone className="h-4 w-4 mr-2" />
-              <a href={`tel:${church.phone}`} className="hover:underline">
-                {church.phone}
-              </a>
-            </div>
-          )}
-        </div>
+    <Link to={`/church/${church.slug}`} className="block bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300">
+      <div className="aspect-w-16 aspect-h-9 bg-gray-200 rounded-t-lg overflow-hidden">
+        <img
+          src={optimizedUrl}
+          alt={church.name}
+          loading="lazy"
+          className="w-full h-48 object-cover"
+        />
       </div>
-    </div>
+      <div className="p-4">
+        <h3 className="text-xl font-bold text-gray-900 mb-2">{church.name}</h3>
+        <p className="text-gray-600 mb-2">
+          {church.denomination && <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-2">{church.denomination}</span>}
+        </p>
+        <p className="text-gray-700 text-sm">{church.city}, {church.postcode}</p>
+        {church.pastor_name && (
+          <p className="text-gray-600 text-sm mt-2">Pastor: {church.pastor_name}</p>
+        )}
+      </div>
+    </Link>
   );
 };
+
+export default ChurchCard;
