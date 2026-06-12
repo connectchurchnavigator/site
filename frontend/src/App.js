@@ -1,18 +1,24 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Home from './pages/Home';
-import ChurchDetail from './pages/ChurchDetail';
-import AdminEnrichment from './pages/AdminEnrichment';
+import { HelmetProvider } from 'react-helmet-async';
+import HomePage from './pages/HomePage';
+import ChurchDetailPage from './pages/ChurchDetailPage';
+import CityPage from './pages/CityPage';
+import NotFound from './pages/NotFound';
+import './App.css';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/church/:id" element={<ChurchDetail />} />
-        <Route path="/admin/enrichment" element={<AdminEnrichment />} />
-      </Routes>
-    </Router>
+    <HelmetProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/church/:id" element={<ChurchDetailPage />} />
+          <Route path="/churches/:city" element={<CityPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Router>
+    </HelmetProvider>
   );
 }
 
