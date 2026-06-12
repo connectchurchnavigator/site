@@ -1,295 +1,188 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
 from datetime import datetime, timedelta
-from ..auth import get_current_user
-from ..database import db
-import anthropic
-import os
-from collections import defaultdict
-import json
+import statistics
+from models.user import User
+from models.listing import Listing
+from dependencies import get_current_user, require_premium_or_network
+from database import db
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-if not ANTHROPIC_API_KEY:
-    raise ValueError("ANTHROPIC_API_KEY not set")
-
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-
-def check_premium_plan(user: dict):
-    if user.get("plan") != "premium":
-        raise HTTPException(status_code=403, detail="Premium plan required")
-
-def get_listing_analytics(listing_id: str, months: int = 12):
-    end_date = datetime.utcnow()
-    start_date = end_date - timedelta(days=months * 30)
-    
-    views = list(db.listing_views.find({
-        "listing_id": listing_id,
-        "timestamp": {"$gte": start_date, "$lte": end_date}
-    }).sort("timestamp", 1))
-    
-    events = list(db.events.find({
-        "listing_id": listing_id,
-        "start_date": {"$gte": start_date.isoformat()}
-    }).sort("start_date", 1))
-    
-    social_stats = list(db.social_stats.find({
-        "listing_id": listing_id,
-        "timestamp": {"$gte": start_date}
-    }).sort("timestamp", 1))
-    
-    content_activity = list(db.content_activity.find({
-        "listing_id": listing_id,
-        "timestamp": {"$gte": start_date}
-    }).sort("timestamp", 1))
-    
-    return {
-        "views": views,
-        "events": events,
-        "social_stats": social_stats,
-        "content_activity": content_activity,
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat()
-    }
-
-def aggregate_patterns(analytics: dict):
-    views = analytics["views"]
-    events = analytics["events"]
-    content = analytics["content_activity"]
-    
-    month_views = defaultdict(int)
-    day_views = defaultdict(int)
-    event_impact = []
-    content_performance = defaultdict(lambda: {"count": 0, "views": 0, "engagement": 0})
-    
-    for view in views:
-        dt = view["timestamp"]
-        month_views[dt.month] += 1
-        day_views[dt.strftime("%A")] += 1
-    
-    for event in events:
-        event_date = datetime.fromisoformat(event["start_date"])
-        week_before = event_date - timedelta(days=7)
-        week_after = event_date + timedelta(days=7)
-        
-        before_views = sum(1 for v in views if week_before <= v["timestamp"] < event_date)
-        after_views = sum(1 for v in views if event_date <= v["timestamp"] < week_after)
-        
-        if before_views > 0:
-            impact = ((after_views - before_views) / before_views) * 100
-            event_impact.append({"event": event["title"], "impact": impact, "date": event["start_date"]})
-    
-    for item in content:
-        ctype = item.get("type", "unknown")
-        content_performance[ctype]["count"] += 1
-        content_performance[ctype]["views"] += item.get("views", 0)
-        content_performance[ctype]["engagement"] += item.get("engagement", 0)
-    
-    avg_views = sum(month_views.values()) / 12 if month_views else 1
-    seasonal_multipliers = [{"month": m, "multiplier": round(month_views[m] / avg_views, 2)} for m in range(1, 13)]
-    
-    best_month = max(month_views.items(), key=lambda x: x[1])[0] if month_views else 1
-    worst_month = min(month_views.items(), key=lambda x: x[1])[0] if month_views else 1
-    best_day = max(day_views.items(), key=lambda x: x[1])[0] if day_views else "Monday"
-    
-    content_perf = [{
-        "type": k,
-        "avg_views": round(v["views"] / v["count"], 1) if v["count"] > 0 else 0,
-        "avg_engagement": round(v["engagement"] / v["count"], 1) if v["count"] > 0 else 0,
-        "count": v["count"]
-    } for k, v in content_performance.items()]
-    
-    content_perf.sort(key=lambda x: x["avg_views"], reverse=True)
-    
-    return {
-        "best_month_of_year": best_month,
-        "worst_month": worst_month,
-        "best_day_of_week": best_day,
-        "seasonal_multipliers": seasonal_multipliers,
-        "event_impact_avg": round(sum(e["impact"] for e in event_impact) / len(event_impact), 1) if event_impact else 0,
-        "event_impacts": event_impact[:5],
-        "content_performance": content_perf,
-        "total_views": len(views),
-        "total_events": len(events)
-    }
-
-def generate_ai_briefing(listing_id: str, analytics: dict, patterns: dict):
-    prompt = f"""You are an AI marketing analyst for church listings.
-
-Analyze this 12-month data and produce a strategic briefing:
-
-VIEWS DATA:
-- Total views: {patterns['total_views']}
-- Best month: {patterns['best_month_of_year']}
-- Worst month: {patterns['worst_month']}
-- Best day: {patterns['best_day_of_week']}
-
-EVENTS DATA:
-- Total events: {patterns['total_events']}
-- Average event impact: {patterns['event_impact_avg']}% view increase
-- Top events: {json.dumps(patterns['event_impacts'][:3])}
-
-CONTENT PERFORMANCE:
-{json.dumps(patterns['content_performance'][:5], indent=2)}
-
-SEASONAL PATTERNS:
-{json.dumps(patterns['seasonal_multipliers'], indent=2)}
-
-Provide:
-1. What's Working (3 specific insights)
-2. What's Not Working (3 gaps or missed opportunities)
-3. This Week's Opportunity (1 actionable recommendation)
-4. Seasonal Patterns (explain the data)
-5. Event Correlation (what events drive engagement)
-6. Content Patterns (what content works best)
-7. AI Briefing (500-word strategic narrative)
-
-Return ONLY valid JSON with these exact keys:
-{{
-  "what_is_working": ["insight1", "insight2", "insight3"],
-  "what_is_not_working": ["gap1", "gap2", "gap3"],
-  "this_week_opportunity": "specific action",
-  "seasonal_patterns": "explanation",
-  "event_correlation": "explanation",
-  "content_patterns": "explanation",
-  "ai_briefing_text": "full 500-word briefing"
-}}"""
-    
-    response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    
-    briefing = json.loads(response.content[0].text)
-    briefing["generated_at"] = datetime.utcnow().isoformat()
-    briefing["listing_id"] = listing_id
-    
-    return briefing
-
-@router.post("/intelligence/{listing_id}/briefing")
-async def create_intelligence_briefing(
-    listing_id: str,
-    regenerate: bool = False,
-    user: dict = Depends(get_current_user)
-):
-    check_premium_plan(user)
-    
-    listing = db.listings.find_one({"_id": listing_id})
+@router.get("/benchmarks/{listing_id}")
+async def get_benchmarks(listing_id: str, current_user: User = Depends(require_premium_or_network)):
+    listing = await db.listings.find_one({"_id": listing_id})
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
     
-    if str(listing["owner_id"]) != str(user["_id"]):
+    if listing["owner_id"] != current_user.id and current_user.plan not in ["network", "admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    if not regenerate:
-        cached = db.ai_briefings.find_one({
-            "listing_id": listing_id,
-            "generated_at": {"$gte": (datetime.utcnow() - timedelta(days=7)).isoformat()}
+    denomination = listing.get("denomination", "")
+    city = listing.get("address", {}).get("city", "")
+    
+    category_filter = {"denomination": denomination}
+    if city:
+        category_filter["address.city"] = city
+    
+    category_listings = await db.listings.find(category_filter).to_list(length=None)
+    
+    if len(category_listings) < 3:
+        category_listings = await db.listings.find({"denomination": denomination}).to_list(length=None)
+    
+    your_metrics = {
+        "views": listing.get("analytics", {}).get("total_views", 0),
+        "health_score": listing.get("health_score", 0),
+        "followers": listing.get("followers_count", 0),
+        "engagement": listing.get("analytics", {}).get("engagement_rate", 0)
+    }
+    
+    all_metrics = []
+    for l in category_listings:
+        all_metrics.append({
+            "id": l["_id"],
+            "views": l.get("analytics", {}).get("total_views", 0),
+            "health_score": l.get("health_score", 0),
+            "followers": l.get("followers_count", 0),
+            "engagement": l.get("analytics", {}).get("engagement_rate", 0),
+            "sermon_videos": len(l.get("media", {}).get("sermon_videos", [])),
+            "events_count": await db.events.count_documents({"listing_id": l["_id"], "start_date": {"$gte": datetime.utcnow()}}),
+            "instagram_posts": l.get("social", {}).get("instagram_posts_per_week", 0)
         })
-        if cached:
-            cached["_id"] = str(cached["_id"])
-            return cached
     
-    analytics = get_listing_analytics(listing_id)
-    patterns = aggregate_patterns(analytics)
-    briefing = generate_ai_briefing(listing_id, analytics, patterns)
+    sorted_by_health = sorted(all_metrics, key=lambda x: x["health_score"], reverse=True)
+    your_rank = next((i + 1 for i, m in enumerate(sorted_by_health) if m["id"] == listing_id), len(sorted_by_health))
+    percentile = round((len(sorted_by_health) - your_rank) / len(sorted_by_health) * 100)
     
-    db.ai_briefings.insert_one(briefing)
-    briefing["_id"] = str(briefing["_id"])
+    category_avg = {
+        "views": round(statistics.mean([m["views"] for m in all_metrics])),
+        "health_score": round(statistics.mean([m["health_score"] for m in all_metrics])),
+        "followers": round(statistics.mean([m["followers"] for m in all_metrics])),
+        "engagement": round(statistics.mean([m["engagement"] for m in all_metrics]), 1)
+    }
     
-    return briefing
+    top_quartile_count = max(1, len(all_metrics) // 4)
+    top_performers = sorted_by_health[:top_quartile_count]
+    
+    top_quartile = {
+        "views": round(statistics.mean([m["views"] for m in top_performers])),
+        "health_score": round(statistics.mean([m["health_score"] for m in top_performers])),
+        "followers": round(statistics.mean([m["followers"] for m in top_performers])),
+        "engagement": round(statistics.mean([m["engagement"] for m in top_performers]), 1)
+    }
+    
+    your_sermon_videos = len(listing.get("media", {}).get("sermon_videos", []))
+    your_events = await db.events.count_documents({"listing_id": listing_id, "start_date": {"$gte": datetime.utcnow()}})
+    your_instagram = listing.get("social", {}).get("instagram_posts_per_week", 0)
+    
+    top_sermon_avg = round(statistics.mean([m["sermon_videos"] for m in top_performers]))
+    top_events_avg = round(statistics.mean([m["events_count"] for m in top_performers]), 1)
+    top_instagram_avg = round(statistics.mean([m["instagram_posts"] for m in top_performers]), 1)
+    
+    gap_analysis = []
+    if top_sermon_avg > your_sermon_videos:
+        gap_analysis.append({
+            "metric": "sermon_videos",
+            "you": your_sermon_videos,
+            "top_performers_avg": top_sermon_avg,
+            "impact": "4x more followers"
+        })
+    if top_events_avg > your_events:
+        gap_analysis.append({
+            "metric": "events_per_month",
+            "you": your_events,
+            "top_performers_avg": top_events_avg,
+            "impact": "340% more views"
+        })
+    if top_instagram_avg > your_instagram:
+        gap_analysis.append({
+            "metric": "instagram_posts_per_week",
+            "you": your_instagram,
+            "top_performers_avg": top_instagram_avg,
+            "impact": "2.5x more engagement"
+        })
+    
+    top_performer_actions = []
+    if top_instagram_avg >= 3:
+        top_performer_actions.append("Post on Instagram 3x per week")
+    if top_sermon_avg >= 1:
+        top_performer_actions.append("Add new sermon video monthly")
+    if top_events_avg >= 1:
+        top_performer_actions.append("Create events 4+ weeks in advance")
+    
+    return {
+        "your_rank": your_rank,
+        "total_in_category": len(category_listings),
+        "percentile": percentile,
+        "category_description": f"{denomination} churches" + (f" in {city}" if city else ""),
+        "your_metrics": your_metrics,
+        "category_avg": category_avg,
+        "top_quartile": top_quartile,
+        "gap_analysis": gap_analysis,
+        "top_performer_actions": top_performer_actions
+    }
 
-@router.get("/intelligence/{listing_id}/patterns")
-async def get_intelligence_patterns(
-    listing_id: str,
-    user: dict = Depends(get_current_user)
-):
-    check_premium_plan(user)
-    
-    listing = db.listings.find_one({"_id": listing_id})
-    if not listing:
+@router.get("/benchmarks/{listing_id}/network")
+async def get_network_benchmarks(listing_id: str, current_user: User = Depends(require_premium_or_network)):
+    parent_listing = await db.listings.find_one({"_id": listing_id})
+    if not parent_listing:
         raise HTTPException(status_code=404, detail="Listing not found")
     
-    if str(listing["owner_id"]) != str(user["_id"]):
-        raise HTTPException(status_code=403, detail="Not authorized")
+    if parent_listing["owner_id"] != current_user.id or current_user.plan != "network":
+        raise HTTPException(status_code=403, detail="Network plan required")
     
-    analytics = get_listing_analytics(listing_id)
-    patterns = aggregate_patterns(analytics)
+    branches = await db.listings.find({"parent_listing_id": listing_id}).to_list(length=None)
     
-    daily_views = defaultdict(int)
-    for view in analytics["views"]:
-        date_key = view["timestamp"].strftime("%Y-%m-%d")
-        daily_views[date_key] += 1
+    if not branches:
+        raise HTTPException(status_code=404, detail="No branches found")
     
-    patterns["daily_views"] = [{"date": k, "views": v} for k, v in sorted(daily_views.items())]
+    branch_data = []
+    for branch in branches:
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        sixty_days_ago = datetime.utcnow() - timedelta(days=60)
+        
+        current_views = await db.analytics.count_documents({
+            "listing_id": branch["_id"],
+            "timestamp": {"$gte": thirty_days_ago}
+        })
+        previous_views = await db.analytics.count_documents({
+            "listing_id": branch["_id"],
+            "timestamp": {"$gte": sixty_days_ago, "$lt": thirty_days_ago}
+        })
+        
+        growth_rate = 0
+        if previous_views > 0:
+            growth_rate = round(((current_views - previous_views) / previous_views) * 100, 1)
+        
+        branch_data.append({
+            "branch_id": branch["_id"],
+            "branch_name": branch["name"],
+            "health_score": branch.get("health_score", 0),
+            "total_views": branch.get("analytics", {}).get("total_views", 0),
+            "followers": branch.get("followers_count", 0),
+            "growth_rate": growth_rate,
+            "current_month_views": current_views
+        })
     
-    return patterns
-
-@router.get("/intelligence/{listing_id}/briefing/latest")
-async def get_latest_briefing(
-    listing_id: str,
-    user: dict = Depends(get_current_user)
-):
-    check_premium_plan(user)
+    sorted_by_health = sorted(branch_data, key=lambda x: x["health_score"], reverse=True)
+    sorted_by_views = sorted(branch_data, key=lambda x: x["total_views"], reverse=True)
+    sorted_by_growth = sorted(branch_data, key=lambda x: x["growth_rate"], reverse=True)
     
-    listing = db.listings.find_one({"_id": listing_id})
-    if not listing:
-        raise HTTPException(status_code=404, detail="Listing not found")
+    fastest_growing = sorted_by_growth[0] if sorted_by_growth else None
+    needs_attention = sorted_by_health[-1] if sorted_by_health else None
     
-    if str(listing["owner_id"]) != str(user["_id"]):
-        raise HTTPException(status_code=403, detail="Not authorized")
+    network_totals = {
+        "total_views": sum([b["total_views"] for b in branch_data]),
+        "total_followers": sum([b["followers"] for b in branch_data]),
+        "avg_health_score": round(statistics.mean([b["health_score"] for b in branch_data])),
+        "total_branches": len(branch_data)
+    }
     
-    cached = db.ai_briefings.find_one(
-        {"listing_id": listing_id},
-        sort=[("generated_at", -1)]
-    )
-    
-    if cached and (datetime.utcnow() - datetime.fromisoformat(cached["generated_at"])).days < 7:
-        cached["_id"] = str(cached["_id"])
-        return cached
-    
-    analytics = get_listing_analytics(listing_id)
-    patterns = aggregate_patterns(analytics)
-    briefing = generate_ai_briefing(listing_id, analytics, patterns)
-    
-    db.ai_briefings.insert_one(briefing)
-    briefing["_id"] = str(briefing["_id"])
-    
-    return briefing
-
-@router.post("/intelligence/{listing_id}/ask")
-async def ask_ai_question(
-    listing_id: str,
-    question: dict,
-    user: dict = Depends(get_current_user)
-):
-    check_premium_plan(user)
-    
-    listing = db.listings.find_one({"_id": listing_id})
-    if not listing:
-        raise HTTPException(status_code=404, detail="Listing not found")
-    
-    if str(listing["owner_id"]) != str(user["_id"]):
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    analytics = get_listing_analytics(listing_id)
-    patterns = aggregate_patterns(analytics)
-    
-    prompt = f"""You are an AI analyst for church listings. Answer this question using the data:
-
-QUESTION: {question.get('query', '')}
-
-DATA AVAILABLE:
-{json.dumps(patterns, indent=2)}
-
-Provide a clear, actionable answer in plain English (2-3 paragraphs)."""
-    
-    response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
-        max_tokens=500,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    
-    return {"answer": response.content[0].text, "timestamp": datetime.utcnow().isoformat()}
+    return {
+        "branches": branch_data,
+        "health_ranking": sorted_by_health,
+        "views_ranking": sorted_by_views,
+        "fastest_growing": fastest_growing,
+        "needs_attention": needs_attention,
+        "network_totals": network_totals
+    }
