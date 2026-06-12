@@ -1,145 +1,342 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
-from typing import Optional, List
+from fastapi import APIRouter, HTTPException, Depends, status
+from typing import List, Dict, Any
 from datetime import datetime
-from models import Church, VisitPreferences
-from database import db
-from auth import get_current_user
-from geopy.distance import geodesic
-import math
+from bson import ObjectId
+import re
 
-router = APIRouter()
+from models import Church, ChurchCreate, ChurchUpdate, BranchCreate, NetworkResponse, ChurchStats, User
+from database import get_database
+from auth import get_current_user, get_current_active_user
 
-@router.get("/churches/{slug}")
+router = APIRouter(prefix="/api/churches", tags=["churches"])
+
+def slugify(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r'[^\w\s-]', '', text)
+    text = re.sub(r'[-\s]+', '-', text)
+    return text
+
+def has_church_access(user: User, church_slug: str, required_roles: List[str] = ["owner", "admin"]) -> bool:
+    for listing in user.listings:
+        if listing.type == "church" and listing.listing_slug == church_slug:
+            return listing.role in required_roles
+    return False
+
+def get_user_church_role(user: User, church_slug: str) -> str:
+    for listing in user.listings:
+        if listing.type == "church" and listing.listing_slug == church_slug:
+            return listing.role
+    return None
+
+@router.get("/")
+async def get_churches(
+    skip: int = 0,
+    limit: int = 20,
+    city: str = None,
+    county: str = None,
+    denomination: str = None,
+    search: str = None
+):
+    db = get_database()
+    query = {}
+    
+    if city:
+        query["location.city"] = {"$regex": city, "$options": "i"}
+    if county:
+        query["location.county"] = {"$regex": county, "$options": "i"}
+    if denomination:
+        query["denomination"] = {"$regex": denomination, "$options": "i"}
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+            {"location.city": {"$regex": search, "$options": "i"}}
+        ]
+    
+    churches = list(db.churches.find(query).skip(skip).limit(limit))
+    total = db.churches.count_documents(query)
+    
+    for church in churches:
+        church["_id"] = str(church["_id"])
+    
+    return {"churches": churches, "total": total, "skip": skip, "limit": limit}
+
+@router.get("/{slug}")
 async def get_church(slug: str):
-    church = await db.churches.find_one({"slug": slug})
+    db = get_database()
+    church = db.churches.find_one({"slug": slug})
+    
     if not church:
         raise HTTPException(status_code=404, detail="Church not found")
+    
+    db.churches.update_one(
+        {"slug": slug},
+        {"$inc": {"stats.views": 1}}
+    )
     
     church["_id"] = str(church["_id"])
-    if "visit_preferences" not in church:
-        church["visit_preferences"] = {
-            "open_to_visits": False,
-            "preferred_days": [],
-            "preferred_times": [],
-            "min_notice_weeks": 2,
-            "max_visits_per_month": 2
-        }
     return church
 
-@router.put("/churches/{slug}/visit-preferences")
-async def update_visit_preferences(
-    slug: str,
-    preferences: VisitPreferences,
-    current_user: dict = Depends(get_current_user)
-):
-    church = await db.churches.find_one({"slug": slug})
+@router.get("/{slug}/network")
+async def get_church_network(slug: str):
+    db = get_database()
+    church = db.churches.find_one({"slug": slug})
+    
     if not church:
         raise HTTPException(status_code=404, detail="Church not found")
     
-    if church.get("owner_id") != current_user.get("uid"):
-        raise HTTPException(status_code=403, detail="Not authorized to update this church")
+    response = {
+        "parent": None,
+        "branches": [],
+        "combined_stats": {
+            "total_views": 0,
+            "total_checkins": 0,
+            "total_followers": 0,
+            "total_messages": 0,
+            "total_events": 0
+        }
+    }
     
-    result = await db.churches.update_one(
+    if church.get("is_parent"):
+        church["_id"] = str(church["_id"])
+        response["parent"] = church
+        
+        if church.get("branches"):
+            branches = list(db.churches.find({"slug": {"$in": church["branches"]}}))
+            for branch in branches:
+                branch["_id"] = str(branch["_id"])
+                response["branches"].append(branch)
+                
+                stats = branch.get("stats", {})
+                response["combined_stats"]["total_views"] += stats.get("views", 0)
+                response["combined_stats"]["total_checkins"] += stats.get("checkins", 0)
+                response["combined_stats"]["total_followers"] += stats.get("followers", 0)
+                response["combined_stats"]["total_messages"] += stats.get("messages", 0)
+                response["combined_stats"]["total_events"] += stats.get("events", 0)
+        
+        parent_stats = church.get("stats", {})
+        response["combined_stats"]["total_views"] += parent_stats.get("views", 0)
+        response["combined_stats"]["total_checkins"] += parent_stats.get("checkins", 0)
+        response["combined_stats"]["total_followers"] += parent_stats.get("followers", 0)
+        response["combined_stats"]["total_messages"] += parent_stats.get("messages", 0)
+        response["combined_stats"]["total_events"] += parent_stats.get("events", 0)
+    
+    elif church.get("is_branch") and church.get("parent_id"):
+        parent = db.churches.find_one({"slug": church["parent_id"]})
+        if parent:
+            parent["_id"] = str(parent["_id"])
+            response["parent"] = parent
+            
+            if parent.get("branches"):
+                branches = list(db.churches.find({"slug": {"$in": parent["branches"]}}))
+                for branch in branches:
+                    branch["_id"] = str(branch["_id"])
+                    response["branches"].append(branch)
+                    
+                    stats = branch.get("stats", {})
+                    response["combined_stats"]["total_views"] += stats.get("views", 0)
+                    response["combined_stats"]["total_checkins"] += stats.get("checkins", 0)
+                    response["combined_stats"]["total_followers"] += stats.get("followers", 0)
+                    response["combined_stats"]["total_messages"] += stats.get("messages", 0)
+                    response["combined_stats"]["total_events"] += stats.get("events", 0)
+            
+            parent_stats = parent.get("stats", {})
+            response["combined_stats"]["total_views"] += parent_stats.get("views", 0)
+            response["combined_stats"]["total_checkins"] += parent_stats.get("checkins", 0)
+            response["combined_stats"]["total_followers"] += parent_stats.get("followers", 0)
+            response["combined_stats"]["total_messages"] += parent_stats.get("messages", 0)
+            response["combined_stats"]["total_events"] += parent_stats.get("events", 0)
+    else:
+        church["_id"] = str(church["_id"])
+        response["parent"] = church
+        stats = church.get("stats", {})
+        response["combined_stats"]["total_views"] = stats.get("views", 0)
+        response["combined_stats"]["total_checkins"] = stats.get("checkins", 0)
+        response["combined_stats"]["total_followers"] = stats.get("followers", 0)
+        response["combined_stats"]["total_messages"] = stats.get("messages", 0)
+        response["combined_stats"]["total_events"] = stats.get("events", 0)
+    
+    return response
+
+@router.post("/{slug}/branches", status_code=status.HTTP_201_CREATED)
+async def add_branch(
+    slug: str,
+    branch_data: BranchCreate,
+    current_user: User = Depends(get_current_active_user)
+):
+    db = get_database()
+    
+    if not has_church_access(current_user, slug, ["owner", "admin"]):
+        raise HTTPException(status_code=403, detail="Only parent church admins can add branches")
+    
+    parent = db.churches.find_one({"slug": slug})
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent church not found")
+    
+    branch = db.churches.find_one({"slug": branch_data.branch_slug})
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch church not found")
+    
+    if branch.get("is_branch") or branch.get("parent_id"):
+        raise HTTPException(status_code=400, detail="Church is already a branch")
+    
+    db.churches.update_one(
         {"slug": slug},
         {
+            "$set": {"is_parent": True, "updated_at": datetime.utcnow()},
+            "$addToSet": {"branches": branch_data.branch_slug}
+        }
+    )
+    
+    branch_update = {
+        "is_branch": True,
+        "parent_id": slug,
+        "branch_label": branch_data.branch_label,
+        "updated_at": datetime.utcnow()
+    }
+    
+    if branch_data.branch_pastor_id:
+        branch_update["branch_pastor_id"] = branch_data.branch_pastor_id
+    
+    if parent.get("network_name"):
+        branch_update["network_name"] = parent["network_name"]
+    
+    db.churches.update_one(
+        {"slug": branch_data.branch_slug},
+        {"$set": branch_update}
+    )
+    
+    return {"message": "Branch added successfully", "branch_slug": branch_data.branch_slug}
+
+@router.delete("/{slug}/branches/{branch_slug}")
+async def remove_branch(
+    slug: str,
+    branch_slug: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    db = get_database()
+    
+    if not has_church_access(current_user, slug, ["owner", "admin"]):
+        raise HTTPException(status_code=403, detail="Only parent church admins can remove branches")
+    
+    parent = db.churches.find_one({"slug": slug})
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent church not found")
+    
+    if branch_slug not in parent.get("branches", []):
+        raise HTTPException(status_code=404, detail="Branch not found in parent church")
+    
+    db.churches.update_one(
+        {"slug": slug},
+        {
+            "$pull": {"branches": branch_slug},
+            "$set": {"updated_at": datetime.utcnow()}
+        }
+    )
+    
+    result = db.churches.update_one(
+        {"slug": slug},
+        {"$set": {"updated_at": datetime.utcnow()}}
+    )
+    
+    updated_parent = db.churches.find_one({"slug": slug})
+    if not updated_parent.get("branches"):
+        db.churches.update_one(
+            {"slug": slug},
+            {"$set": {"is_parent": False, "updated_at": datetime.utcnow()}}
+        )
+    
+    db.churches.update_one(
+        {"slug": branch_slug},
+        {
             "$set": {
-                "visit_preferences": preferences.dict(),
+                "is_branch": False,
+                "parent_id": None,
+                "branch_label": None,
+                "branch_pastor_id": None,
+                "network_name": None,
                 "updated_at": datetime.utcnow()
             }
         }
     )
     
-    if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Failed to update preferences")
-    
-    return {"message": "Visit preferences updated successfully"}
+    return {"message": "Branch removed successfully"}
 
-@router.get("/planner/available-hosts")
-async def get_available_hosts(
-    lat: float = Query(...),
-    lng: float = Query(...),
-    radius: int = Query(50, ge=1, le=500),
-    denomination: Optional[str] = None,
-    dates: Optional[str] = None
+@router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_church(
+    church_data: ChurchCreate,
+    current_user: User = Depends(get_current_active_user)
 ):
-    query = {"visit_preferences.open_to_visits": True}
+    db = get_database()
     
-    if denomination and denomination != "Any":
-        query["$or"] = [
-            {"denomination": denomination},
-            {"visit_preferences.denomination_preference": "Any"},
-            {"visit_preferences.denomination_preference": None}
-        ]
+    slug = slugify(church_data.name)
+    existing = db.churches.find_one({"slug": slug})
     
-    churches = await db.churches.find(query).to_list(length=1000)
-    pastors = await db.pastors.find(query).to_list(length=1000)
+    if existing:
+        counter = 1
+        while db.churches.find_one({"slug": f"{slug}-{counter}"}):
+            counter += 1
+        slug = f"{slug}-{counter}"
     
-    results = []
-    base_coords = (lat, lng)
+    church = Church(
+        name=church_data.name,
+        slug=slug,
+        denomination=church_data.denomination,
+        location=church_data.location,
+        contact=church_data.contact,
+        description=church_data.description,
+        pastor_name=church_data.pastor_name,
+        pastor_email=church_data.pastor_email,
+        owner_id=str(current_user.id)
+    )
     
-    for church in churches:
-        if church.get("location") and church["location"].get("coordinates"):
-            coords = church["location"]["coordinates"]
-            church_coords = (coords[1], coords[0])
-            distance = geodesic(base_coords, church_coords).miles
-            
-            if distance <= radius:
-                church["_id"] = str(church["_id"])
-                church["distance_miles"] = round(distance, 1)
-                church["type"] = "church"
-                results.append(church)
+    result = db.churches.insert_one(church.dict(by_alias=True, exclude={"id"}))
     
-    for pastor in pastors:
-        if pastor.get("location") and pastor["location"].get("coordinates"):
-            coords = pastor["location"]["coordinates"]
-            pastor_coords = (coords[1], coords[0])
-            distance = geodesic(base_coords, pastor_coords).miles
-            
-            if distance <= radius:
-                pastor["_id"] = str(pastor["_id"])
-                pastor["distance_miles"] = round(distance, 1)
-                pastor["type"] = "pastor"
-                results.append(pastor)
+    db.users.update_one(
+        {"_id": current_user.id},
+        {
+            "$push": {
+                "listings": {
+                    "type": "church",
+                    "listing_id": str(result.inserted_id),
+                    "listing_slug": slug,
+                    "listing_name": church_data.name,
+                    "listing_avatar": None,
+                    "role": "owner",
+                    "is_parent": False,
+                    "parent_id": None
+                }
+            },
+            "$set": {"updated_at": datetime.utcnow()}
+        }
+    )
     
-    results.sort(key=lambda x: x["distance_miles"])
-    return results
+    created_church = db.churches.find_one({"_id": result.inserted_id})
+    created_church["_id"] = str(created_church["_id"])
+    
+    return created_church
 
-@router.post("/visits/invite")
-async def send_visit_invitation(
-    from_church_slug: str,
-    to_type: str,
-    to_slug: str,
-    message: str,
-    proposed_dates: List[str],
-    contact_email: str,
-    contact_phone: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
+@router.put("/{slug}")
+async def update_church(
+    slug: str,
+    church_data: ChurchUpdate,
+    current_user: User = Depends(get_current_active_user)
 ):
-    from_church = await db.churches.find_one({"slug": from_church_slug})
-    if not from_church or from_church.get("owner_id") != current_user.get("uid"):
-        raise HTTPException(status_code=403, detail="Not authorized")
+    db = get_database()
     
-    if to_type == "church":
-        to_entity = await db.churches.find_one({"slug": to_slug})
-    else:
-        to_entity = await db.pastors.find_one({"slug": to_slug})
+    if not has_church_access(current_user, slug, ["owner", "admin", "contributor"]):
+        raise HTTPException(status_code=403, detail="You don't have permission to update this church")
     
-    if not to_entity:
-        raise HTTPException(status_code=404, detail="Target not found")
+    church = db.churches.find_one({"slug": slug})
+    if not church:
+        raise HTTPException(status_code=404, detail="Church not found")
     
-    invitation = {
-        "from_church_slug": from_church_slug,
-        "from_church_name": from_church["name"],
-        "to_type": to_type,
-        "to_slug": to_slug,
-        "to_name": to_entity["name"],
-        "message": message,
-        "proposed_dates": proposed_dates,
-        "contact_email": contact_email,
-        "contact_phone": contact_phone,
-        "status": "pending",
-        "created_at": datetime.utcnow()
-    }
+    update_data = church_data.dict(exclude_unset=True)
+    update_data["updated_at"] = datetime.utcnow()
     
-    result = await db.visit_invitations.insert_one(invitation)
-    return {"message": "Invitation sent successfully", "invitation_id": str(result.inserted_id)}
+    db.churches.update_one({"slug": slug}, {"$set": update_data})
+    
+    updated_church = db.churches.find_one({"slug": slug})
+    updated_church["_id"] = str(updated_church["_id"])
+    
+    return updated_church
