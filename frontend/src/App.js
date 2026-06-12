@@ -1,27 +1,37 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import HomePage from './pages/HomePage';
+import ChurchesPage from './pages/ChurchesPage';
 import ChurchDetailPage from './pages/ChurchDetailPage';
-import WorshipLeaderDetailPage from './pages/WorshipLeaderDetailPage';
-import WorshipLeadersListPage from './pages/WorshipLeadersListPage';
-import MediaTeamDetailPage from './pages/MediaTeamDetailPage';
-import MediaTeamsListPage from './pages/MediaTeamsListPage';
-import './App.css';
+import EventsListPage from './pages/EventsListPage';
+import EventDetailPage from './pages/EventDetailPage';
+import AboutPage from './pages/AboutPage';
+import ContactPage from './pages/ContactPage';
+import Header from './components/Header';
+import Footer from './components/Footer';
 
 function App() {
   return (
-    <Router>
-      <div className="App">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/church/:slug" element={<ChurchDetailPage />} />
-          <Route path="/worship-leaders" element={<WorshipLeadersListPage />} />
-          <Route path="/worship-leader/:slug" element={<WorshipLeaderDetailPage />} />
-          <Route path="/media-teams" element={<MediaTeamsListPage />} />
-          <Route path="/media-team/:slug" element={<MediaTeamDetailPage />} />
-        </Routes>
-      </div>
-    </Router>
+    <HelmetProvider>
+      <Router>
+        <div className="flex flex-col min-h-screen">
+          <Header />
+          <main className="flex-grow">
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/churches" element={<ChurchesPage />} />
+              <Route path="/church/:slug" element={<ChurchDetailPage />} />
+              <Route path="/events" element={<EventsListPage />} />
+              <Route path="/event/:slug" element={<EventDetailPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </Router>
+    </HelmetProvider>
   );
 }
 
