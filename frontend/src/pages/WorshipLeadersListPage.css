@@ -1,0 +1,28 @@
+.wll-page { background: #f9fafb; min-height: 100vh; }
+
+.wll-hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 60px 20px; text-align: center; color: #fff; }
+.wll-hero-title { font-size: 42px; font-weight: 700; margin: 0 0 12px; }
+.wll-hero-subtitle { font-size: 18px; opacity: 0.95; margin: 0; }
+
+.wll-container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+
+.wll-search-bar { margin-bottom: 30px; }
+.wll-search-input { width: 100%; max-width: 600px; padding: 14px 20px; font-size: 16px; border: 2px solid #d1d5db; border-radius: 8px; display: block; margin: 0 auto; }
+.wll-search-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+
+.wll-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 30px; justify-content: center; }
+.wll-filter { padding: 10px 16px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: #fff; cursor: pointer; }
+.wll-filter:focus { outline: none; border-color: #667eea; }
+.wll-clear-btn { padding: 10px 20px; background: #ef4444; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+.wll-clear-btn:hover { background: #dc2626; }
+
+.wll-loading, .wll-empty { text-align: center; padding: 60px 20px; font-size: 16px; color: #6b7280; }
+
+.wll-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
+
+@media (max-width: 768px) {
+  .wll-hero-title { font-size: 32px; }
+  .wll-hero-subtitle { font-size: 16px; }
+  .wll-filters { flex-direction: column; align-items: stretch; }
+  .wll-grid { grid-template-columns: 1fr; }
+}
