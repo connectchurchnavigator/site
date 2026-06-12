@@ -1,302 +1,187 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import Navbar from '../components/Navbar2';
-import Footer from '../components/Footer';
-import { Helmet } from 'react-helmet-async';
+import { Link, useNavigate } from 'react-router-dom';
+import SearchBar from '../components/SearchBar';
+import './Home2.css';
 
 const Home2 = () => {
-  const [featuredChurches, setFeaturedChurches] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState('churches');
+  const navigate = useNavigate();
+  const [showToolsDropdown, setShowToolsDropdown] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  useEffect(() => {
-    const fetchFeaturedChurches = async () => {
-      try {
-        const response = await fetch('https://api.churchnavigator.com/api/churches/featured?limit=6');
-        if (!response.ok) throw new Error('Failed to fetch');
-        const data = await response.json();
-        setFeaturedChurches(data.churches || []);
-      } catch (error) {
-        console.error('Error fetching featured churches:', error);
-        setFeaturedChurches([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFeaturedChurches();
-  }, []);
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      window.location.href = `/search?q=${encodeURIComponent(searchQuery)}&type=${searchType}`;
-    }
+  const handleSearch = (searchParams) => {
+    const params = new URLSearchParams();
+    if (searchParams.location) params.set('location', searchParams.location);
+    if (searchParams.denomination) params.set('denomination', searchParams.denomination);
+    if (searchParams.serviceTime) params.set('serviceTime', searchParams.serviceTime);
+    navigate(`/search?${params.toString()}`);
   };
 
-  const tools = [
-    {
-      icon: 'ti-search',
-      label: 'Search',
-      description: 'Find churches by location, denomination or name',
-      href: '/search',
-      badge: null
-    },
-    {
-      icon: 'ti-map-route',
-      label: 'Ministry Trip Planner',
-      description: 'Plan visits, meetings and logistics with AI',
-      href: '/planner',
-      badge: 'Standard'
-    },
-    {
-      icon: 'ti-id-badge',
-      label: 'Visitor Tracking',
-      description: 'Track first-timers with QR codes',
-      href: '/tools/visitor-tracking',
-      badge: 'Premium'
-    },
-    {
-      icon: 'ti-calendar',
-      label: 'Event Listings',
-      description: 'Discover conferences, seminars and gatherings',
-      href: '/events',
-      badge: null
-    }
+  const toolsMenuItems = [
+    { name: 'Health Score Checker', tier: 'Free', tierClass: 'free', link: '/tools/health-check' },
+    { name: 'View Analytics', tier: 'Standard', tierClass: 'standard', link: '/tools/analytics' },
+    { name: 'Social Media Health', tier: 'Standard', tierClass: 'standard', link: '/tools/social' },
+    { name: 'AI Pattern Intelligence', tier: 'Premium', tierClass: 'premium', link: '/tools/intelligence' },
+    { name: 'Network Benchmarking', tier: 'Premium', tierClass: 'premium', link: '/tools/network' }
   ];
-
-  const resources = [
-    {
-      icon: 'ti-microphone',
-      label: 'Worship Leaders',
-      description: 'Find skilled worship leaders for your church',
-      href: '/worship-leaders'
-    },
-    {
-      icon: 'ti-video-camera',
-      label: 'Media Teams',
-      description: 'Connect with production and media experts',
-      href: '/media-teams'
-    },
-    {
-      icon: 'ti-write',
-      label: 'Submit Church',
-      description: 'Add your church to our directory',
-      href: '/submit-church'
-    },
-    {
-      icon: 'ti-email',
-      label: 'Contact Us',
-      description: 'Get in touch with our team',
-      href: '/contact'
-    }
-  ];
-
-  const stats = [
-    { number: '20,000+', label: 'UK Churches' },
-    { number: '150+', label: 'Denominations' },
-    { number: '500+', label: 'Cities Covered' },
-    { number: '50,000+', label: 'Monthly Visitors' }
-  ];
-
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'ChurchNavigator',
-    url: 'https://churchnavigator.com',
-    description: 'UK\'s most comprehensive church directory with 20,000+ churches across all denominations',
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: 'https://churchnavigator.com/search?q={search_term_string}',
-      'query-input': 'required name=search_term_string'
-    }
-  };
 
   return (
-    <>
-      <Helmet>
-        <title>ChurchNavigator | UK's Leading Church Directory</title>
-        <meta name="description" content="Find churches across the UK. Search 20,000+ churches by location, denomination or name. The most comprehensive church directory in the United Kingdom." />
-        <meta property="og:title" content="ChurchNavigator | UK's Leading Church Directory" />
-        <meta property="og:description" content="Find churches across the UK. Search 20,000+ churches by location, denomination or name." />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://churchnavigator.com" />
-        <link rel="canonical" href="https://churchnavigator.com" />
-        <script type="application/ld+json">
-          {JSON.stringify(jsonLd)}
-        </script>
-      </Helmet>
-
-      <Navbar />
-
-      <section className="hero-section" style={{ paddingTop: '120px', paddingBottom: '100px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+    <div className="home2-page">
+      <header className="home2-header">
         <div className="container">
-          <div className="row align-items-center">
-            <div className="col-lg-6">
-              <h1 className="text-white mb-4" style={{ fontSize: '3.5rem', fontWeight: '700', lineHeight: '1.2' }}>
-                Find Your Church Home
-              </h1>
-              <p className="text-white mb-4" style={{ fontSize: '1.3rem', opacity: '0.95' }}>
-                Search 20,000+ UK churches by location, denomination or name. The most comprehensive church directory in the United Kingdom.
-              </p>
-              <form onSubmit={handleSearch} className="search-form">
-                <div className="input-group input-group-lg shadow" style={{ borderRadius: '12px', overflow: 'hidden' }}>
-                  <input
-                    type="text"
-                    className="form-control border-0"
-                    placeholder="Search by church name, city or postcode..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ fontSize: '1.1rem', padding: '20px' }}
-                  />
-                  <div className="input-group-append">
-                    <button className="btn btn-primary" type="submit" style={{ padding: '0 30px', fontSize: '1.1rem', fontWeight: '600' }}>
-                      <i className="ti-search mr-2"></i>Search
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
-            <div className="col-lg-6">
-              <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                {stats.map((stat, index) => (
-                  <div key={index} className="stat-card bg-white p-4 text-center shadow" style={{ borderRadius: '12px' }}>
-                    <h2 className="mb-2" style={{ color: '#667eea', fontWeight: '700', fontSize: '2.5rem' }}>{stat.number}</h2>
-                    <p className="mb-0 text-muted" style={{ fontSize: '1rem' }}>{stat.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-5">
-        <div className="container">
-          <div className="row mb-4">
-            <div className="col-12">
-              <h2 className="mb-2" style={{ fontWeight: '700', fontSize: '2.5rem' }}>Tools & Resources</h2>
-              <p className="text-muted" style={{ fontSize: '1.1rem' }}>Everything you need to connect with churches</p>
-            </div>
-          </div>
-          <div className="row">
-            {tools.map((tool, index) => (
-              <div key={index} className="col-lg-3 col-md-6 mb-4">
-                <Link to={tool.href} className="text-decoration-none">
-                  <div className="card h-100 border-0 shadow-sm hover-lift" style={{ borderRadius: '12px', transition: 'transform 0.2s' }}>
-                    <div className="card-body p-4">
-                      <div className="d-flex align-items-start mb-3">
-                        <i className={tool.icon} style={{ fontSize: '2.5rem', color: '#667eea' }}></i>
-                        {tool.badge && (
-                          <span className="badge badge-primary ml-auto" style={{ fontSize: '0.7rem', padding: '4px 8px' }}>{tool.badge}</span>
-                        )}
-                      </div>
-                      <h5 className="mb-2" style={{ fontWeight: '600', color: '#333' }}>{tool.label}</h5>
-                      <p className="text-muted mb-0" style={{ fontSize: '0.95rem' }}>{tool.description}</p>
-                    </div>
-                  </div>
+          <nav className="home2-nav">
+            <Link to="/" className="logo">ChurchNavigator</Link>
+            <div className="nav-links">
+              <Link to="/">Home</Link>
+              <Link to="/search">Find a Church</Link>
+              <div 
+                className="nav-dropdown"
+                onMouseEnter={() => setShowToolsDropdown(true)}
+                onMouseLeave={() => setShowToolsDropdown(false)}
+              >
+                <Link to="/tools" className="nav-link-with-dropdown">
+                  Tools <span className="dropdown-arrow">▼</span>
                 </Link>
+                {showToolsDropdown && (
+                  <div className="dropdown-menu">
+                    {toolsMenuItems.map((item, idx) => (
+                      <Link key={idx} to={item.link} className="dropdown-item">
+                        <span className="item-name">{item.name}</span>
+                        <span className={`item-tier ${item.tierClass}`}>{item.tier}</span>
+                      </Link>
+                    ))}
+                    <div className="dropdown-divider"></div>
+                    <Link to="/tools" className="dropdown-item view-all">
+                      View All Tools →
+                    </Link>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="py-5 bg-light">
-        <div className="container">
-          <div className="row mb-4">
-            <div className="col-12 text-center">
-              <h2 className="mb-2" style={{ fontWeight: '700', fontSize: '2.5rem' }}>Featured Churches</h2>
-              <p className="text-muted" style={{ fontSize: '1.1rem' }}>Discover vibrant communities across the UK</p>
+              <Link to="/about">About</Link>
+              <Link to="/contact">Contact</Link>
             </div>
-          </div>
-          {loading ? (
-            <div className="text-center py-5">
-              <div className="spinner-border text-primary" role="status">
-                <span className="sr-only">Loading...</span>
-              </div>
+            <div className="nav-actions">
+              <Link to="/login" className="btn-login">Login</Link>
+              <Link to="/register" className="btn-register">Add Your Church</Link>
             </div>
-          ) : (
-            <div className="row">
-              {featuredChurches.map((church) => (
-                <div key={church._id} className="col-lg-4 col-md-6 mb-4">
-                  <Link to={`/church/${church.slug}`} className="text-decoration-none">
-                    <div className="card h-100 border-0 shadow-sm hover-lift" style={{ borderRadius: '12px', overflow: 'hidden', transition: 'transform 0.2s' }}>
-                      {church.image_url && (
-                        <img
-                          src={church.image_url}
-                          alt={church.name}
-                          className="card-img-top"
-                          style={{ height: '200px', objectFit: 'cover' }}
-                        />
-                      )}
-                      <div className="card-body p-4">
-                        <h5 className="mb-2" style={{ fontWeight: '600', color: '#333' }}>{church.name}</h5>
-                        <p className="text-muted mb-2" style={{ fontSize: '0.9rem' }}>
-                          <i className="ti-location-pin mr-1"></i>{church.city || church.postcode}
-                        </p>
-                        {church.denomination && (
-                          <span className="badge badge-light" style={{ fontSize: '0.85rem' }}>{church.denomination}</span>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-              ))}
+            <button 
+              className="mobile-menu-toggle"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              ☰
+            </button>
+          </nav>
+          {isMobileMenuOpen && (
+            <div className="mobile-menu">
+              <Link to="/" onClick={() => setIsMobileMenuOpen(false)}>Home</Link>
+              <Link to="/search" onClick={() => setIsMobileMenuOpen(false)}>Find a Church</Link>
+              <Link to="/tools" onClick={() => setIsMobileMenuOpen(false)}>Tools</Link>
+              <Link to="/about" onClick={() => setIsMobileMenuOpen(false)}>About</Link>
+              <Link to="/contact" onClick={() => setIsMobileMenuOpen(false)}>Contact</Link>
+              <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>Login</Link>
+              <Link to="/register" onClick={() => setIsMobileMenuOpen(false)}>Add Your Church</Link>
             </div>
           )}
-          <div className="text-center mt-4">
-            <Link to="/search" className="btn btn-primary btn-lg" style={{ padding: '12px 40px', borderRadius: '8px', fontWeight: '600' }}>
-              View All Churches <i className="ti-arrow-right ml-2"></i>
-            </Link>
-          </div>
+        </div>
+      </header>
+
+      <section className="hero-section">
+        <div className="container">
+          <h1>Find Your Church Home</h1>
+          <p className="hero-subtitle">Discover welcoming churches across the UK</p>
+          <SearchBar onSearch={handleSearch} />
         </div>
       </section>
 
-      <section className="py-5">
+      <section className="features-section">
         <div className="container">
-          <div className="row mb-4">
-            <div className="col-12">
-              <h2 className="mb-2" style={{ fontWeight: '700', fontSize: '2.5rem' }}>More Resources</h2>
-              <p className="text-muted" style={{ fontSize: '1.1rem' }}>Connect, contribute and grow</p>
+          <h2>Why ChurchNavigator?</h2>
+          <div className="features-grid">
+            <div className="feature-card">
+              <div className="feature-icon">🔍</div>
+              <h3>Easy Search</h3>
+              <p>Find churches by location, denomination, or service times</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">✓</div>
+              <h3>Verified Listings</h3>
+              <p>Accurate, up-to-date information verified by church leaders</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">📊</div>
+              <h3>Smart Tools</h3>
+              <p>Analytics and insights to help churches grow their reach</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">🌍</div>
+              <h3>UK Coverage</h3>
+              <p>Comprehensive directory of churches across the United Kingdom</p>
             </div>
           </div>
-          <div className="row">
-            {resources.map((resource, index) => (
-              <div key={index} className="col-lg-3 col-md-6 mb-4">
-                <Link to={resource.href} className="text-decoration-none">
-                  <div className="card h-100 border-0 shadow-sm hover-lift" style={{ borderRadius: '12px', transition: 'transform 0.2s' }}>
-                    <div className="card-body p-4">
-                      <i className={resource.icon} style={{ fontSize: '2.5rem', color: '#667eea', marginBottom: '15px', display: 'block' }}></i>
-                      <h5 className="mb-2" style={{ fontWeight: '600', color: '#333' }}>{resource.label}</h5>
-                      <p className="text-muted mb-0" style={{ fontSize: '0.95rem' }}>{resource.description}</p>
-                    </div>
-                  </div>
-                </Link>
-              </div>
-            ))}
+        </div>
+      </section>
+
+      <section className="stats-section">
+        <div className="container">
+          <div className="stats-grid">
+            <div className="stat">
+              <div className="stat-number">12,000+</div>
+              <div className="stat-label">Churches Listed</div>
+            </div>
+            <div className="stat">
+              <div className="stat-number">500K+</div>
+              <div className="stat-label">Monthly Visitors</div>
+            </div>
+            <div className="stat">
+              <div className="stat-number">95%</div>
+              <div className="stat-label">Satisfaction Rate</div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="py-5" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-        <div className="container text-center">
-          <h2 className="text-white mb-3" style={{ fontWeight: '700', fontSize: '2.5rem' }}>Join ChurchNavigator Today</h2>
-          <p className="text-white mb-4" style={{ fontSize: '1.2rem', opacity: '0.95' }}>List your church for free and connect with thousands of visitors</p>
-          <Link to="/submit-church" className="btn btn-light btn-lg" style={{ padding: '15px 40px', fontSize: '1.1rem', fontWeight: '600', borderRadius: '8px' }}>
-            Submit Your Church <i className="ti-arrow-right ml-2"></i>
-          </Link>
+      <section className="cta-section">
+        <div className="container">
+          <h2>Is Your Church Listed?</h2>
+          <p>Join thousands of churches connecting with seekers across the UK</p>
+          <div className="cta-buttons">
+            <Link to="/register" className="btn-cta-primary">Add Your Church</Link>
+            <Link to="/tools" className="btn-cta-secondary">Explore Tools</Link>
+          </div>
         </div>
       </section>
 
-      <Footer />
-
-      <style>{`
-        .hover-lift:hover {
-          transform: translateY(-5px);
-        }
-      `}</style>
-    </>
+      <footer className="home2-footer">
+        <div className="container">
+          <div className="footer-grid">
+            <div className="footer-col">
+              <h4>ChurchNavigator</h4>
+              <p>Connecting seekers with churches across the UK</p>
+            </div>
+            <div className="footer-col">
+              <h4>Quick Links</h4>
+              <Link to="/search">Find a Church</Link>
+              <Link to="/tools">Tools</Link>
+              <Link to="/about">About Us</Link>
+              <Link to="/contact">Contact</Link>
+            </div>
+            <div className="footer-col">
+              <h4>For Churches</h4>
+              <Link to="/register">Add Your Church</Link>
+              <Link to="/login">Church Login</Link>
+              <Link to="/pricing">Pricing</Link>
+            </div>
+            <div className="footer-col">
+              <h4>Legal</h4>
+              <Link to="/privacy">Privacy Policy</Link>
+              <Link to="/terms">Terms of Service</Link>
+            </div>
+          </div>
+          <div className="footer-bottom">
+            <p>&copy; 2025 ChurchNavigator. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 };
 
