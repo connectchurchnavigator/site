@@ -1,22 +1,18 @@
-from fastapi import FastAPI, HTTPException, Depends, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field, EmailStr, HttpUrl
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date, time
+from pymongo import MongoClient, ASCENDING, DESCENDING
 from bson import ObjectId
 import os
 from dotenv import load_dotenv
 import uuid
 import re
-from passlib.context import CryptContext
-from jose import JWTError, jwt
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(title="ChurchNavigator API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,363 +22,305 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MONGODB_URL = os.getenv("MONGODB_URL")
-DATABASE_NAME = os.getenv("DATABASE_NAME", "DEV-ChurchNavigator")
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
-JWT_ALGORITHM = "HS256"
+MONGO_URI = os.getenv("MONGO_URI")
+client = MongoClient(MONGO_URI)
+db = client["DEV-ChurchNavigator"]
+churches_collection = db["churches"]
+events_collection = db["events"]
 
-client = AsyncIOMotorClient(MONGODB_URL)
-db = client[DATABASE_NAME]
+events_collection.create_index([("slug", ASCENDING)], unique=True)
+events_collection.create_index([("start_date", ASCENDING)])
+events_collection.create_index([("city", ASCENDING)])
+events_collection.create_index([("event_type", ASCENDING)])
+events_collection.create_index([("is_featured", DESCENDING)])
+events_collection.create_index([("status", ASCENDING)])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
+class EventBase(BaseModel):
+    title: str = Field(..., min_length=3, max_length=200)
+    description: str = Field(..., min_length=10)
+    cover_image: Optional[str] = None
+    gallery_images: List[str] = []
+    event_type: str = Field(..., regex="^(Conference|Concert|Prayer Night|Youth Event|Revival|Workshop|Sunday Service|Special Service|Outreach|Community Event)$")
+    start_date: str
+    end_date: Optional[str] = None
+    start_time: str
+    end_time: Optional[str] = None
+    is_recurring: bool = False
+    recurrence_pattern: Optional[str] = Field(None, regex="^(Weekly|Monthly|Annual)?$")
+    venue_name: str = Field(..., min_length=2)
+    address_line1: str
+    city: str
+    postcode: str
+    country: str = "United Kingdom"
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    google_maps_link: Optional[str] = None
+    organiser_name: str
+    organiser_phone: Optional[str] = None
+    organiser_email: Optional[str] = None
+    church_id: Optional[str] = None
+    tickets_required: bool = False
+    ticket_url: Optional[str] = None
+    ticket_price: str = "Free"
+    is_online: bool = False
+    online_link: Optional[str] = None
+    is_featured: bool = False
+    is_verified: bool = False
+    tags: List[str] = []
+    status: str = "draft"
 
-def generate_slug(name: str) -> str:
-    slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+    @validator('start_time', 'end_time')
+    def validate_time_format(cls, v):
+        if v and not re.match(r'^(0?[1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM)$', v, re.IGNORECASE):
+            raise ValueError('Time must be in format: HH:MM AM/PM')
+        return v
+
+    @validator('status')
+    def validate_status(cls, v):
+        if v not in ['draft', 'published', 'cancelled']:
+            raise ValueError('Status must be draft, published, or cancelled')
+        return v
+
+class EventCreate(EventBase):
+    pass
+
+class EventUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=3, max_length=200)
+    description: Optional[str] = None
+    cover_image: Optional[str] = None
+    gallery_images: Optional[List[str]] = None
+    event_type: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    is_recurring: Optional[bool] = None
+    recurrence_pattern: Optional[str] = None
+    venue_name: Optional[str] = None
+    address_line1: Optional[str] = None
+    city: Optional[str] = None
+    postcode: Optional[str] = None
+    country: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    google_maps_link: Optional[str] = None
+    organiser_name: Optional[str] = None
+    organiser_phone: Optional[str] = None
+    organiser_email: Optional[str] = None
+    church_id: Optional[str] = None
+    tickets_required: Optional[bool] = None
+    ticket_url: Optional[str] = None
+    ticket_price: Optional[str] = None
+    is_online: Optional[bool] = None
+    online_link: Optional[str] = None
+    is_featured: Optional[bool] = None
+    is_verified: Optional[bool] = None
+    tags: Optional[List[str]] = None
+    status: Optional[str] = None
+
+class EventResponse(EventBase):
+    id: str
+    slug: str
+    created_at: datetime
+    updated_at: datetime
+    owner_id: Optional[str] = None
+    trashed_at: Optional[datetime] = None
+
+def create_slug(title: str) -> str:
+    slug = re.sub(r'[^a-z0-9]+', '-', title.lower()).strip('-')
+    base_slug = slug
+    counter = 1
+    while events_collection.find_one({"slug": slug, "trashed_at": None}):
+        slug = f"{base_slug}-{counter}"
+        counter += 1
     return slug
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid authentication")
-        return user_id
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid authentication")
-
-class ChurchBase(BaseModel):
-    name: str
-    slug: str
-    city: str
-    state: str
-    country: str
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    website: Optional[HttpUrl] = None
-    denomination: Optional[str] = None
-    service_times: Optional[str] = None
-    description: Optional[str] = None
-    profile_picture: Optional[str] = None
-    cover_image: Optional[str] = None
-    gallery_images: Optional[List[str]] = []
-    pastor_name: Optional[str] = None
-    founded_year: Optional[int] = None
-    capacity: Optional[int] = None
-    ministries: Optional[List[str]] = []
-    languages: Optional[List[str]] = []
-    facilities: Optional[List[str]] = []
-    social_facebook: Optional[str] = None
-    social_twitter: Optional[str] = None
-    social_instagram: Optional[str] = None
-    social_youtube: Optional[str] = None
-    is_verified: bool = False
-    is_featured: bool = False
-    status: str = "draft"
-
-class ChurchCreate(ChurchBase):
-    pass
-
-class ChurchUpdate(BaseModel):
-    name: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    country: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    website: Optional[HttpUrl] = None
-    denomination: Optional[str] = None
-    service_times: Optional[str] = None
-    description: Optional[str] = None
-    profile_picture: Optional[str] = None
-    cover_image: Optional[str] = None
-    gallery_images: Optional[List[str]] = None
-    pastor_name: Optional[str] = None
-    founded_year: Optional[int] = None
-    capacity: Optional[int] = None
-    ministries: Optional[List[str]] = None
-    languages: Optional[List[str]] = None
-    facilities: Optional[List[str]] = None
-    social_facebook: Optional[str] = None
-    social_twitter: Optional[str] = None
-    social_instagram: Optional[str] = None
-    social_youtube: Optional[str] = None
-    status: Optional[str] = None
-
-class MediaTeamBase(BaseModel):
-    name: str
-    slug: str
-    tagline: Optional[str] = None
-    bio: Optional[str] = None
-    profile_picture: Optional[str] = None
-    cover_image: Optional[str] = None
-    gallery_images: Optional[List[str]] = []
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    website: Optional[HttpUrl] = None
-    city: str
-    state: str
-    country: str
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    services: List[str] = []
-    equipment: Optional[List[str]] = []
-    team_size: Optional[str] = None
-    availability: Optional[str] = None
-    pricing_from: Optional[float] = None
-    portfolio_url: Optional[HttpUrl] = None
-    social_facebook: Optional[str] = None
-    social_instagram: Optional[str] = None
-    social_youtube: Optional[str] = None
-    church_associated_to: Optional[str] = None
-    is_verified: bool = False
-    is_featured: bool = False
-    status: str = "draft"
-
-class MediaTeamCreate(MediaTeamBase):
-    pass
-
-class MediaTeamUpdate(BaseModel):
-    name: Optional[str] = None
-    tagline: Optional[str] = None
-    bio: Optional[str] = None
-    profile_picture: Optional[str] = None
-    cover_image: Optional[str] = None
-    gallery_images: Optional[List[str]] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    website: Optional[HttpUrl] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    country: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    services: Optional[List[str]] = None
-    equipment: Optional[List[str]] = None
-    team_size: Optional[str] = None
-    availability: Optional[str] = None
-    pricing_from: Optional[float] = None
-    portfolio_url: Optional[HttpUrl] = None
-    social_facebook: Optional[str] = None
-    social_instagram: Optional[str] = None
-    social_youtube: Optional[str] = None
-    church_associated_to: Optional[str] = None
-    status: Optional[str] = None
+def event_to_response(event: dict) -> dict:
+    event["id"] = event["_id"]
+    del event["_id"]
+    return event
 
 @app.get("/")
-async def root():
-    return {"message": "ChurchNavigator API", "version": "1.0", "database": DATABASE_NAME}
+def root():
+    return {"message": "ChurchNavigator API", "status": "active"}
+
+@app.get("/api/events")
+def get_events(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    city: Optional[str] = None,
+    event_type: Optional[str] = None,
+    status: str = "published"
+):
+    query = {"trashed_at": None, "status": status}
+    
+    if city:
+        query["city"] = {"$regex": city, "$options": "i"}
+    if event_type:
+        query["event_type"] = event_type
+    
+    total = events_collection.count_documents(query)
+    
+    events = list(events_collection.find(query).sort("start_date", ASCENDING).skip(offset).limit(limit))
+    
+    return {
+        "events": [event_to_response(e) for e in events],
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
+
+@app.get("/api/events/featured")
+def get_featured_events(limit: int = Query(6, ge=1, le=20)):
+    query = {
+        "trashed_at": None,
+        "status": "published",
+        "is_featured": True
+    }
+    
+    events = list(events_collection.find(query).sort("start_date", ASCENDING).limit(limit))
+    
+    return {
+        "events": [event_to_response(e) for e in events]
+    }
+
+@app.get("/api/events/search")
+def search_events(
+    q: Optional[str] = None,
+    city: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    event_type: Optional[str] = None,
+    is_online: Optional[bool] = None,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0)
+):
+    query = {"trashed_at": None, "status": "published"}
+    
+    if q:
+        query["$or"] = [
+            {"title": {"$regex": q, "$options": "i"}},
+            {"description": {"$regex": q, "$options": "i"}},
+            {"tags": {"$regex": q, "$options": "i"}}
+        ]
+    
+    if city:
+        query["city"] = {"$regex": city, "$options": "i"}
+    
+    if date_from:
+        query["start_date"] = {"$gte": date_from}
+    
+    if date_to:
+        if "start_date" in query:
+            query["start_date"]["$lte"] = date_to
+        else:
+            query["start_date"] = {"$lte": date_to}
+    
+    if event_type:
+        query["event_type"] = event_type
+    
+    if is_online is not None:
+        query["is_online"] = is_online
+    
+    total = events_collection.count_documents(query)
+    events = list(events_collection.find(query).sort("start_date", ASCENDING).skip(offset).limit(limit))
+    
+    return {
+        "events": [event_to_response(e) for e in events],
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
+
+@app.get("/api/events/{slug}")
+def get_event(slug: str):
+    event = events_collection.find_one({"slug": slug, "trashed_at": None})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event_to_response(event)
+
+@app.post("/api/events", status_code=status.HTTP_201_CREATED)
+def create_event(event: EventCreate):
+    event_dict = event.dict()
+    event_dict["_id"] = str(uuid.uuid4())
+    event_dict["slug"] = create_slug(event.title)
+    event_dict["created_at"] = datetime.utcnow()
+    event_dict["updated_at"] = datetime.utcnow()
+    event_dict["owner_id"] = "system"
+    event_dict["trashed_at"] = None
+    
+    if event.church_id:
+        church = churches_collection.find_one({"_id": event.church_id, "trashed_at": None})
+        if not church:
+            raise HTTPException(status_code=404, detail="Church not found")
+    
+    try:
+        events_collection.insert_one(event_dict)
+        return event_to_response(event_dict)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/api/events/{slug}")
+def update_event(slug: str, event_update: EventUpdate):
+    existing_event = events_collection.find_one({"slug": slug, "trashed_at": None})
+    if not existing_event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    update_data = {k: v for k, v in event_update.dict(exclude_unset=True).items() if v is not None}
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    if "title" in update_data and update_data["title"] != existing_event["title"]:
+        update_data["slug"] = create_slug(update_data["title"])
+    
+    if "church_id" in update_data and update_data["church_id"]:
+        church = churches_collection.find_one({"_id": update_data["church_id"], "trashed_at": None})
+        if not church:
+            raise HTTPException(status_code=404, detail="Church not found")
+    
+    update_data["updated_at"] = datetime.utcnow()
+    
+    try:
+        events_collection.update_one(
+            {"slug": slug},
+            {"$set": update_data}
+        )
+        updated_event = events_collection.find_one({"slug": update_data.get("slug", slug)})
+        return event_to_response(updated_event)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/churches")
-async def get_churches(
+def get_churches(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     city: Optional[str] = None,
-    state: Optional[str] = None,
-    country: Optional[str] = None,
-    denomination: Optional[str] = None,
-    search: Optional[str] = None,
-    limit: int = Query(50, le=100),
-    skip: int = 0
+    status: str = "published"
 ):
-    query = {"status": "published", "trashed_at": None}
-    
+    query = {"trashed_at": None, "status": status}
     if city:
         query["city"] = {"$regex": city, "$options": "i"}
-    if state:
-        query["state"] = {"$regex": state, "$options": "i"}
-    if country:
-        query["country"] = {"$regex": country, "$options": "i"}
-    if denomination:
-        query["denomination"] = {"$regex": denomination, "$options": "i"}
-    if search:
-        query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}}
-        ]
     
-    churches = await db.churches.find(query).skip(skip).limit(limit).to_list(length=limit)
-    total = await db.churches.count_documents(query)
+    total = churches_collection.count_documents(query)
+    churches = list(churches_collection.find(query).skip(offset).limit(limit))
     
     for church in churches:
-        church["id"] = str(church["_id"])
+        church["id"] = church["_id"]
         del church["_id"]
     
-    return {"churches": churches, "total": total, "limit": limit, "skip": skip}
+    return {
+        "churches": churches,
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
 
 @app.get("/api/churches/{slug}")
-async def get_church(slug: str):
-    church = await db.churches.find_one({"slug": slug, "status": "published", "trashed_at": None})
+def get_church(slug: str):
+    church = churches_collection.find_one({"slug": slug, "trashed_at": None})
     if not church:
         raise HTTPException(status_code=404, detail="Church not found")
-    
-    church["id"] = str(church["_id"])
+    church["id"] = church["_id"]
     del church["_id"]
     return church
-
-@app.post("/api/churches")
-async def create_church(church: ChurchCreate, owner_id: str = Depends(get_current_user)):
-    church_dict = church.dict()
-    church_dict["id"] = str(uuid.uuid4())
-    church_dict["created_at"] = datetime.utcnow()
-    church_dict["updated_at"] = datetime.utcnow()
-    church_dict["owner_id"] = owner_id
-    church_dict["trashed_at"] = None
-    
-    existing = await db.churches.find_one({"slug": church.slug})
-    if existing:
-        raise HTTPException(status_code=400, detail="Church with this slug already exists")
-    
-    result = await db.churches.insert_one(church_dict)
-    church_dict["_id"] = str(result.inserted_id)
-    return {"message": "Church created successfully", "id": church_dict["id"]}
-
-@app.put("/api/churches/{slug}")
-async def update_church(slug: str, church_update: ChurchUpdate, owner_id: str = Depends(get_current_user)):
-    existing = await db.churches.find_one({"slug": slug})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Church not found")
-    
-    if existing.get("owner_id") != owner_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this church")
-    
-    update_data = {k: v for k, v in church_update.dict(exclude_unset=True).items()}
-    update_data["updated_at"] = datetime.utcnow()
-    
-    await db.churches.update_one({"slug": slug}, {"$set": update_data})
-    return {"message": "Church updated successfully"}
-
-@app.get("/api/media-teams")
-async def get_media_teams(
-    city: Optional[str] = None,
-    state: Optional[str] = None,
-    country: Optional[str] = None,
-    service: Optional[str] = None,
-    search: Optional[str] = None,
-    limit: int = Query(50, le=100),
-    skip: int = 0
-):
-    query = {"status": "published", "trashed_at": None}
-    
-    if city:
-        query["city"] = {"$regex": city, "$options": "i"}
-    if state:
-        query["state"] = {"$regex": state, "$options": "i"}
-    if country:
-        query["country"] = {"$regex": country, "$options": "i"}
-    if service:
-        query["services"] = {"$regex": service, "$options": "i"}
-    if search:
-        query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"bio": {"$regex": search, "$options": "i"}},
-            {"tagline": {"$regex": search, "$options": "i"}}
-        ]
-    
-    teams = await db.media_teams.find(query).skip(skip).limit(limit).to_list(length=limit)
-    total = await db.media_teams.count_documents(query)
-    
-    for team in teams:
-        team["id"] = str(team["_id"])
-        del team["_id"]
-    
-    return {"media_teams": teams, "total": total, "limit": limit, "skip": skip}
-
-@app.get("/api/media-teams/{slug}")
-async def get_media_team(slug: str):
-    team = await db.media_teams.find_one({"slug": slug, "status": "published", "trashed_at": None})
-    if not team:
-        raise HTTPException(status_code=404, detail="Media team not found")
-    
-    team["id"] = str(team["_id"])
-    del team["_id"]
-    return team
-
-@app.post("/api/media-teams")
-async def create_media_team(media_team: MediaTeamCreate, owner_id: str = Depends(get_current_user)):
-    team_dict = media_team.dict()
-    team_dict["id"] = str(uuid.uuid4())
-    team_dict["created_at"] = datetime.utcnow()
-    team_dict["updated_at"] = datetime.utcnow()
-    team_dict["owner_id"] = owner_id
-    team_dict["trashed_at"] = None
-    
-    existing = await db.media_teams.find_one({"slug": media_team.slug})
-    if existing:
-        raise HTTPException(status_code=400, detail="Media team with this slug already exists")
-    
-    result = await db.media_teams.insert_one(team_dict)
-    team_dict["_id"] = str(result.inserted_id)
-    return {"message": "Media team created successfully", "id": team_dict["id"]}
-
-@app.put("/api/media-teams/{slug}")
-async def update_media_team(slug: str, team_update: MediaTeamUpdate, owner_id: str = Depends(get_current_user)):
-    existing = await db.media_teams.find_one({"slug": slug})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Media team not found")
-    
-    if existing.get("owner_id") != owner_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this media team")
-    
-    update_data = {k: v for k, v in team_update.dict(exclude_unset=True).items()}
-    update_data["updated_at"] = datetime.utcnow()
-    
-    await db.media_teams.update_one({"slug": slug}, {"$set": update_data})
-    return {"message": "Media team updated successfully"}
-
-@app.get("/sitemap.xml")
-async def sitemap():
-    churches = await db.churches.find({"status": "published", "trashed_at": None}).to_list(length=10000)
-    media_teams = await db.media_teams.find({"status": "published", "trashed_at": None}).to_list(length=10000)
-    
-    urls = [
-        {"loc": "https://churchnavigator.com/", "priority": "1.0"},
-        {"loc": "https://churchnavigator.com/churches", "priority": "0.9"},
-        {"loc": "https://churchnavigator.com/media-teams", "priority": "0.9"},
-    ]
-    
-    for church in churches:
-        urls.append({
-            "loc": f"https://churchnavigator.com/church/{church['slug']}",
-            "priority": "0.8",
-            "lastmod": church.get("updated_at", church.get("created_at", datetime.utcnow())).strftime("%Y-%m-%d")
-        })
-    
-    for team in media_teams:
-        urls.append({
-            "loc": f"https://churchnavigator.com/media-team/{team['slug']}",
-            "priority": "0.8",
-            "lastmod": team.get("updated_at", team.get("created_at", datetime.utcnow())).strftime("%Y-%m-%d")
-        })
-    
-    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-    
-    for url in urls:
-        xml_content += '  <url>\n'
-        xml_content += f'    <loc>{url["loc"]}</loc>\n'
-        xml_content += f'    <priority>{url["priority"]}</priority>\n'
-        if "lastmod" in url:
-            xml_content += f'    <lastmod>{url["lastmod"]}</lastmod>\n'
-        xml_content += '  </url>\n'
-    
-    xml_content += '</urlset>'
-    
-    return Response(content=xml_content, media_type="application/xml")
-
-@app.get("/robots.txt")
-async def robots():
-    content = """User-agent: *
-Allow: /
-
-Sitemap: https://api.churchnavigator.com/sitemap.xml"""
-    return Response(content=content, media_type="text/plain")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
