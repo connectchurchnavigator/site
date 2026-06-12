@@ -1,265 +1,192 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-import '../styles/PlannerView.css';
-
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import './PlannerViewPage.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
 
 function PlannerViewPage() {
-  const { tripId } = useParams();
-  const [trip, setTrip] = useState(null);
-  const [optimising, setOptimising] = useState(false);
-  const [optimisedData, setOptimisedData] = useState(null);
-  const [viewMode, setViewMode] = useState('list');
-  const [showOriginal, setShowOriginal] = useState(false);
-  const [travelTimes, setTravelTimes] = useState({});
-  const [loadingTimes, setLoadingTimes] = useState(false);
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [planner, setPlanner] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
-    fetchTrip();
-  }, [tripId]);
+    fetchPlanner();
+  }, [id]);
 
-  useEffect(() => {
-    if (trip?.itinerary?.length > 0) {
-      loadTravelTimes();
-    }
-  }, [trip]);
-
-  const fetchTrip = async () => {
+  const fetchPlanner = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/planner/${tripId}`);
-      const data = await response.json();
-      setTrip(data);
-    } catch (error) {
-      console.error('Failed to fetch trip:', error);
-    }
-  };
-
-  const loadTravelTimes = async () => {
-    if (!trip?.itinerary) return;
-    setLoadingTimes(true);
-    const times = {};
-    
-    for (let i = 0; i < trip.itinerary.length - 1; i++) {
-      const from = trip.itinerary[i];
-      const to = trip.itinerary[i + 1];
-      
-      try {
-        const response = await fetch(
-          `${API_BASE}/api/planner/travel-time?lat1=${from.lat}&lng1=${from.lng}&lat2=${to.lat}&lng2=${to.lng}`
-        );
-        const data = await response.json();
-        times[`${i}-${i+1}`] = data;
-      } catch (error) {
-        times[`${i}-${i+1}`] = { duration_minutes: 0, distance_km: 0, maps_url: '' };
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
       }
-    }
-    
-    setTravelTimes(times);
-    setLoadingTimes(false);
-  };
-
-  const optimiseRoute = async () => {
-    setOptimising(true);
-    try {
-      const locations = trip.itinerary.map((item, idx) => ({
-        item_id: item.id || `item-${idx}`,
-        name: item.name,
-        lat: item.lat,
-        lng: item.lng,
-        start_time: item.start_time,
-        end_time: item.end_time,
-        is_flexible: item.is_flexible !== false,
-        day: item.day || 1
-      }));
-
-      const response = await fetch(`${API_BASE}/api/planner/${tripId}/optimise`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locations })
+      const response = await axios.get(`${API_BASE}/api/planner/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-
-      const data = await response.json();
-      setOptimisedData(data);
-    } catch (error) {
-      console.error('Optimisation failed:', error);
-      alert('Failed to optimise route');
+      setPlanner(response.data);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to load planner');
     } finally {
-      setOptimising(false);
+      setLoading(false);
     }
   };
 
-  const applyOptimisation = () => {
-    const newItinerary = [];
-    optimisedData.optimised_itinerary.forEach(day => {
-      newItinerary.push(...day.items);
-    });
-    setTrip({ ...trip, itinerary: newItinerary });
-    setOptimisedData(null);
-    loadTravelTimes();
+  const handleDownloadPDF = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/api/planner/${id}/export/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${planner.trip_name || 'itinerary'}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert('Failed to download PDF');
+    }
   };
 
-  const renderTravelSegment = (fromIdx, toIdx) => {
-    const key = `${fromIdx}-${toIdx}`;
-    const travel = travelTimes[key];
-    if (!travel) return null;
-
-    return (
-      <div className="travel-segment">
-        <div className="travel-icon">🚗</div>
-        <div className="travel-info">
-          <span className="travel-time">{travel.duration_minutes} min drive</span>
-          <span className="travel-distance">({travel.distance_km} km)</span>
-          {travel.maps_url && (
-            <a href={travel.maps_url} target="_blank" rel="noopener noreferrer" className="travel-link">
-              Google Maps →
-            </a>
-          )}
-        </div>
-      </div>
-    );
+  const handleDownloadCalendar = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/api/planner/${id}/export/ical`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${planner.trip_name || 'itinerary'}.ics`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert('Failed to download calendar');
+    }
   };
 
-  const renderMapView = () => {
-    const itinerary = showOriginal && optimisedData 
-      ? optimisedData.original_itinerary.flatMap(d => d.items)
-      : optimisedData 
-      ? optimisedData.optimised_itinerary.flatMap(d => d.items)
-      : trip.itinerary;
-
-    if (!itinerary?.length) return null;
-
-    const bounds = itinerary.map(item => [item.lat, item.lng]);
-    const center = [
-      bounds.reduce((sum, b) => sum + b[0], 0) / bounds.length,
-      bounds.reduce((sum, b) => sum + b[1], 0) / bounds.length
-    ];
-
-    return (
-      <MapContainer center={center} zoom={10} style={{ height: '500px', width: '100%' }}>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        />
-        {itinerary.map((item, idx) => (
-          <Marker key={idx} position={[item.lat, item.lng]}>
-            <Popup>
-              <strong>{idx + 1}. {item.name}</strong>
-              {item.start_time && <div>{item.start_time}</div>}
-            </Popup>
-          </Marker>
-        ))}
-        <Polyline positions={bounds} color={showOriginal ? "red" : "blue"} weight={3} />
-      </MapContainer>
-    );
+  const handleShareWhatsApp = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE}/api/planner/${id}/export/whatsapp`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      window.open(response.data.whatsapp_url, '_blank');
+    } catch (err) {
+      alert('Failed to generate WhatsApp share');
+    }
   };
 
-  if (!trip) return <div className="loading">Loading trip...</div>;
+  const handleCopyShareLink = () => {
+    const shareUrl = `https://churchnavigator.com/planner/${planner.share_token}`;
+    navigator.clipboard.writeText(shareUrl);
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  const handleEdit = () => {
+    navigate(`/planner/${id}/edit`);
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this planner?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_BASE}/api/planner/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      navigate('/dashboard');
+    } catch (err) {
+      alert('Failed to delete planner');
+    }
+  };
+
+  if (loading) return <div className="planner-loading">Loading planner...</div>;
+  if (error) return <div className="planner-error">{error}</div>;
+  if (!planner) return <div className="planner-error">Planner not found</div>;
+
+  const sortedItems = (planner.items || []).sort((a, b) => {
+    const dateA = new Date(`${a.date} ${a.time}`);
+    const dateB = new Date(`${b.date} ${b.time}`);
+    return dateA - dateB;
+  });
 
   return (
     <div className="planner-view-page">
-      <header className="planner-header">
-        <h1>{trip.name}</h1>
-        <button onClick={optimiseRoute} disabled={optimising} className="btn-optimise">
-          {optimising ? 'Optimising...' : '✨ Optimise My Route'}
-        </button>
-      </header>
-
-      {optimisedData && (
-        <div className="optimisation-result">
-          <div className="comparison-card">
-            <h2>Route Optimisation Complete!</h2>
-            <p className="explanation">{optimisedData.explanation}</p>
-            
-            <div className="comparison-stats">
-              <div className="stat">
-                <span className="label">Before:</span>
-                <span className="value">
-                  {optimisedData.original_itinerary.reduce((sum, d) => sum + d.total_driving_minutes, 0)} min
-                </span>
-              </div>
-              <div className="stat">
-                <span className="label">After:</span>
-                <span className="value">
-                  {optimisedData.optimised_itinerary.reduce((sum, d) => sum + d.total_driving_minutes, 0)} min
-                </span>
-              </div>
-              <div className="stat saved">
-                <span className="label">Saved:</span>
-                <span className="value">✅ {optimisedData.time_saved_minutes} min</span>
-              </div>
-            </div>
-
-            <div className="changes-made">
-              <h3>Changes Made:</h3>
-              <ul>
-                {optimisedData.changes_made.map((change, idx) => (
-                  <li key={idx}>{change}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="action-buttons">
-              <button onClick={applyOptimisation} className="btn-apply">Apply Changes</button>
-              <button onClick={() => setOptimisedData(null)} className="btn-cancel">Cancel</button>
-            </div>
-          </div>
+      <div className="planner-header">
+        <div className="planner-title-section">
+          <h1>{planner.trip_name || 'Untitled Trip'}</h1>
+          <p className="planner-visitor">{planner.visitor_name}</p>
+          <p className="planner-dates">
+            {planner.start_date} to {planner.end_date} • Base: {planner.base_location}
+          </p>
         </div>
-      )}
-
-      <div className="view-toggle">
-        <button 
-          className={viewMode === 'list' ? 'active' : ''} 
-          onClick={() => setViewMode('list')}
-        >
-          📋 List View
-        </button>
-        <button 
-          className={viewMode === 'map' ? 'active' : ''} 
-          onClick={() => setViewMode('map')}
-        >
-          🗺️ Map View
-        </button>
-        {optimisedData && (
-          <label className="show-original">
-            <input 
-              type="checkbox" 
-              checked={showOriginal} 
-              onChange={(e) => setShowOriginal(e.target.checked)} 
-            />
-            Show Original
-          </label>
-        )}
+        <div className="planner-actions">
+          <button onClick={handleEdit} className="btn-edit">Edit</button>
+          <button onClick={handleDelete} className="btn-delete">Delete</button>
+        </div>
       </div>
 
-      {viewMode === 'map' ? (
-        renderMapView()
-      ) : (
-        <div className="itinerary-list">
-          {trip.itinerary.map((item, idx) => (
-            <React.Fragment key={idx}>
-              <div className="itinerary-item">
-                <div className="item-number">{idx + 1}</div>
-                <div className="item-details">
-                  <h3>{item.name}</h3>
-                  {item.start_time && <p className="item-time">🕒 {item.start_time}</p>}
-                  {!item.is_flexible && <span className="badge-fixed">Fixed Time</span>}
-                </div>
-              </div>
-              {idx < trip.itinerary.length - 1 && renderTravelSegment(idx, idx + 1)}
-            </React.Fragment>
-          ))}
+      <div className="planner-export-section">
+        <button onClick={handleDownloadPDF} className="export-btn pdf-btn">
+          📄 Download PDF
+        </button>
+        <button onClick={handleDownloadCalendar} className="export-btn calendar-btn">
+          📅 Add to Calendar
+        </button>
+        <button onClick={handleShareWhatsApp} className="export-btn whatsapp-btn">
+          💬 Share on WhatsApp
+        </button>
+        <button onClick={handleCopyShareLink} className="export-btn link-btn">
+          {copySuccess ? '✓ Copied!' : '🔗 Copy Link'}
+        </button>
+      </div>
+
+      {planner.overview && (
+        <div className="planner-overview">
+          <h2>Overview</h2>
+          <p>{planner.overview}</p>
         </div>
       )}
+
+      <div className="planner-schedule">
+        <h2>Schedule</h2>
+        {sortedItems.length === 0 ? (
+          <p className="no-items">No items in this planner yet.</p>
+        ) : (
+          <div className="schedule-list">
+            {sortedItems.map((item, index) => {
+              const prevItem = index > 0 ? sortedItems[index - 1] : null;
+              const showDate = !prevItem || prevItem.date !== item.date;
+              return (
+                <div key={index}>
+                  {showDate && <div className="schedule-date">{item.date}</div>}
+                  <div className="schedule-item">
+                    <div className="schedule-time">{item.time}</div>
+                    <div className="schedule-details">
+                      <h3>{item.title}</h3>
+                      {item.church_name && <p className="church-name">{item.church_name}</p>}
+                      {item.location && <p className="location">📍 {item.location}</p>}
+                      {item.pastor_name && (
+                        <p className="pastor">Pastor: {item.pastor_name} {item.phone}</p>
+                      )}
+                      {item.description && <p className="description">{item.description}</p>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
