@@ -1,44 +1,32 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
-import os
-from dotenv import load_dotenv
+from app.routers import churches, events, jobs, auth, flyers
+from app.database import init_db
 
-load_dotenv()
-
-from backend.database import connect_to_mongo, close_mongo_connection
-from backend.routes import churches, search, seo, website
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await connect_to_mongo()
-    yield
-    await close_mongo_connection()
-
-app = FastAPI(title="ChurchNavigator API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="ChurchNavigator API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "https://churchnavigator.com", "https://dev.churchnavigator.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(churches.router)
-app.include_router(search.router)
-app.include_router(seo.router)
-app.include_router(website.router)
+@app.on_event("startup")
+async def startup_event():
+    init_db()
 
 @app.get("/")
-async def root():
-    return {"message": "ChurchNavigator API", "version": "1.0.0", "status": "active"}
+def read_root():
+    return {"message": "ChurchNavigator API", "status": "online"}
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+app.include_router(churches.router)
+app.include_router(events.router)
+app.include_router(jobs.router)
+app.include_router(auth.router)
+app.include_router(flyers.router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
