@@ -1,15 +1,20 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
-import HealthCheckPage from './pages/tools/HealthCheckPage';
+import ChurchDetailPage from './pages/ChurchDetailPage';
+import PastorSearchPage from './pages/PastorSearchPage';
+import './App.css';
 
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/tools/health-check" element={<HealthCheckPage />} />
-      </Routes>
+      <div className="App">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/church/:slug" element={<ChurchDetailPage />} />
+          <Route path="/pastors" element={<PastorSearchPage />} />
+        </Routes>
+      </div>
     </Router>
   );
 }
