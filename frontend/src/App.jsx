@@ -1,26 +1,30 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Header from './components/Header';
+import Footer from './components/Footer';
 import Home from './pages/Home';
+import ChurchList from './pages/ChurchList';
 import ChurchDetail from './pages/ChurchDetail';
-import Dashboard from './pages/dashboard/Dashboard';
-import Gallery from './pages/dashboard/Gallery';
-import Videos from './pages/dashboard/Videos';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import PrivateRoute from './components/PrivateRoute';
+import TripPlanner from './components/Planner/TripPlanner';
+import VisitRequestResponse from './components/Planner/VisitRequestResponse';
 
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/church/:slug" element={<ChurchDetail />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="/dashboard/gallery" element={<PrivateRoute><Gallery /></PrivateRoute>} />
-        <Route path="/dashboard/videos" element={<PrivateRoute><Videos /></PrivateRoute>} />
-      </Routes>
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-grow">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/churches" element={<ChurchList />} />
+            <Route path="/church/:id" element={<ChurchDetail />} />
+            <Route path="/planner/trips/:tripId" element={<TripPlanner />} />
+            <Route path="/visit-request/:requestId/:action" element={<VisitRequestResponse />} />
+            <Route path="/visit-request/:requestId" element={<VisitRequestResponse />} />
+          </Routes>
+        </main>
+        <Footer />
+      </div>
     </Router>
   );
 }
