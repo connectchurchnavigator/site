@@ -1,19 +1,22 @@
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pymongo import MongoClient, ASCENDING, DESCENDING
-from bson import ObjectId
+from fastapi.responses import Response
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field, EmailStr, HttpUrl
 from typing import Optional, List
-from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
+from bson import ObjectId
 import os
 from dotenv import load_dotenv
 import uuid
 import re
-from urllib.parse import quote_plus
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 load_dotenv()
 
-app = FastAPI(title="ChurchNavigator API")
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,34 +26,99 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MONGODB_USERNAME = quote_plus(os.getenv("MONGODB_USERNAME", ""))
-MONGODB_PASSWORD = quote_plus(os.getenv("MONGODB_PASSWORD", ""))
-MONGODB_CLUSTER = os.getenv("MONGODB_CLUSTER", "")
-MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "DEV-ChurchNavigator")
+MONGODB_URL = os.getenv("MONGODB_URL")
+DATABASE_NAME = os.getenv("DATABASE_NAME", "DEV-ChurchNavigator")
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+JWT_ALGORITHM = "HS256"
 
-MONGODB_URI = f"mongodb+srv://{MONGODB_USERNAME}:{MONGODB_PASSWORD}@{MONGODB_CLUSTER}/?retryWrites=true&w=majority"
+client = AsyncIOMotorClient(MONGODB_URL)
+db = client[DATABASE_NAME]
 
-client = MongoClient(MONGODB_URI)
-db = client[MONGODB_DATABASE]
-churches_collection = db["churches"]
-worship_leaders_collection = db["worship_leaders"]
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
 
-worship_leaders_collection.create_index([("slug", ASCENDING)], unique=True)
-worship_leaders_collection.create_index([("status", ASCENDING)])
-worship_leaders_collection.create_index([("city", ASCENDING)])
-worship_leaders_collection.create_index([("denomination", ASCENDING)])
-worship_leaders_collection.create_index([("instruments", ASCENDING)])
-worship_leaders_collection.create_index([("is_featured", DESCENDING)])
-worship_leaders_collection.create_index([("created_at", DESCENDING)])
+def generate_slug(name: str) -> str:
+    slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+    return slug
 
-class SocialLinks(BaseModel):
-    facebook: Optional[str] = None
-    instagram: Optional[str] = None
-    youtube: Optional[str] = None
-    twitter: Optional[str] = None
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication")
+        return user_id
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid authentication")
 
-class WorshipLeaderCreate(BaseModel):
+class ChurchBase(BaseModel):
     name: str
+    slug: str
+    city: str
+    state: str
+    country: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    website: Optional[HttpUrl] = None
+    denomination: Optional[str] = None
+    service_times: Optional[str] = None
+    description: Optional[str] = None
+    profile_picture: Optional[str] = None
+    cover_image: Optional[str] = None
+    gallery_images: Optional[List[str]] = []
+    pastor_name: Optional[str] = None
+    founded_year: Optional[int] = None
+    capacity: Optional[int] = None
+    ministries: Optional[List[str]] = []
+    languages: Optional[List[str]] = []
+    facilities: Optional[List[str]] = []
+    social_facebook: Optional[str] = None
+    social_twitter: Optional[str] = None
+    social_instagram: Optional[str] = None
+    social_youtube: Optional[str] = None
+    is_verified: bool = False
+    is_featured: bool = False
+    status: str = "draft"
+
+class ChurchCreate(ChurchBase):
+    pass
+
+class ChurchUpdate(BaseModel):
+    name: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    website: Optional[HttpUrl] = None
+    denomination: Optional[str] = None
+    service_times: Optional[str] = None
+    description: Optional[str] = None
+    profile_picture: Optional[str] = None
+    cover_image: Optional[str] = None
+    gallery_images: Optional[List[str]] = None
+    pastor_name: Optional[str] = None
+    founded_year: Optional[int] = None
+    capacity: Optional[int] = None
+    ministries: Optional[List[str]] = None
+    languages: Optional[List[str]] = None
+    facilities: Optional[List[str]] = None
+    social_facebook: Optional[str] = None
+    social_twitter: Optional[str] = None
+    social_instagram: Optional[str] = None
+    social_youtube: Optional[str] = None
+    status: Optional[str] = None
+
+class MediaTeamBase(BaseModel):
+    name: str
+    slug: str
     tagline: Optional[str] = None
     bio: Optional[str] = None
     profile_picture: Optional[str] = None
@@ -58,24 +126,30 @@ class WorshipLeaderCreate(BaseModel):
     gallery_images: Optional[List[str]] = []
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
-    website: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    country: str = "United Kingdom"
+    website: Optional[HttpUrl] = None
+    city: str
+    state: str
+    country: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    denomination: Optional[str] = None
-    instruments: Optional[List[str]] = []
-    worship_styles: Optional[List[str]] = []
-    languages_known: Optional[List[str]] = ["English"]
-    years_of_experience: Optional[int] = 0
-    availability: Optional[str] = "Available for hire"
-    social: Optional[SocialLinks] = SocialLinks()
+    services: List[str] = []
+    equipment: Optional[List[str]] = []
+    team_size: Optional[str] = None
+    availability: Optional[str] = None
+    pricing_from: Optional[float] = None
+    portfolio_url: Optional[HttpUrl] = None
+    social_facebook: Optional[str] = None
+    social_instagram: Optional[str] = None
+    social_youtube: Optional[str] = None
     church_associated_to: Optional[str] = None
+    is_verified: bool = False
+    is_featured: bool = False
     status: str = "draft"
-    owner_id: Optional[str] = None
 
-class WorshipLeaderUpdate(BaseModel):
+class MediaTeamCreate(MediaTeamBase):
+    pass
+
+class MediaTeamUpdate(BaseModel):
     name: Optional[str] = None
     tagline: Optional[str] = None
     bio: Optional[str] = None
@@ -84,252 +158,230 @@ class WorshipLeaderUpdate(BaseModel):
     gallery_images: Optional[List[str]] = None
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
-    website: Optional[str] = None
+    website: Optional[HttpUrl] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    denomination: Optional[str] = None
-    instruments: Optional[List[str]] = None
-    worship_styles: Optional[List[str]] = None
-    languages_known: Optional[List[str]] = None
-    years_of_experience: Optional[int] = None
+    services: Optional[List[str]] = None
+    equipment: Optional[List[str]] = None
+    team_size: Optional[str] = None
     availability: Optional[str] = None
-    social: Optional[SocialLinks] = None
+    pricing_from: Optional[float] = None
+    portfolio_url: Optional[HttpUrl] = None
+    social_facebook: Optional[str] = None
+    social_instagram: Optional[str] = None
+    social_youtube: Optional[str] = None
     church_associated_to: Optional[str] = None
     status: Optional[str] = None
-    is_verified: Optional[bool] = None
-    is_featured: Optional[bool] = None
-    is_recommended: Optional[bool] = None
-
-def create_slug(name: str) -> str:
-    slug = name.lower()
-    slug = re.sub(r'[^a-z0-9\s-]', '', slug)
-    slug = re.sub(r'[\s-]+', '-', slug)
-    slug = slug.strip('-')
-    base_slug = slug
-    counter = 1
-    while worship_leaders_collection.find_one({"slug": slug, "trashed_at": None}):
-        slug = f"{base_slug}-{counter}"
-        counter += 1
-    return slug
-
-def serialize_worship_leader(leader: dict) -> dict:
-    leader["id"] = str(leader.pop("_id"))
-    if "created_at" in leader:
-        leader["created_at"] = leader["created_at"].isoformat()
-    if "updated_at" in leader:
-        leader["updated_at"] = leader["updated_at"].isoformat()
-    if "trashed_at" in leader and leader["trashed_at"]:
-        leader["trashed_at"] = leader["trashed_at"].isoformat()
-    return leader
 
 @app.get("/")
-def read_root():
-    return {"message": "ChurchNavigator API", "version": "1.0.0"}
+async def root():
+    return {"message": "ChurchNavigator API", "version": "1.0", "database": DATABASE_NAME}
 
 @app.get("/api/churches")
-def get_churches(
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+async def get_churches(
     city: Optional[str] = None,
     state: Optional[str] = None,
+    country: Optional[str] = None,
     denomination: Optional[str] = None,
-    status: str = "published"
+    search: Optional[str] = None,
+    limit: int = Query(50, le=100),
+    skip: int = 0
 ):
-    query = {"status": status, "trashed_at": None}
+    query = {"status": "published", "trashed_at": None}
+    
     if city:
         query["city"] = {"$regex": city, "$options": "i"}
     if state:
         query["state"] = {"$regex": state, "$options": "i"}
+    if country:
+        query["country"] = {"$regex": country, "$options": "i"}
     if denomination:
         query["denomination"] = {"$regex": denomination, "$options": "i"}
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}}
+        ]
     
-    skip = (page - 1) * limit
-    total = churches_collection.count_documents(query)
-    churches = list(churches_collection.find(query).skip(skip).limit(limit).sort("created_at", DESCENDING))
+    churches = await db.churches.find(query).skip(skip).limit(limit).to_list(length=limit)
+    total = await db.churches.count_documents(query)
     
     for church in churches:
-        church["id"] = str(church.pop("_id"))
-        if "created_at" in church:
-            church["created_at"] = church["created_at"].isoformat()
-        if "updated_at" in church:
-            church["updated_at"] = church["updated_at"].isoformat()
+        church["id"] = str(church["_id"])
+        del church["_id"]
     
-    return {
-        "data": churches,
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "pages": (total + limit - 1) // limit
-    }
+    return {"churches": churches, "total": total, "limit": limit, "skip": skip}
 
 @app.get("/api/churches/{slug}")
-def get_church(slug: str):
-    church = churches_collection.find_one({"slug": slug, "trashed_at": None})
+async def get_church(slug: str):
+    church = await db.churches.find_one({"slug": slug, "status": "published", "trashed_at": None})
     if not church:
         raise HTTPException(status_code=404, detail="Church not found")
     
-    church["id"] = str(church.pop("_id"))
-    if "created_at" in church:
-        church["created_at"] = church["created_at"].isoformat()
-    if "updated_at" in church:
-        church["updated_at"] = church["updated_at"].isoformat()
-    
+    church["id"] = str(church["_id"])
+    del church["_id"]
     return church
 
-@app.get("/api/worship-leaders")
-def get_worship_leaders(
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
-    city: Optional[str] = None,
-    denomination: Optional[str] = None,
-    instrument: Optional[str] = None,
-    availability: Optional[str] = None,
-    is_featured: Optional[bool] = None,
-    status: str = "published"
-):
-    query = {"status": status, "trashed_at": None}
-    if city:
-        query["city"] = {"$regex": city, "$options": "i"}
-    if denomination:
-        query["denomination"] = {"$regex": denomination, "$options": "i"}
-    if instrument:
-        query["instruments"] = {"$regex": instrument, "$options": "i"}
-    if availability:
-        query["availability"] = {"$regex": availability, "$options": "i"}
-    if is_featured is not None:
-        query["is_featured"] = is_featured
+@app.post("/api/churches")
+async def create_church(church: ChurchCreate, owner_id: str = Depends(get_current_user)):
+    church_dict = church.dict()
+    church_dict["id"] = str(uuid.uuid4())
+    church_dict["created_at"] = datetime.utcnow()
+    church_dict["updated_at"] = datetime.utcnow()
+    church_dict["owner_id"] = owner_id
+    church_dict["trashed_at"] = None
     
-    skip = (page - 1) * limit
-    total = worship_leaders_collection.count_documents(query)
+    existing = await db.churches.find_one({"slug": church.slug})
+    if existing:
+        raise HTTPException(status_code=400, detail="Church with this slug already exists")
     
-    sort_order = [("is_featured", DESCENDING), ("created_at", DESCENDING)]
-    leaders = list(worship_leaders_collection.find(query).skip(skip).limit(limit).sort(sort_order))
-    
-    return {
-        "data": [serialize_worship_leader(leader) for leader in leaders],
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "pages": (total + limit - 1) // limit
-    }
+    result = await db.churches.insert_one(church_dict)
+    church_dict["_id"] = str(result.inserted_id)
+    return {"message": "Church created successfully", "id": church_dict["id"]}
 
-@app.get("/api/worship-leaders/search")
-def search_worship_leaders(
-    q: str = Query(..., min_length=1),
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100)
-):
-    query = {
-        "status": "published",
-        "trashed_at": None,
-        "$or": [
-            {"name": {"$regex": q, "$options": "i"}},
-            {"city": {"$regex": q, "$options": "i"}},
-            {"instruments": {"$regex": q, "$options": "i"}},
-            {"bio": {"$regex": q, "$options": "i"}}
-        ]
-    }
-    
-    skip = (page - 1) * limit
-    total = worship_leaders_collection.count_documents(query)
-    leaders = list(worship_leaders_collection.find(query).skip(skip).limit(limit).sort("created_at", DESCENDING))
-    
-    return {
-        "data": [serialize_worship_leader(leader) for leader in leaders],
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "pages": (total + limit - 1) // limit
-    }
-
-@app.get("/api/worship-leaders/{slug}")
-def get_worship_leader(slug: str):
-    leader = worship_leaders_collection.find_one({"slug": slug, "trashed_at": None})
-    if not leader:
-        raise HTTPException(status_code=404, detail="Worship leader not found")
-    return serialize_worship_leader(leader)
-
-@app.post("/api/worship-leaders")
-def create_worship_leader(leader: WorshipLeaderCreate):
-    slug = create_slug(leader.name)
-    
-    leader_dict = leader.dict()
-    leader_dict["id"] = str(uuid.uuid4())
-    leader_dict["slug"] = slug
-    leader_dict["created_at"] = datetime.utcnow()
-    leader_dict["updated_at"] = datetime.utcnow()
-    leader_dict["trashed_at"] = None
-    leader_dict["is_verified"] = False
-    leader_dict["is_featured"] = False
-    leader_dict["is_recommended"] = False
-    
-    if leader_dict["social"]:
-        leader_dict["social"] = leader_dict["social"].dict() if hasattr(leader_dict["social"], 'dict') else leader_dict["social"]
-    
-    result = worship_leaders_collection.insert_one(leader_dict)
-    created_leader = worship_leaders_collection.find_one({"_id": result.inserted_id})
-    
-    return serialize_worship_leader(created_leader)
-
-@app.put("/api/worship-leaders/{slug}")
-def update_worship_leader(slug: str, leader_update: WorshipLeaderUpdate):
-    existing = worship_leaders_collection.find_one({"slug": slug, "trashed_at": None})
+@app.put("/api/churches/{slug}")
+async def update_church(slug: str, church_update: ChurchUpdate, owner_id: str = Depends(get_current_user)):
+    existing = await db.churches.find_one({"slug": slug})
     if not existing:
-        raise HTTPException(status_code=404, detail="Worship leader not found")
+        raise HTTPException(status_code=404, detail="Church not found")
     
-    update_data = {k: v for k, v in leader_update.dict(exclude_unset=True).items() if v is not None}
+    if existing.get("owner_id") != owner_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this church")
     
-    if "name" in update_data and update_data["name"] != existing["name"]:
-        update_data["slug"] = create_slug(update_data["name"])
-    
-    if "social" in update_data and update_data["social"]:
-        update_data["social"] = update_data["social"].dict() if hasattr(update_data["social"], 'dict') else update_data["social"]
-    
+    update_data = {k: v for k, v in church_update.dict(exclude_unset=True).items()}
     update_data["updated_at"] = datetime.utcnow()
     
-    worship_leaders_collection.update_one(
-        {"slug": slug},
-        {"$set": update_data}
-    )
+    await db.churches.update_one({"slug": slug}, {"$set": update_data})
+    return {"message": "Church updated successfully"}
+
+@app.get("/api/media-teams")
+async def get_media_teams(
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    country: Optional[str] = None,
+    service: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = Query(50, le=100),
+    skip: int = 0
+):
+    query = {"status": "published", "trashed_at": None}
     
-    updated_leader = worship_leaders_collection.find_one({"slug": update_data.get("slug", slug)})
-    return serialize_worship_leader(updated_leader)
+    if city:
+        query["city"] = {"$regex": city, "$options": "i"}
+    if state:
+        query["state"] = {"$regex": state, "$options": "i"}
+    if country:
+        query["country"] = {"$regex": country, "$options": "i"}
+    if service:
+        query["services"] = {"$regex": service, "$options": "i"}
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"bio": {"$regex": search, "$options": "i"}},
+            {"tagline": {"$regex": search, "$options": "i"}}
+        ]
+    
+    teams = await db.media_teams.find(query).skip(skip).limit(limit).to_list(length=limit)
+    total = await db.media_teams.count_documents(query)
+    
+    for team in teams:
+        team["id"] = str(team["_id"])
+        del team["_id"]
+    
+    return {"media_teams": teams, "total": total, "limit": limit, "skip": skip}
+
+@app.get("/api/media-teams/{slug}")
+async def get_media_team(slug: str):
+    team = await db.media_teams.find_one({"slug": slug, "status": "published", "trashed_at": None})
+    if not team:
+        raise HTTPException(status_code=404, detail="Media team not found")
+    
+    team["id"] = str(team["_id"])
+    del team["_id"]
+    return team
+
+@app.post("/api/media-teams")
+async def create_media_team(media_team: MediaTeamCreate, owner_id: str = Depends(get_current_user)):
+    team_dict = media_team.dict()
+    team_dict["id"] = str(uuid.uuid4())
+    team_dict["created_at"] = datetime.utcnow()
+    team_dict["updated_at"] = datetime.utcnow()
+    team_dict["owner_id"] = owner_id
+    team_dict["trashed_at"] = None
+    
+    existing = await db.media_teams.find_one({"slug": media_team.slug})
+    if existing:
+        raise HTTPException(status_code=400, detail="Media team with this slug already exists")
+    
+    result = await db.media_teams.insert_one(team_dict)
+    team_dict["_id"] = str(result.inserted_id)
+    return {"message": "Media team created successfully", "id": team_dict["id"]}
+
+@app.put("/api/media-teams/{slug}")
+async def update_media_team(slug: str, team_update: MediaTeamUpdate, owner_id: str = Depends(get_current_user)):
+    existing = await db.media_teams.find_one({"slug": slug})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Media team not found")
+    
+    if existing.get("owner_id") != owner_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this media team")
+    
+    update_data = {k: v for k, v in team_update.dict(exclude_unset=True).items()}
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.media_teams.update_one({"slug": slug}, {"$set": update_data})
+    return {"message": "Media team updated successfully"}
 
 @app.get("/sitemap.xml")
-def get_sitemap():
-    from xml.etree.ElementTree import Element, SubElement, tostring
+async def sitemap():
+    churches = await db.churches.find({"status": "published", "trashed_at": None}).to_list(length=10000)
+    media_teams = await db.media_teams.find({"status": "published", "trashed_at": None}).to_list(length=10000)
     
-    urlset = Element('urlset')
-    urlset.set('xmlns', 'http://www.sitemaps.org/schemas/sitemap/0.9')
+    urls = [
+        {"loc": "https://churchnavigator.com/", "priority": "1.0"},
+        {"loc": "https://churchnavigator.com/churches", "priority": "0.9"},
+        {"loc": "https://churchnavigator.com/media-teams", "priority": "0.9"},
+    ]
     
-    url = SubElement(urlset, 'url')
-    SubElement(url, 'loc').text = 'https://churchnavigator.com'
-    SubElement(url, 'changefreq').text = 'daily'
-    SubElement(url, 'priority').text = '1.0'
-    
-    churches = churches_collection.find({"status": "published", "trashed_at": None})
     for church in churches:
-        url = SubElement(urlset, 'url')
-        SubElement(url, 'loc').text = f'https://churchnavigator.com/church/{church["slug"]}'
-        SubElement(url, 'changefreq').text = 'weekly'
-        SubElement(url, 'priority').text = '0.8'
+        urls.append({
+            "loc": f"https://churchnavigator.com/church/{church['slug']}",
+            "priority": "0.8",
+            "lastmod": church.get("updated_at", church.get("created_at", datetime.utcnow())).strftime("%Y-%m-%d")
+        })
     
-    leaders = worship_leaders_collection.find({"status": "published", "trashed_at": None})
-    for leader in leaders:
-        url = SubElement(urlset, 'url')
-        SubElement(url, 'loc').text = f'https://churchnavigator.com/worship-leader/{leader["slug"]}'
-        SubElement(url, 'changefreq').text = 'weekly'
-        SubElement(url, 'priority').text = '0.7'
+    for team in media_teams:
+        urls.append({
+            "loc": f"https://churchnavigator.com/media-team/{team['slug']}",
+            "priority": "0.8",
+            "lastmod": team.get("updated_at", team.get("created_at", datetime.utcnow())).strftime("%Y-%m-%d")
+        })
     
-    xml_string = tostring(urlset, encoding='unicode', method='xml')
-    return f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_string}'
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    
+    for url in urls:
+        xml_content += '  <url>\n'
+        xml_content += f'    <loc>{url["loc"]}</loc>\n'
+        xml_content += f'    <priority>{url["priority"]}</priority>\n'
+        if "lastmod" in url:
+            xml_content += f'    <lastmod>{url["lastmod"]}</lastmod>\n'
+        xml_content += '  </url>\n'
+    
+    xml_content += '</urlset>'
+    
+    return Response(content=xml_content, media_type="application/xml")
 
 @app.get("/robots.txt")
-def get_robots():
-    return "User-agent: *\nAllow: /\nSitemap: https://api.churchnavigator.com/sitemap.xml"
+async def robots():
+    content = """User-agent: *
+Allow: /
+
+Sitemap: https://api.churchnavigator.com/sitemap.xml"""
+    return Response(content=content, media_type="text/plain")
 
 if __name__ == "__main__":
     import uvicorn
