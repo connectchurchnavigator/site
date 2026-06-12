@@ -1,254 +1,251 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import StreamingResponse
-from typing import Optional, List
-from datetime import datetime, timedelta
-from bson import ObjectId
+from fastapi import APIRouter, HTTPException, Depends
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel
+from datetime import datetime, time, timedelta
+import httpx
 import asyncio
-import json
-import uuid
-from ..database import db
-from ..auth import get_current_user, optional_current_user
-from pydantic import BaseModel, Field
+from itertools import permutations
+import math
 
 router = APIRouter(prefix="/api/planner", tags=["planner"])
 
-class ItineraryItem(BaseModel):
-    church_id: str
-    church_name: str
-    datetime: str
+class Location(BaseModel):
+    item_id: str
+    name: str
+    lat: float
+    lng: float
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    is_flexible: bool = True
+    day: int
+
+class OptimiseRequest(BaseModel):
+    locations: List[Location]
+
+class TravelSegment(BaseModel):
+    from_name: str
+    to_name: str
     duration_minutes: int
-    event_type: str
-    notes: Optional[str] = None
-    status: str = "pending"
-    confirmed_by: Optional[str] = None
-    confirmed_at: Optional[str] = None
-    declined_reason: Optional[str] = None
-    alternative_time: Optional[str] = None
+    distance_km: float
+    mode: str
+    maps_url: str
 
-class Trip(BaseModel):
-    minister_id: str
-    minister_name: str
-    title: str
-    start_date: str
-    end_date: str
-    itinerary: List[ItineraryItem]
-    share_token: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    coordinators: List[str] = []
-    drivers: List[str] = []
-    public_view_enabled: bool = False
-    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+class OptimisedItinerary(BaseModel):
+    day: int
+    items: List[Dict[str, Any]]
+    total_driving_minutes: int
 
-class UpdateItemStatus(BaseModel):
-    status: str
-    confirmed_by: Optional[str] = None
-    declined_reason: Optional[str] = None
-    alternative_time: Optional[str] = None
+class OptimiseResponse(BaseModel):
+    optimised_itinerary: List[OptimisedItinerary]
+    original_itinerary: List[OptimisedItinerary]
+    time_saved_minutes: int
+    changes_made: List[str]
+    explanation: str
 
-active_connections = {}
-
-@router.post("/trips")
-async def create_trip(trip: Trip, current_user: dict = Depends(get_current_user)):
-    trip_dict = trip.dict()
-    trip_dict["minister_id"] = current_user["_id"]
-    trip_dict["minister_name"] = current_user.get("name", "Unknown")
-    trip_dict["coordinators"] = [current_user["_id"]]
-    result = await db.trips.insert_one(trip_dict)
-    trip_dict["_id"] = str(result.inserted_id)
-    return {"success": True, "trip": trip_dict}
-
-@router.get("/trips/{trip_id}")
-async def get_trip(trip_id: str, current_user: dict = Depends(get_current_user)):
-    if not ObjectId.is_valid(trip_id):
-        raise HTTPException(status_code=400, detail="Invalid trip ID")
-    trip = await db.trips.find_one({"_id": ObjectId(trip_id)})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    trip["_id"] = str(trip["_id"])
-    return trip
-
-@router.get("/trips")
-async def list_trips(current_user: dict = Depends(get_current_user)):
-    cursor = db.trips.find({
-        "$or": [
-            {"minister_id": current_user["_id"]},
-            {"coordinators": current_user["_id"]}
-        ]
-    }).sort("created_at", -1)
-    trips = await cursor.to_list(length=100)
-    for trip in trips:
-        trip["_id"] = str(trip["_id"])
-    return {"trips": trips}
-
-@router.put("/trips/{trip_id}")
-async def update_trip(trip_id: str, trip: Trip, current_user: dict = Depends(get_current_user)):
-    if not ObjectId.is_valid(trip_id):
-        raise HTTPException(status_code=400, detail="Invalid trip ID")
-    existing = await db.trips.find_one({"_id": ObjectId(trip_id)})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    if current_user["_id"] not in existing.get("coordinators", []):
-        raise HTTPException(status_code=403, detail="Not authorized")
-    trip_dict = trip.dict(exclude={"share_token", "created_at"})
-    trip_dict["updated_at"] = datetime.utcnow().isoformat()
-    await db.trips.update_one({"_id": ObjectId(trip_id)}, {"$set": trip_dict})
-    return {"success": True}
-
-@router.get("/{share_token}/live")
-async def get_live_itinerary(share_token: str, current_user: Optional[dict] = Depends(optional_current_user)):
-    trip = await db.trips.find_one({"share_token": share_token})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    
-    trip["_id"] = str(trip["_id"])
-    share_level = determine_share_level(trip, current_user)
-    filtered_trip = filter_trip_by_share_level(trip, share_level, current_user)
-    
-    viewer_count = len(active_connections.get(share_token, []))
-    return {
-        "trip": filtered_trip,
-        "share_level": share_level,
-        "viewer_count": viewer_count
-    }
-
-@router.get("/{share_token}/stream")
-async def stream_updates(share_token: str, current_user: Optional[dict] = Depends(optional_current_user)):
-    trip = await db.trips.find_one({"share_token": share_token})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    
-    share_level = determine_share_level(trip, current_user)
-    viewer_id = str(uuid.uuid4())
-    
-    async def event_generator():
-        queue = asyncio.Queue()
-        if share_token not in active_connections:
-            active_connections[share_token] = {}
-        active_connections[share_token][viewer_id] = queue
-        
+async def get_osrm_route(lat1: float, lng1: float, lat2: float, lng2: float) -> Dict[str, Any]:
+    url = f"https://router.project-osrm.org/route/v1/driving/{lng1},{lat1};{lng2},{lat2}?overview=false"
+    async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            yield f"data: {json.dumps({'type': 'connected', 'viewer_id': viewer_id})}\n\n"
-            
-            while True:
-                try:
-                    message = await asyncio.wait_for(queue.get(), timeout=30.0)
-                    yield f"data: {json.dumps(message)}\n\n"
-                except asyncio.TimeoutError:
-                    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
-        finally:
-            if share_token in active_connections and viewer_id in active_connections[share_token]:
-                del active_connections[share_token][viewer_id]
-                if not active_connections[share_token]:
-                    del active_connections[share_token]
-    
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-@router.put("/{share_token}/items/{item_index}/status")
-async def update_item_status(
-    share_token: str,
-    item_index: int,
-    update: UpdateItemStatus,
-    current_user: Optional[dict] = Depends(optional_current_user)
-):
-    trip = await db.trips.find_one({"share_token": share_token})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    
-    if item_index < 0 or item_index >= len(trip.get("itinerary", [])):
-        raise HTTPException(status_code=400, detail="Invalid item index")
-    
-    share_level = determine_share_level(trip, current_user)
-    if share_level not in ["coordinator", "minister", "host_church"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    item = trip["itinerary"][item_index]
-    if share_level == "host_church" and current_user:
-        church_id = current_user.get("church_id")
-        if item.get("church_id") != church_id:
-            raise HTTPException(status_code=403, detail="Can only update your own church")
-    
-    update_dict = {f"itinerary.{item_index}.status": update.status}
-    if update.status == "confirmed":
-        update_dict[f"itinerary.{item_index}.confirmed_by"] = current_user.get("name", "Unknown") if current_user else "Unknown"
-        update_dict[f"itinerary.{item_index}.confirmed_at"] = datetime.utcnow().isoformat()
-    if update.declined_reason:
-        update_dict[f"itinerary.{item_index}.declined_reason"] = update.declined_reason
-    if update.alternative_time:
-        update_dict[f"itinerary.{item_index}.alternative_time"] = update.alternative_time
-    
-    await db.trips.update_one({"share_token": share_token}, {"$set": update_dict})
-    
-    updated_trip = await db.trips.find_one({"share_token": share_token})
-    await broadcast_update(share_token, {
-        "type": "status_update",
-        "item_index": item_index,
-        "item": updated_trip["itinerary"][item_index],
-        "updater": current_user.get("name", "Unknown") if current_user else "Unknown"
-    })
-    
-    return {"success": True}
-
-async def broadcast_update(share_token: str, message: dict):
-    if share_token not in active_connections:
-        return
-    for viewer_id, queue in active_connections[share_token].items():
-        try:
-            await queue.put(message)
-        except:
+            response = await client.get(url)
+            data = response.json()
+            if data.get("code") == "Ok" and data.get("routes"):
+                route = data["routes"][0]
+                return {
+                    "duration_seconds": route["duration"],
+                    "distance_meters": route["distance"]
+                }
+        except Exception:
             pass
+    return {"duration_seconds": 1800, "distance_meters": 10000}
 
-def determine_share_level(trip: dict, current_user: Optional[dict]) -> str:
-    if not current_user:
-        return "public" if trip.get("public_view_enabled") else "none"
+async def get_travel_matrix(locations: List[Location]) -> Dict[tuple, Dict[str, Any]]:
+    matrix = {}
+    tasks = []
+    pairs = []
     
-    user_id = current_user.get("_id")
-    if user_id in trip.get("coordinators", []):
-        return "coordinator"
-    if user_id == trip.get("minister_id"):
-        return "minister"
-    if user_id in trip.get("drivers", []):
-        return "driver"
+    for i, loc1 in enumerate(locations):
+        for j, loc2 in enumerate(locations):
+            if i != j:
+                pairs.append((i, j, loc1, loc2))
+                tasks.append(get_osrm_route(loc1.lat, loc1.lng, loc2.lat, loc2.lng))
     
-    church_id = current_user.get("church_id")
-    if church_id:
-        for item in trip.get("itinerary", []):
-            if item.get("church_id") == church_id:
-                return "host_church"
+    results = await asyncio.gather(*tasks)
     
-    return "public" if trip.get("public_view_enabled") else "none"
+    for (i, j, loc1, loc2), result in zip(pairs, results):
+        matrix[(i, j)] = {
+            "duration_minutes": result["duration_seconds"] / 60,
+            "distance_km": result["distance_meters"] / 1000,
+            "from_name": loc1.name,
+            "to_name": loc2.name,
+            "from_lat": loc1.lat,
+            "from_lng": loc1.lng,
+            "to_lat": loc2.lat,
+            "to_lng": loc2.lng
+        }
+    
+    return matrix
 
-def filter_trip_by_share_level(trip: dict, share_level: str, current_user: Optional[dict]) -> dict:
-    if share_level == "none":
-        raise HTTPException(status_code=403, detail="Not authorized to view this trip")
+def solve_tsp_greedy(locations: List[int], matrix: Dict[tuple, Dict[str, Any]], start_idx: int = 0) -> tuple:
+    if len(locations) <= 1:
+        return locations, 0
     
-    if share_level in ["coordinator", "minister"]:
-        return trip
+    unvisited = set(locations)
+    route = [start_idx]
+    unvisited.remove(start_idx)
+    total_time = 0
     
-    filtered = {k: v for k, v in trip.items() if k not in ["coordinators", "drivers"]}
+    current = start_idx
+    while unvisited:
+        nearest = min(unvisited, key=lambda x: matrix.get((current, x), {"duration_minutes": 999999})["duration_minutes"])
+        total_time += matrix.get((current, nearest), {"duration_minutes": 0})["duration_minutes"]
+        route.append(nearest)
+        unvisited.remove(nearest)
+        current = nearest
     
-    if share_level == "host_church":
-        church_id = current_user.get("church_id") if current_user else None
-        filtered_items = []
-        for i, item in enumerate(trip.get("itinerary", [])):
-            if item.get("church_id") == church_id:
-                filtered_items.append(item)
-            elif i > 0 and trip["itinerary"][i-1].get("church_id") == church_id:
-                sanitized = {k: v for k, v in item.items() if k in ["datetime", "church_name", "event_type"]}
-                filtered_items.append(sanitized)
-            elif i < len(trip["itinerary"]) - 1 and trip["itinerary"][i+1].get("church_id") == church_id:
-                sanitized = {k: v for k, v in item.items() if k in ["datetime", "church_name", "event_type"]}
-                filtered_items.append(sanitized)
-        filtered["itinerary"] = filtered_items
+    return route, total_time
+
+def solve_tsp_optimal(locations: List[int], matrix: Dict[tuple, Dict[str, Any]], start_idx: int = 0) -> tuple:
+    if len(locations) <= 6:
+        best_route = None
+        best_time = float('inf')
+        other_locs = [l for l in locations if l != start_idx]
+        
+        for perm in permutations(other_locs):
+            route = [start_idx] + list(perm)
+            total_time = sum(matrix.get((route[i], route[i+1]), {"duration_minutes": 0})["duration_minutes"] 
+                           for i in range(len(route)-1))
+            if total_time < best_time:
+                best_time = total_time
+                best_route = route
+        
+        return best_route, best_time
+    else:
+        return solve_tsp_greedy(locations, matrix, start_idx)
+
+def calculate_total_time(route: List[int], matrix: Dict[tuple, Dict[str, Any]]) -> float:
+    return sum(matrix.get((route[i], route[i+1]), {"duration_minutes": 0})["duration_minutes"] 
+               for i in range(len(route)-1))
+
+@router.post("/{trip_id}/optimise", response_model=OptimiseResponse)
+async def optimise_route(trip_id: str, request: OptimiseRequest):
+    if not request.locations:
+        raise HTTPException(status_code=400, detail="No locations provided")
     
-    elif share_level == "driver":
-        filtered["itinerary"] = [
-            {k: v for k, v in item.items() if k in ["datetime", "church_name", "duration_minutes"]}
-            for item in trip.get("itinerary", [])
-        ]
+    locations = request.locations
+    matrix = await get_travel_matrix(locations)
     
-    elif share_level == "public":
-        filtered["itinerary"] = [
-            {k: v for k, v in item.items() if k in ["datetime", "church_name", "event_type", "status"]}
-            for item in trip.get("itinerary", [])
-        ]
+    days = {}
+    for i, loc in enumerate(locations):
+        if loc.day not in days:
+            days[loc.day] = {"fixed": [], "flexible": []}
+        if loc.is_flexible:
+            days[loc.day]["flexible"].append(i)
+        else:
+            days[loc.day]["fixed"].append(i)
     
-    return filtered
+    original_itinerary = []
+    optimised_itinerary = []
+    changes_made = []
+    original_total = 0
+    optimised_total = 0
+    
+    for day_num in sorted(days.keys()):
+        day_data = days[day_num]
+        fixed_indices = sorted(day_data["fixed"], key=lambda i: locations[i].start_time or "00:00")
+        flexible_indices = day_data["flexible"]
+        
+        original_order = fixed_indices + flexible_indices
+        original_time = calculate_total_time(original_order, matrix)
+        original_total += original_time
+        
+        original_items = []
+        for idx in original_order:
+            loc = locations[idx]
+            original_items.append({
+                "item_id": loc.item_id,
+                "name": loc.name,
+                "lat": loc.lat,
+                "lng": loc.lng,
+                "start_time": loc.start_time,
+                "is_flexible": loc.is_flexible
+            })
+        
+        original_itinerary.append(OptimisedItinerary(
+            day=day_num,
+            items=original_items,
+            total_driving_minutes=int(original_time)
+        ))
+        
+        if len(flexible_indices) > 1:
+            all_indices = fixed_indices + flexible_indices
+            if flexible_indices:
+                optimised_order, optimised_time = solve_tsp_optimal(all_indices, matrix, all_indices[0])
+            else:
+                optimised_order = fixed_indices
+                optimised_time = original_time
+            
+            optimised_total += optimised_time
+            
+            optimised_items = []
+            for idx in optimised_order:
+                loc = locations[idx]
+                optimised_items.append({
+                    "item_id": loc.item_id,
+                    "name": loc.name,
+                    "lat": loc.lat,
+                    "lng": loc.lng,
+                    "start_time": loc.start_time,
+                    "is_flexible": loc.is_flexible
+                })
+            
+            optimised_itinerary.append(OptimisedItinerary(
+                day=day_num,
+                items=optimised_items,
+                total_driving_minutes=int(optimised_time)
+            ))
+            
+            if optimised_order != original_order:
+                saved = original_time - optimised_time
+                changes_made.append(f"Day {day_num}: Reordered stops to save {int(saved)} minutes")
+        else:
+            optimised_itinerary.append(OptimisedItinerary(
+                day=day_num,
+                items=original_items,
+                total_driving_minutes=int(original_time)
+            ))
+            optimised_total += original_time
+    
+    time_saved = int(original_total - optimised_total)
+    
+    explanation = f"I optimised your route across {len(days)} days. "
+    if time_saved > 0:
+        explanation += f"By reordering flexible stops, I saved {time_saved} minutes of total driving time. "
+        explanation += "Fixed items (like church services) stayed at their scheduled times."
+    else:
+        explanation += "Your current route is already optimal!"
+    
+    if not changes_made:
+        changes_made.append("No changes needed - route already optimal")
+    
+    return OptimiseResponse(
+        optimised_itinerary=optimised_itinerary,
+        original_itinerary=original_itinerary,
+        time_saved_minutes=time_saved,
+        changes_made=changes_made,
+        explanation=explanation
+    )
+
+@router.get("/travel-time")
+async def get_travel_time(lat1: float, lng1: float, lat2: float, lng2: float):
+    result = await get_osrm_route(lat1, lng1, lat2, lng2)
+    duration_min = int(result["duration_seconds"] / 60)
+    distance_km = round(result["distance_meters"] / 1000, 1)
+    
+    maps_url = f"https://www.google.com/maps/dir/?api=1&origin={lat1},{lng1}&destination={lat2},{lng2}&travelmode=driving"
+    
+    return {
+        "duration_minutes": duration_min,
+        "distance_km": distance_km,
+        "maps_url": maps_url,
+        "mode": "driving"
+    }
