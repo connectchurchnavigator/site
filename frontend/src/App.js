@@ -1,34 +1,30 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-import SearchPage from './pages/SearchPage';
+import { HelmetProvider } from 'react-helmet-async';
+import Home2 from './pages/Home2';
 import ChurchDetailPage from './pages/ChurchDetailPage';
-import WorshipLeadersPage from './pages/WorshipLeadersPage';
-import MediaTeamPage from './pages/MediaTeamPage';
-import EventsPage from './pages/EventsPage';
-import SocialHealthPage from './pages/tools/SocialHealthPage';
-import Header from './components/Header';
-import Footer from './components/Footer';
+import SearchPage from './pages/SearchPage';
+import SubmitChurch from './pages/SubmitChurch';
+import Contact from './pages/Contact';
+import PlannerPage from './pages/tools/PlannerPage';
+import './App.css';
 
 function App() {
   return (
-    <Router>
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <main className="flex-grow">
+    <HelmetProvider>
+      <Router>
+        <div className="App">
           <Routes>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<Home2 />} />
+            <Route path="/church/:slug" element={<ChurchDetailPage />} />
             <Route path="/search" element={<SearchPage />} />
-            <Route path="/church/:id" element={<ChurchDetailPage />} />
-            <Route path="/worship-leaders" element={<WorshipLeadersPage />} />
-            <Route path="/media-team" element={<MediaTeamPage />} />
-            <Route path="/events" element={<EventsPage />} />
-            <Route path="/tools/social/:listingId" element={<SocialHealthPage />} />
+            <Route path="/submit-church" element={<SubmitChurch />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/planner" element={<PlannerPage />} />
           </Routes>
-        </main>
-        <Footer />
-      </div>
-    </Router>
+        </div>
+      </Router>
+    </HelmetProvider>
   );
 }
 
