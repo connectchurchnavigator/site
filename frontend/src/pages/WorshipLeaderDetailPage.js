@@ -1,202 +1,378 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import './WorshipLeaderDetailPage.css';
+import {
+  Box, Container, Typography, Chip, Grid, Card, CardMedia, Button,
+  Dialog, DialogTitle, DialogContent, TextField, MenuItem, CircularProgress, Alert
+} from '@mui/material';
+import {
+  MusicNote, Group, Language, LocationOn, Event, CheckCircle,
+  Facebook, Instagram, YouTube, Email, Phone
+} from '@mui/icons-material';
+import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
 
 const WorshipLeaderDetailPage = () => {
   const { slug } = useParams();
   const [leader, setLeader] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('profile');
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '', message: '' });
-  const [formStatus, setFormStatus] = useState('');
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingForm, setBookingForm] = useState({
+    your_name: '', your_email: '', your_phone: '',
+    event_type: '', event_date: '', expected_attendance: '', message: ''
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
-    fetch(`${API_URL}/worship-leaders/${slug}`)
-      .then(res => res.ok ? res.json() : Promise.reject('Failed to load'))
-      .then(data => { setLeader(data); setLoading(false); })
-      .catch(err => { setError(err.toString()); setLoading(false); });
+    const fetchLeader = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/worship-leaders/${slug}`);
+        setLeader(response.data);
+      } catch (err) {
+        setError(err.response?.data?.detail || 'Failed to load worship leader');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeader();
   }, [slug]);
 
-  const handleSubmit = async (e) => {
+  const handleBookingSubmit = async (e) => {
     e.preventDefault();
-    setFormStatus('sending');
+    setSubmitting(true);
+    setSubmitError('');
     try {
-      const res = await fetch(`${API_URL}/worship-leaders/${slug}/contact`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+      await axios.post(`${API_BASE}/api/worship-leaders/enquire`, {
+        listing_type: 'worship_leader',
+        listing_slug: slug,
+        listing_name: leader.name,
+        ...bookingForm
       });
-      if (res.ok) {
-        setFormStatus('success');
-        setFormData({ name: '', email: '', phone: '', message: '' });
-      } else {
-        setFormStatus('error');
-      }
-    } catch {
-      setFormStatus('error');
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        setBookingOpen(false);
+        setSubmitSuccess(false);
+        setBookingForm({
+          your_name: '', your_email: '', your_phone: '',
+          event_type: '', event_date: '', expected_attendance: '', message: ''
+        });
+      }, 2000);
+    } catch (err) {
+      setSubmitError(err.response?.data?.detail || 'Failed to submit enquiry');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  if (loading) return <div className="wl-loading">Loading worship leader...</div>;
-  if (error) return <div className="wl-error">Error: {error}</div>;
-  if (!leader) return <div className="wl-error">Worship leader not found</div>;
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>;
+  if (error) return <Container sx={{ py: 4 }}><Alert severity="error">{error}</Alert></Container>;
+  if (!leader) return <Container sx={{ py: 4 }}><Alert severity="warning">Worship leader not found</Alert></Container>;
 
-  const availabilityColor = leader.availability === 'available' ? '#10b981' : leader.availability === 'limited' ? '#f59e0b' : '#ef4444';
-  const instrumentColors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4'];
+  const isIndividual = leader.leader_type === 'individual';
+  const coverImage = leader.cover_image || leader.profile_picture || leader.logo;
 
   return (
     <>
       <Helmet>
-        <title>{leader.name} - Worship Leader | ChurchNavigator</title>
-        <meta name="description" content={`${leader.name} - ${leader.instruments?.join(', ')} | ${leader.city || 'UK'} | ${leader.bio?.substring(0, 150) || 'Experienced worship leader'}`} />
+        <title>{leader.name} | Worship Leader | ChurchNavigator</title>
+        <meta name="description" content={leader.bio || leader.description || `Book ${leader.name} for worship leading services`} />
       </Helmet>
 
-      <div className="wl-detail-page">
-        <div className="wl-hero" style={{ backgroundImage: `url(${leader.coverImage || 'https://ik.imagekit.io/cuizrvzly/church_navigator/default-worship-cover.jpg'})` }}>
-          <div className="wl-hero-overlay">
-            <div className="wl-hero-content">
-              <div className="wl-profile-pic-wrapper">
-                <img src={leader.profileImage || 'https://ik.imagekit.io/cuizrvzly/church_navigator/default-profile.jpg'} alt={leader.name} className="wl-profile-pic" />
-              </div>
-              <h1 className="wl-hero-title">{leader.name}</h1>
-              <p className="wl-hero-subtitle">{leader.instruments?.join(' • ') || 'Worship Leader'} • {leader.city || 'UK'}</p>
-            </div>
-          </div>
-        </div>
+      {/* Hero Section */}
+      <Box sx={{ bgcolor: 'grey.900', color: 'white', py: 8 }}>
+        <Container maxWidth="lg">
+          <Grid container spacing={4} alignItems="center">
+            <Grid item xs={12} md={4} sx={{ textAlign: 'center' }}>
+              {isIndividual ? (
+                <Box
+                  component="img"
+                  src={leader.profile_picture || '/default-avatar.png'}
+                  alt={leader.name}
+                  sx={{ width: 200, height: 200, borderRadius: '50%', objectFit: 'cover', mx: 'auto', boxShadow: 3 }}
+                />
+              ) : (
+                <Box
+                  component="img"
+                  src={leader.logo || '/default-team.png'}
+                  alt={leader.name}
+                  sx={{ width: 200, height: 200, borderRadius: 2, objectFit: 'cover', mx: 'auto', boxShadow: 3 }}
+                />
+              )}
+            </Grid>
+            <Grid item xs={12} md={8}>
+              <Chip
+                label={isIndividual ? 'Individual Artist' : 'Worship Team'}
+                color="primary"
+                size="small"
+                sx={{ mb: 2 }}
+              />
+              <Typography variant="h3" fontWeight="bold" gutterBottom>{leader.name}</Typography>
+              {leader.home_church_name && (
+                <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <LocationOn fontSize="small" /> {leader.home_church_name}, {leader.city}
+                </Typography>
+              )}
+              {leader.years_active > 0 && (
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  {leader.years_active}+ years of worship ministry
+                </Typography>
+              )}
+              {leader.events_done > 0 && (
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                  {leader.events_done}+ events led
+                </Typography>
+              )}
+              {leader.verified && (
+                <Chip icon={<CheckCircle />} label="Verified" color="success" size="small" sx={{ mr: 1 }} />
+              )}
+              <Box sx={{ mt: 3 }}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={() => setBookingOpen(true)}
+                  disabled={!leader.available_for_booking}
+                >
+                  {isIndividual ? `Book ${leader.name.split(' ')[0]}` : 'Book This Team'}
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+        </Container>
+      </Box>
 
-        <div className="wl-stats-bar">
-          <div className="wl-stat">
-            <div className="wl-stat-value">{leader.instruments?.length || 0}</div>
-            <div className="wl-stat-label">Instruments</div>
-          </div>
-          <div className="wl-stat">
-            <div className="wl-stat-value">{leader.yearsExperience || 0}+</div>
-            <div className="wl-stat-label">Years Experience</div>
-          </div>
-          <div className="wl-stat">
-            <div className="wl-stat-value">{leader.worshipStyles?.length || 0}</div>
-            <div className="wl-stat-label">Worship Styles</div>
-          </div>
-          <div className="wl-stat">
-            <div className="wl-stat-value">{leader.languages?.length || 1}</div>
-            <div className="wl-stat-label">Languages</div>
-          </div>
-        </div>
+      {/* Cover Image/Slider */}
+      {coverImage && leader.cover_type !== 'youtube' && (
+        <Box sx={{ width: '100%', height: 400, overflow: 'hidden' }}>
+          <Box
+            component="img"
+            src={coverImage}
+            alt="Cover"
+            sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </Box>
+      )}
 
-        <div className="wl-container">
-          <div className="wl-main-content">
-            <div className="wl-tabs">
-              <button className={`wl-tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Profile</button>
-              <button className={`wl-tab ${activeTab === 'gallery' ? 'active' : ''}`} onClick={() => setActiveTab('gallery')}>Gallery</button>
-              <button className={`wl-tab ${activeTab === 'videos' ? 'active' : ''}`} onClick={() => setActiveTab('videos')}>Videos</button>
-            </div>
+      {/* Content */}
+      <Container maxWidth="lg" sx={{ py: 6 }}>
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={8}>
+            {/* About */}
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h5" fontWeight="bold" gutterBottom>About</Typography>
+              <Typography variant="body1" paragraph>
+                {isIndividual ? leader.bio : leader.description}
+              </Typography>
+            </Box>
 
-            {activeTab === 'profile' && (
-              <div className="wl-tab-content">
-                <div className="wl-section">
-                  <h2 className="wl-section-title" style={{ borderLeft: '4px solid #3b82f6' }}>About</h2>
-                  <p className="wl-bio">{leader.bio || 'No biography available.'}</p>
-                </div>
+            {/* Skills & Styles */}
+            {leader.instruments?.length > 0 && (
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom>Instruments</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {leader.instruments.map((inst, i) => (
+                    <Chip key={i} icon={<MusicNote />} label={inst} />
+                  ))}
+                </Box>
+              </Box>
+            )}
 
-                <div className="wl-section">
-                  <h2 className="wl-section-title" style={{ borderLeft: '4px solid #8b5cf6' }}>Instruments</h2>
-                  <div className="wl-tags">
-                    {leader.instruments?.map((inst, i) => (
-                      <span key={i} className="wl-tag" style={{ backgroundColor: instrumentColors[i % instrumentColors.length] }}>{inst}</span>
+            {leader.worship_styles?.length > 0 && (
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom>Worship Styles</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {leader.worship_styles.map((style, i) => (
+                    <Chip key={i} label={style} />
+                  ))}
+                </Box>
+              </Box>
+            )}
+
+            {leader.languages?.length > 0 && (
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom>Languages</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {leader.languages.map((lang, i) => (
+                    <Chip key={i} icon={<Language />} label={lang} />
+                  ))}
+                </Box>
+              </Box>
+            )}
+
+            {/* Team Members */}
+            {!isIndividual && leader.team_size > 0 && (
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom>
+                  Team Members ({leader.team_size})
+                </Typography>
+                {leader.member_images?.length > 0 && (
+                  <Grid container spacing={2}>
+                    {leader.member_images.map((img, i) => (
+                      <Grid item xs={6} sm={4} md={3} key={i}>
+                        <Box
+                          component="img"
+                          src={img}
+                          alt={`Member ${i + 1}`}
+                          sx={{ width: '100%', borderRadius: 2, aspectRatio: '1/1', objectFit: 'cover' }}
+                        />
+                      </Grid>
                     ))}
-                  </div>
-                </div>
-
-                <div className="wl-section">
-                  <h2 className="wl-section-title" style={{ borderLeft: '4px solid #ec4899' }}>Worship Styles</h2>
-                  <div className="wl-tags">
-                    {leader.worshipStyles?.map((style, i) => (
-                      <span key={i} className="wl-tag wl-tag-outline">{style}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="wl-section">
-                  <h2 className="wl-section-title" style={{ borderLeft: '4px solid #f59e0b' }}>Denominations</h2>
-                  <div className="wl-tags">
-                    {leader.denominations?.map((denom, i) => (
-                      <span key={i} className="wl-tag wl-tag-outline">{denom}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                  </Grid>
+                )}
+              </Box>
             )}
 
-            {activeTab === 'gallery' && (
-              <div className="wl-tab-content">
-                <div className="wl-gallery">
-                  {leader.gallery?.length > 0 ? leader.gallery.map((img, i) => (
-                    <img key={i} src={img} alt={`${leader.name} ${i + 1}`} className="wl-gallery-img" />
-                  )) : <p className="wl-empty">No gallery images available.</p>}
-                </div>
-              </div>
+            {/* Gallery */}
+            {leader.gallery_images?.length > 0 && (
+              <Box sx={{ mb: 4 }}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom>Gallery</Typography>
+                <Grid container spacing={2}>
+                  {leader.gallery_images.map((img, i) => (
+                    <Grid item xs={12} sm={6} md={4} key={i}>
+                      <Card>
+                        <CardMedia component="img" height="200" image={img} alt={`Gallery ${i + 1}`} />
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
             )}
+          </Grid>
 
-            {activeTab === 'videos' && (
-              <div className="wl-tab-content">
-                <div className="wl-videos">
-                  {leader.videos?.length > 0 ? leader.videos.map((video, i) => (
-                    <div key={i} className="wl-video">
-                      <iframe src={video} title={`Video ${i + 1}`} frameBorder="0" allowFullScreen></iframe>
-                    </div>
-                  )) : <p className="wl-empty">No videos available.</p>}
-                </div>
-              </div>
+          {/* Sidebar */}
+          <Grid item xs={12} md={4}>
+            <Card sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" fontWeight="bold" gutterBottom>Connect</Typography>
+              {leader.facebook && (
+                <Button
+                  startIcon={<Facebook />}
+                  href={leader.facebook}
+                  target="_blank"
+                  fullWidth
+                  sx={{ mb: 1, justifyContent: 'flex-start' }}
+                >
+                  Facebook
+                </Button>
+              )}
+              {leader.instagram && (
+                <Button
+                  startIcon={<Instagram />}
+                  href={leader.instagram}
+                  target="_blank"
+                  fullWidth
+                  sx={{ mb: 1, justifyContent: 'flex-start' }}
+                >
+                  Instagram
+                </Button>
+              )}
+              {leader.youtube && (
+                <Button
+                  startIcon={<YouTube />}
+                  href={leader.youtube}
+                  target="_blank"
+                  fullWidth
+                  sx={{ justifyContent: 'flex-start' }}
+                >
+                  YouTube
+                </Button>
+              )}
+            </Card>
+
+            {leader.home_church_name && (
+              <Card sx={{ p: 3 }}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom>Home Church</Typography>
+                <Typography variant="body2">{leader.home_church_name}</Typography>
+                <Typography variant="body2" color="text.secondary">{leader.city}</Typography>
+              </Card>
             )}
-          </div>
+          </Grid>
+        </Grid>
+      </Container>
 
-          <div className="wl-sidebar">
-            <div className="wl-sidebar-card">
-              <div className="wl-availability" style={{ backgroundColor: availabilityColor }}>
-                {leader.availability === 'available' ? '✓ Available' : leader.availability === 'limited' ? '⚠ Limited' : '✗ Unavailable'}
-              </div>
-            </div>
-
-            {leader.churchAssociation && (
-              <div className="wl-sidebar-card">
-                <h3 className="wl-sidebar-title">Church Association</h3>
-                <Link to={`/church/${leader.churchSlug}`} className="wl-church-link">{leader.churchAssociation}</Link>
-              </div>
-            )}
-
-            <div className="wl-sidebar-card">
-              <h3 className="wl-sidebar-title">Contact This Worship Leader</h3>
-              <form onSubmit={handleSubmit} className="wl-contact-form">
-                <input type="text" placeholder="Your Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-                <input type="email" placeholder="Your Email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
-                <input type="tel" placeholder="Phone (optional)" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
-                <textarea placeholder="Message" rows="4" value={formData.message} onChange={(e) => setFormData({ ...formData, message: e.target.value })} required></textarea>
-                <button type="submit" disabled={formStatus === 'sending'}>
-                  {formStatus === 'sending' ? 'Sending...' : 'Send Message'}
-                </button>
-                {formStatus === 'success' && <p className="wl-form-success">Message sent successfully!</p>}
-                {formStatus === 'error' && <p className="wl-form-error">Failed to send. Please try again.</p>}
-              </form>
-            </div>
-
-            {leader.socialLinks && (
-              <div className="wl-sidebar-card">
-                <h3 className="wl-sidebar-title">Connect</h3>
-                <div className="wl-social-icons">
-                  {leader.socialLinks.instagram && <a href={leader.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="wl-social-icon">📷</a>}
-                  {leader.socialLinks.youtube && <a href={leader.socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="wl-social-icon">▶️</a>}
-                  {leader.socialLinks.spotify && <a href={leader.socialLinks.spotify} target="_blank" rel="noopener noreferrer" className="wl-social-icon">🎵</a>}
-                  {leader.socialLinks.website && <a href={leader.socialLinks.website} target="_blank" rel="noopener noreferrer" className="wl-social-icon">🌐</a>}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Booking Dialog */}
+      <Dialog open={bookingOpen} onClose={() => setBookingOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Request Booking</DialogTitle>
+        <DialogContent>
+          {submitSuccess ? (
+            <Alert severity="success" sx={{ mt: 2 }}>Enquiry submitted! They'll contact you with pricing and availability.</Alert>
+          ) : (
+            <Box component="form" onSubmit={handleBookingSubmit} sx={{ mt: 2 }}>
+              <TextField
+                fullWidth
+                label="Your Name"
+                required
+                value={bookingForm.your_name}
+                onChange={(e) => setBookingForm({ ...bookingForm, your_name: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Your Email"
+                type="email"
+                required
+                value={bookingForm.your_email}
+                onChange={(e) => setBookingForm({ ...bookingForm, your_email: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Your Phone"
+                value={bookingForm.your_phone}
+                onChange={(e) => setBookingForm({ ...bookingForm, your_phone: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                select
+                label="Event Type"
+                value={bookingForm.event_type}
+                onChange={(e) => setBookingForm({ ...bookingForm, event_type: e.target.value })}
+                sx={{ mb: 2 }}
+              >
+                <MenuItem value="Sunday Service">Sunday Service</MenuItem>
+                <MenuItem value="Conference">Conference</MenuItem>
+                <MenuItem value="Wedding">Wedding</MenuItem>
+                <MenuItem value="Concert">Concert</MenuItem>
+                <MenuItem value="Other">Other</MenuItem>
+              </TextField>
+              <TextField
+                fullWidth
+                label="Event Date"
+                type="date"
+                InputLabelProps={{ shrink: true }}
+                value={bookingForm.event_date}
+                onChange={(e) => setBookingForm({ ...bookingForm, event_date: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Expected Attendance"
+                type="number"
+                value={bookingForm.expected_attendance}
+                onChange={(e) => setBookingForm({ ...bookingForm, expected_attendance: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Message"
+                multiline
+                rows={4}
+                required
+                value={bookingForm.message}
+                onChange={(e) => setBookingForm({ ...bookingForm, message: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+              {submitError && <Alert severity="error" sx={{ mb: 2 }}>{submitError}</Alert>}
+              <Button type="submit" variant="contained" fullWidth disabled={submitting}>
+                {submitting ? 'Submitting...' : 'Submit Enquiry'}
+              </Button>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
