@@ -1,24 +1,48 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
-import Search from './pages/Search';
 import ChurchDetail from './pages/ChurchDetail';
-import ChurchWebsite from './pages/ChurchWebsite';
+import SearchResults from './pages/SearchResults';
 import Dashboard from './pages/Dashboard';
+import FlyerGenerator from './pages/Dashboard/FlyerGenerator';
+import Login from './pages/Login';
+import Register from './pages/Register';
 import NotFound from './pages/NotFound';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Header from './components/Header';
+import Footer from './components/Footer';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/search" element={<Search />} />
-        <Route path="/church/:slug" element={<ChurchDetail />} />
-        <Route path="/site/:slug" element={<ChurchWebsite />} />
-        <Route path="/dashboard/*" element={<Dashboard />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <div className="app">
+          <Header />
+          <main>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/search" element={<SearchResults />} />
+              <Route path="/church/:slug" element={<ChurchDetail />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/dashboard/flyers" element={
+                <ProtectedRoute>
+                  <FlyerGenerator />
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
 
