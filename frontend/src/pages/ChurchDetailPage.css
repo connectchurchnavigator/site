@@ -1,0 +1,631 @@
+.church-detail-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.loading-container,
+.error-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #f5f5f5;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e0e0e0;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-content {
+  text-align: center;
+  padding: 40px;
+}
+
+.error-content i {
+  font-size: 64px;
+  color: #dc3545;
+  margin-bottom: 20px;
+}
+
+.error-content h2 {
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.hero-slide-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.6));
+}
+
+.hero-slide-content .container {
+  position: relative;
+  z-index: 2;
+}
+
+.hero-slide-cover .hero-title-wrapper {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.hero-title {
+  color: white;
+  font-size: 42px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.hero-tagline {
+  color: white;
+  font-size: 18px;
+  margin: 0;
+  opacity: 0.95;
+  text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 12px 28px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  backdrop-filter: blur(10px);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.service-promo,
+.event-promo,
+.gallery-promo {
+  text-align: center;
+  color: white;
+}
+
+.service-promo h2,
+.event-promo h2,
+.gallery-promo h2 {
+  font-size: 36px;
+  margin: 0 0 16px 0;
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.service-time {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.service-type {
+  font-size: 16px;
+  margin: 0 0 24px 0;
+  opacity: 0.9;
+}
+
+.event-badge {
+  display: inline-block;
+  background: rgba(255, 193, 7, 0.9);
+  color: #000;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.event-date,
+.event-time {
+  font-size: 16px;
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pastor-spotlight {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  color: white;
+}
+
+.pastor-spotlight-photo {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.pastor-spotlight-info h3 {
+  font-size: 28px;
+  margin: 0 0 6px 0;
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.pastor-title {
+  font-size: 16px;
+  opacity: 0.9;
+  margin: 0 0 12px 0;
+}
+
+.pastor-quote {
+  font-style: italic;
+  margin: 0 0 20px 0;
+  opacity: 0.95;
+  font-size: 15px;
+}
+
+.gallery-promo p {
+  font-size: 18px;
+  margin: 0 0 24px 0;
+  opacity: 0.9;
+}
+
+.church-detail-container {
+  padding: 40px 0;
+}
+
+.church-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 30px;
+}
+
+.church-main-content {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.church-tabs {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  overflow-x: auto;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 16px 20px;
+  background: none;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: #007bff;
+  background: #f8f9fa;
+}
+
+.tab-btn.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+}
+
+.tab-content {
+  padding: 30px;
+}
+
+.tab-pane h2 {
+  font-size: 28px;
+  margin: 0 0 20px 0;
+  color: #333;
+}
+
+.church-description {
+  font-size: 16px;
+  line-height: 1.7;
+  color: #555;
+  margin-bottom: 24px;
+}
+
+.info-block {
+  margin-bottom: 30px;
+}
+
+.info-block h3 {
+  font-size: 20px;
+  margin: 0 0 12px 0;
+  color: #333;
+}
+
+.ministries-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ministry-tag {
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.pastor-section .pastor-card-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.pastor-card {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.pastor-card:hover {
+  background: #e9ecef;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.pastor-photo {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.pastor-info h4 {
+  font-size: 18px;
+  margin: 0 0 4px 0;
+  color: #333;
+}
+
+.pastor-info .pastor-title {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 8px 0;
+}
+
+.pastor-bio-preview {
+  font-size: 14px;
+  color: #555;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.services-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.service-item {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  align-items: center;
+}
+
+.service-day {
+  font-size: 18px;
+  font-weight: 700;
+  color: #007bff;
+  min-width: 100px;
+}
+
+.service-details {
+  flex: 1;
+}
+
+.service-time {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.service-type {
+  font-size: 14px;
+  color: #666;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.gallery-item {
+  aspect-ratio: 4/3;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.gallery-item:hover img {
+  transform: scale(1.1);
+}
+
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.event-item {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.event-date-badge {
+  text-align: center;
+  background: #007bff;
+  color: white;
+  padding: 12px;
+  border-radius: 8px;
+  min-width: 70px;
+}
+
+.event-day {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.event-month {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.event-details h3 {
+  font-size: 20px;
+  margin: 0 0 8px 0;
+  color: #333;
+}
+
+.event-details p {
+  font-size: 14px;
+  color: #555;
+  margin: 4px 0;
+}
+
+.event-time,
+.event-location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #666;
+}
+
+.contact-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.contact-item {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.contact-item i {
+  font-size: 24px;
+  color: #007bff;
+  min-width: 24px;
+}
+
+.contact-item strong {
+  display: block;
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.contact-item p {
+  margin: 0;
+  font-size: 15px;
+  color: #333;
+}
+
+.contact-item a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.contact-item a:hover {
+  text-decoration: underline;
+}
+
+.church-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidebar-card {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-card h3 {
+  font-size: 18px;
+  margin: 0 0 16px 0;
+  color: #333;
+}
+
+.quick-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quick-info-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #555;
+}
+
+.quick-info-item i {
+  font-size: 18px;
+  color: #007bff;
+  min-width: 18px;
+}
+
+.next-service {
+  text-align: center;
+}
+
+.next-service .service-day {
+  font-size: 16px;
+  font-weight: 700;
+  color: #007bff;
+  margin-bottom: 8px;
+}
+
+.next-service .service-time {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.next-service .service-type {
+  font-size: 14px;
+  color: #666;
+}
+
+@media (max-width: 1024px) {
+  .church-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .church-sidebar {
+    order: 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 32px;
+  }
+  
+  .hero-tagline {
+    font-size: 16px;
+  }
+  
+  .service-promo h2,
+  .event-promo h2,
+  .gallery-promo h2 {
+    font-size: 28px;
+  }
+  
+  .pastor-spotlight {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .pastor-spotlight-photo {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .tab-content {
+    padding: 20px;
+  }
+  
+  .tab-pane h2 {
+    font-size: 24px;
+  }
+  
+  .service-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+}
