@@ -1,0 +1,420 @@
+.planner-report-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.planner-report-loading,
+.planner-report-error {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.1rem;
+  color: #666;
+}
+
+.planner-report-error {
+  color: #e74c3c;
+}
+
+.planner-report-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 1rem;
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.planner-report-header h1 {
+  font-size: 2.5rem;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.trip-dates {
+  font-size: 1.1rem;
+  color: #7f8c8d;
+  margin-bottom: 1.5rem;
+}
+
+.report-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.btn-download,
+.btn-share,
+.btn-share-card {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-download {
+  background: #3498db;
+  color: white;
+}
+
+.btn-share {
+  background: #2ecc71;
+  color: white;
+}
+
+.btn-share-card {
+  background: #9b59b6;
+  color: white;
+  margin-top: 1rem;
+}
+
+.btn-download:hover {
+  background: #2980b9;
+}
+
+.btn-share:hover {
+  background: #27ae60;
+}
+
+.btn-share-card:hover {
+  background: #8e44ad;
+}
+
+.scorecard-section {
+  margin-bottom: 3rem;
+}
+
+.scorecard-section h2 {
+  font-size: 1.8rem;
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+  border-bottom: 3px solid #3498db;
+  padding-bottom: 0.5rem;
+}
+
+.scorecard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.scorecard-item {
+  background: white;
+  border: 2px solid #ecf0f1;
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.scorecard-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.scorecard-label {
+  font-size: 1rem;
+  color: #7f8c8d;
+  margin-bottom: 0.5rem;
+}
+
+.scorecard-subtext {
+  font-size: 0.9rem;
+  color: #95a5a6;
+  margin-top: 0.5rem;
+}
+
+.scorecard-progress {
+  width: 100%;
+  height: 8px;
+  background: #ecf0f1;
+  border-radius: 4px;
+  margin: 1rem 0 0.5rem 0;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3498db, #2ecc71);
+  transition: width 0.5s ease;
+}
+
+.scorecard-percent {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #3498db;
+}
+
+.scorecard-diff {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.scorecard-diff.positive {
+  color: #2ecc71;
+}
+
+.scorecard-diff.negative {
+  color: #e74c3c;
+}
+
+.visits-breakdown-section,
+.ai-insights-section,
+.reinvitations-section,
+.next-trip-section,
+.share-card-section {
+  margin-bottom: 3rem;
+}
+
+.visits-breakdown-section h2,
+.ai-insights-section h2,
+.reinvitations-section h2,
+.next-trip-section h2,
+.share-card-section h2 {
+  font-size: 1.8rem;
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+  border-bottom: 3px solid #3498db;
+  padding-bottom: 0.5rem;
+}
+
+.visits-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.visit-card {
+  background: white;
+  border: 2px solid #ecf0f1;
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.visit-card.completed {
+  border-left: 5px solid #2ecc71;
+}
+
+.visit-card.not-completed {
+  border-left: 5px solid #e74c3c;
+  opacity: 0.7;
+}
+
+.visit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.visit-header h3 {
+  font-size: 1.3rem;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.visit-status {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  background: #ecf0f1;
+}
+
+.visit-card.completed .visit-status {
+  background: #d4edda;
+  color: #155724;
+}
+
+.visit-card.not-completed .visit-status {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.visit-details p {
+  margin: 0.5rem 0;
+  color: #555;
+}
+
+.visit-highlights {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  font-style: italic;
+}
+
+.reinvitation-badge {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #856404;
+}
+
+.reinvitation-badge p {
+  margin-top: 0.5rem;
+  font-weight: 400;
+}
+
+.narrative-content {
+  background: white;
+  border: 2px solid #ecf0f1;
+  border-radius: 12px;
+  padding: 2rem;
+  line-height: 1.8;
+  color: #2c3e50;
+  font-size: 1.05rem;
+}
+
+.narrative-content strong {
+  color: #3498db;
+  display: block;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.2rem;
+}
+
+.reinvitations-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.reinvitation-card {
+  background: white;
+  border: 2px solid #ffc107;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.reinvitation-card h3 {
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.reinvitation-card p {
+  color: #555;
+  margin-bottom: 1rem;
+}
+
+.view-church-link {
+  display: inline-block;
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
+
+.view-church-link:hover {
+  color: #2980b9;
+}
+
+.next-trip-card {
+  background: white;
+  border: 2px solid #ecf0f1;
+  border-radius: 12px;
+  padding: 2rem;
+}
+
+.next-trip-card h3 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+}
+
+.next-trip-card ul {
+  margin-top: 0.5rem;
+  padding-left: 1.5rem;
+}
+
+.share-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 3rem 2rem;
+  color: white;
+  text-align: center;
+  margin: 2rem auto;
+  max-width: 500px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.share-card-content h3 {
+  font-size: 1.8rem;
+  margin-bottom: 2rem;
+}
+
+.share-stats {
+  display: flex;
+  justify-content: space-around;
+  margin: 2rem 0;
+}
+
+.share-stat {
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 3rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.stat-label {
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.share-location {
+  font-size: 1.2rem;
+  margin: 1.5rem 0;
+}
+
+.share-footer {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255,255,255,0.3);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .planner-report-container {
+    padding: 1rem;
+  }
+
+  .planner-report-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .scorecard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-actions {
+    flex-direction: column;
+  }
+
+  .share-stats {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+}
