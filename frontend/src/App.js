@@ -1,30 +1,25 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { HelmetProvider } from 'react-helmet-async';
-import Home2 from './pages/Home2';
+import HomePage from './pages/HomePage';
+import ChurchesPage from './pages/ChurchesPage';
 import ChurchDetailPage from './pages/ChurchDetailPage';
-import SearchPage from './pages/SearchPage';
-import SubmitChurch from './pages/SubmitChurch';
-import Contact from './pages/Contact';
-import PlannerPage from './pages/tools/PlannerPage';
+import PlannerNewPage from './pages/tools/PlannerNewPage';
+import PlannerViewPage from './pages/tools/PlannerViewPage';
 import './App.css';
 
 function App() {
   return (
-    <HelmetProvider>
-      <Router>
-        <div className="App">
-          <Routes>
-            <Route path="/" element={<Home2 />} />
-            <Route path="/church/:slug" element={<ChurchDetailPage />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/submit-church" element={<SubmitChurch />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/planner" element={<PlannerPage />} />
-          </Routes>
-        </div>
-      </Router>
-    </HelmetProvider>
+    <Router>
+      <div className="App">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/churches" element={<ChurchesPage />} />
+          <Route path="/churches/:slug" element={<ChurchDetailPage />} />
+          <Route path="/planner/new" element={<PlannerNewPage />} />
+          <Route path="/planner/:id" element={<PlannerViewPage />} />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
