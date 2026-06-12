@@ -1,19 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import './Dashboard.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
+const API_BASE = process.env.REACT_APP_API_BASE || 'https://api.churchnavigator.com';
+
+const LISTING_TYPES = {
+  church: { label: 'Church', color: '#7c3aed', icon: '⛪' },
+  pastor: { label: 'Pastor', color: '#0891b2', icon: '👨‍💼' },
+  worship: { label: 'Worship Leader', color: '#059669', icon: '🎵' },
+  media: { label: 'Media Team', color: '#1d4ed8', icon: '🎥' },
+  college: { label: 'Bible College', color: '#d97706', icon: '🎓' }
+};
+
+const SECTIONS = {
+  overview: { label: 'Overview', icon: '📊' },
+  insights: { label: 'AI Insights', icon: '🤖' },
+  visitors: { label: 'Visitors', icon: '👥', types: ['church', 'college'] },
+  sermons: { label: 'Sermons', icon: '🎙️', types: ['pastor'] },
+  bookings: { label: 'Bookings', icon: '📅', types: ['worship', 'media'] },
+  enquiries: { label: 'Enquiries', icon: '✉️', types: ['worship', 'media', 'college'] },
+  applications: { label: 'Applications', icon: '📝', types: ['college'] },
+  messages: { label: 'Messages', icon: '💬' },
+  followers: { label: 'Followers', icon: '❤️' },
+  social: { label: 'Social Media', icon: '📱' },
+  events: { label: 'Events', icon: '🎉' },
+  posts: { label: 'Posts & Feed', icon: '📰' },
+  profile: { label: 'Profile Settings', icon: '⚙️' }
+};
 
 function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { section = 'overview' } = useParams();
+
   const [user, setUser] = useState(null);
   const [listings, setListings] = useState([]);
-  const [activeListingId, setActiveListingId] = useState(null);
-  const [activeListing, setActiveListing] = useState(null);
-  const [networkData, setNetworkData] = useState(null);
+  const [currentListing, setCurrentListing] = useState(null);
+  const [listingType, setListingType] = useState('church');
+  const [network, setNetwork] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
@@ -21,414 +49,640 @@ function Dashboard() {
       navigate('/login');
       return;
     }
-    fetchUserListings(token);
-  }, [navigate]);
+    fetchUser();
+  }, []);
 
   useEffect(() => {
-    if (activeListingId && activeListing) {
-      if (!activeListing.is_branch && activeListing.listing_type === 'church') {
-        fetchNetworkData(activeListing.slug);
-      }
+    if (currentListing) {
+      fetchDashboardData();
+      if (listingType === 'church') fetchNetwork();
     }
-  }, [activeListingId, activeListing]);
+  }, [currentListing, section]);
 
-  const fetchUserListings = async (token) => {
+  const fetchUser = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/users/me/listings`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const token = localStorage.getItem('auth_token');
+      const res = await axios.get(`${API_BASE}/api/users/me`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      
-      if (response.status === 401) {
-        localStorage.removeItem('auth_token');
-        navigate('/login');
-        return;
+      setUser(res.data);
+      if (res.data.listings && res.data.listings.length > 0) {
+        const churchListings = res.data.listings.filter(l => l.type === 'church');
+        const allListings = res.data.listings;
+        setListings(allListings);
+        setCurrentListing(churchListings[0] || allListings[0]);
+        setListingType(churchListings[0]?.type || allListings[0]?.type || 'church');
       }
-      
-      if (!response.ok) throw new Error('Failed to fetch listings');
-      
-      const data = await response.json();
-      setListings(data.listings);
-      
-      const savedListingId = localStorage.getItem('active_listing_id');
-      let initialListing = null;
-      
-      if (savedListingId) {
-        initialListing = data.listings.find(l => l.listing_id === savedListingId);
-      }
-      
-      if (!initialListing && data.listings.length > 0) {
-        initialListing = data.listings[0];
-      }
-      
-      if (initialListing) {
-        setActiveListingId(initialListing.listing_id);
-        setActiveListing(initialListing);
-        localStorage.setItem('active_listing_id', initialListing.listing_id);
-      }
-      
       setLoading(false);
     } catch (err) {
-      setError(err.message);
+      console.error('Failed to fetch user:', err);
+      if (err.response?.status === 401) navigate('/login');
       setLoading(false);
     }
   };
 
-  const fetchNetworkData = async (slug) => {
+  const fetchDashboardData = async () => {
+    if (!currentListing) return;
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${API_BASE}/api/churches/${slug}/network`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const endpoint = listingType === 'church' 
+        ? `/api/churches/${currentListing.slug}/dashboard`
+        : `/api/${listingType}s/${currentListing.slug}/dashboard`;
+      const res = await axios.get(`${API_BASE}${endpoint}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      
-      if (!response.ok) throw new Error('Failed to fetch network data');
-      
-      const data = await response.json();
-      setNetworkData(data);
+      setDashboardData(res.data);
     } catch (err) {
-      console.error('Network data fetch error:', err);
-      setNetworkData(null);
+      console.error('Failed to fetch dashboard data:', err);
+    }
+  };
+
+  const fetchNetwork = async () => {
+    if (!currentListing || listingType !== 'church') return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await axios.get(`${API_BASE}/api/churches/${currentListing.slug}/network`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNetwork(res.data);
+    } catch (err) {
+      console.error('Failed to fetch network:', err);
+    }
+  };
+
+  const switchListingType = (type) => {
+    const typeListings = listings.filter(l => l.type === type);
+    if (typeListings.length > 0) {
+      setListingType(type);
+      setCurrentListing(typeListings[0]);
+      setNetwork(null);
     }
   };
 
   const switchListing = (listing) => {
-    setActiveListingId(listing.listing_id);
-    setActiveListing(listing);
-    localStorage.setItem('active_listing_id', listing.listing_id);
-    setActiveTab('overview');
-    setNetworkData(null);
+    setCurrentListing(listing);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('active_listing_id');
-    navigate('/login');
-  };
-
-  const getStatusIcon = (status) => {
-    if (status === 'good') return '✅';
-    if (status === 'needs_attention') return '⚠️';
-    return '🔴';
-  };
-
-  const renderNetworkDashboard = () => {
-    if (!networkData || !networkData.branches || networkData.branches.length === 0) {
-      return null;
-    }
-
-    const { combined_stats, branch_performance, insights } = networkData;
-
-    return (
-      <div className="network-dashboard">
-        <div className="network-header">
-          <h2>🏛️ Network Overview</h2>
-          <p>{networkData.parent.name} + {combined_stats.total_branches} branches</p>
-        </div>
-
-        <div className="network-stats">
-          <div className="stat-card">
-            <div className="stat-value">{combined_stats.total_views.toLocaleString()}</div>
-            <div className="stat-label">Total Views</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{combined_stats.total_checkins.toLocaleString()}</div>
-            <div className="stat-label">Check-ins</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{combined_stats.total_followers.toLocaleString()}</div>
-            <div className="stat-label">Followers</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{combined_stats.total_messages.toLocaleString()}</div>
-            <div className="stat-label">Messages</div>
-          </div>
-        </div>
-
-        <div className="branch-performance">
-          <h3>Branch Performance</h3>
-          <table className="performance-table">
-            <thead>
-              <tr>
-                <th>Branch</th>
-                <th>Views</th>
-                <th>Check-ins</th>
-                <th>Followers</th>
-                <th>Health</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {branch_performance.map((branch) => (
-                <tr key={branch.branch_id}>
-                  <td>
-                    <strong>{branch.name}</strong>
-                  </td>
-                  <td>{branch.views.toLocaleString()}</td>
-                  <td>{branch.checkins.toLocaleString()}</td>
-                  <td>{branch.followers.toLocaleString()}</td>
-                  <td>
-                    <div className="health-score">
-                      <div className="health-bar" style={{ width: `${branch.health_score}%` }}></div>
-                      <span>{branch.health_score}%</span>
-                    </div>
-                  </td>
-                  <td>{getStatusIcon(branch.status)} {branch.status.replace('_', ' ')}</td>
-                  <td>
-                    <button 
-                      className="btn-small"
-                      onClick={() => {
-                        const branchListing = listings.find(l => l.listing_id === branch.branch_id);
-                        if (branchListing) switchListing(branchListing);
-                      }}
-                    >
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="ai-insights">
-          <h3>🤖 AI Network Insights</h3>
-          {insights.best_performing && (
-            <div className="insight-card positive">
-              <strong>Best Performer:</strong> {insights.best_performing}
-            </div>
-          )}
-          {insights.needs_attention && (
-            <div className="insight-card warning">
-              <strong>Needs Attention:</strong> {insights.needs_attention}
-            </div>
-          )}
-          <div className="recommendations">
-            <h4>Recommendations:</h4>
-            <ul>
-              {insights.recommendations.map((rec, idx) => (
-                <li key={idx}>{rec}</li>
-              ))}
-            </ul>
-          </div>
-          <button className="btn-primary" style={{ marginTop: '1rem' }}>
-            📢 Post to All Branches
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  const renderOverview = () => {
-    if (!activeListing) return null;
-
-    const stats = activeListing.stats || {};
-
-    return (
-      <div className="overview-tab">
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-value">{stats.views || 0}</div>
-            <div className="stat-label">Profile Views</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{stats.checkins || 0}</div>
-            <div className="stat-label">Check-ins</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{stats.followers || 0}</div>
-            <div className="stat-label">Followers</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{stats.messages || 0}</div>
-            <div className="stat-label">Messages</div>
-          </div>
-        </div>
-
-        {networkData && networkData.branches && networkData.branches.length > 0 && (
-          <div style={{ marginTop: '2rem' }}>
-            {renderNetworkDashboard()}
-          </div>
-        )}
-
-        {(!networkData || !networkData.branches || networkData.branches.length === 0) && (
-          <div className="quick-actions">
-            <h3>Quick Actions</h3>
-            <button className="action-btn">✏️ Edit Profile</button>
-            <button className="action-btn">📸 Add Photos</button>
-            <button className="action-btn">📅 Update Service Times</button>
-            {activeListing.listing_type === 'church' && !activeListing.is_branch && (
-              <button className="action-btn">➕ Add Branch Church</button>
-            )}
-          </div>
-        )}
-      </div>
-    );
+  const navigateSection = (sec) => {
+    navigate(`/dashboard/${sec}`);
+    if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
   if (loading) {
-    return <div className="dashboard-loading">Loading dashboard...</div>;
-  }
-
-  if (error) {
-    return <div className="dashboard-error">Error: {error}</div>;
-  }
-
-  if (listings.length === 0) {
     return (
-      <div className="dashboard-empty">
-        <h2>Welcome to ChurchNavigator</h2>
-        <p>You don't have any listings yet.</p>
-        <button className="btn-primary" onClick={() => navigate('/add-church')}>
-          + Add Your First Church
-        </button>
+      <div className="dashboard-loading">
+        <div className="spinner"></div>
+        <p>Loading dashboard...</p>
       </div>
     );
   }
 
+  if (!currentListing) {
+    return (
+      <div className="dashboard-empty">
+        <h2>No listings found</h2>
+        <p>You don't have any listings yet. Create one to access the dashboard.</p>
+        <button onClick={() => navigate('/create-listing')}>Create Listing</button>
+      </div>
+    );
+  }
+
+  const currentColor = LISTING_TYPES[listingType].color;
+  const availableSections = Object.entries(SECTIONS).filter(([key, val]) => 
+    !val.types || val.types.includes(listingType)
+  );
+
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-sidebar">
+    <div className="dashboard" style={{ '--primary-color': currentColor }}>
+      <button 
+        className="sidebar-toggle" 
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        aria-label="Toggle sidebar"
+      >
+        ☰
+      </button>
+
+      <aside className={`dashboard-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <h2>Dashboard</h2>
+          <h1>Dashboard</h1>
         </div>
 
-        {networkData && networkData.branches && networkData.branches.length > 0 && (
-          <div className="network-section">
-            <div className="section-label">NETWORK VIEW</div>
-            <div className="network-item">
-              <span>🏛️ {networkData.parent.name} Network</span>
-              <span className="network-badge">{networkData.combined_stats.total_branches} branches</span>
-            </div>
+        <div className="listing-type-switcher">
+          {Object.entries(LISTING_TYPES).map(([type, config]) => {
+            const count = listings.filter(l => l.type === type).length;
+            if (count === 0) return null;
+            return (
+              <button
+                key={type}
+                className={`type-btn ${listingType === type ? 'active' : ''}`}
+                onClick={() => switchListingType(type)}
+                style={listingType === type ? { backgroundColor: config.color } : {}}
+              >
+                <span className="icon">{config.icon}</span>
+                <span className="label">{config.label}</span>
+                {count > 1 && <span className="badge">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {listings.filter(l => l.type === listingType).length > 1 && (
+          <div className="listing-switcher">
+            <label>Select Listing:</label>
+            <select 
+              value={currentListing.id} 
+              onChange={(e) => {
+                const listing = listings.find(l => l.id === e.target.value);
+                switchListing(listing);
+              }}
+            >
+              {listings.filter(l => l.type === listingType).map(listing => (
+                <option key={listing.id} value={listing.id}>{listing.name}</option>
+              ))}
+            </select>
           </div>
         )}
 
-        <div className="listings-section">
-          <div className="section-label">MY LISTINGS</div>
-          {listings.map((listing) => (
-            <div
-              key={listing.listing_id}
-              className={`listing-item ${activeListingId === listing.listing_id ? 'active' : ''}`}
-              onClick={() => switchListing(listing)}
+        {network && network.branches && network.branches.length > 0 && (
+          <div className="network-switcher">
+            <label>Network View:</label>
+            <select onChange={(e) => {
+              if (e.target.value === 'all') return;
+              const branch = network.branches.find(b => b.id === e.target.value);
+              if (branch) navigate(`/church/${branch.slug}`);
+            }}>
+              <option value="current">{currentListing.name} (current)</option>
+              {network.parent && (
+                <option value={network.parent.id}>{network.parent.name} (parent)</option>
+              )}
+              {network.branches.map(branch => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+              <option value="all">View All Network</option>
+            </select>
+          </div>
+        )}
+
+        <nav className="sidebar-nav">
+          {availableSections.map(([key, config]) => (
+            <button
+              key={key}
+              className={`nav-item ${section === key ? 'active' : ''}`}
+              onClick={() => navigateSection(key)}
             >
-              <div className="listing-icon">
-                {listing.logo_url ? (
-                  <img src={listing.logo_url} alt="" />
-                ) : (
-                  <span>{listing.listing_type === 'church' ? '⛪' : '👤'}</span>
-                )}
-              </div>
-              <div className="listing-info">
-                <div className="listing-name">{listing.name}</div>
-                <div className="listing-role">{listing.role}</div>
-              </div>
-            </div>
+              <span className="icon">{config.icon}</span>
+              <span className="label">{config.label}</span>
+            </button>
           ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <button onClick={() => navigate('/')} className="btn-secondary">← Back to Site</button>
+          <button onClick={() => {
+            localStorage.removeItem('auth_token');
+            navigate('/login');
+          }} className="btn-logout">Logout</button>
         </div>
+      </aside>
 
-        <button className="add-listing-btn" onClick={() => navigate('/add-church')}>
-          + Add New Listing
-        </button>
+      <main className="dashboard-main">
+        <DashboardContent 
+          section={section}
+          listing={currentListing}
+          listingType={listingType}
+          data={dashboardData}
+          network={network}
+          user={user}
+        />
+      </main>
+    </div>
+  );
+}
 
-        <button className="logout-btn" onClick={handleLogout}>
-          🚪 Logout
-        </button>
+function DashboardContent({ section, listing, listingType, data, network, user }) {
+  switch (section) {
+    case 'overview':
+      return <OverviewSection listing={listing} data={data} network={network} />;
+    case 'insights':
+      return <InsightsSection listing={listing} data={data} />;
+    case 'visitors':
+      return <VisitorsSection listing={listing} />;
+    case 'sermons':
+      return <SermonsSection listing={listing} />;
+    case 'bookings':
+      return <BookingsSection listing={listing} />;
+    case 'enquiries':
+      return <EnquiriesSection listing={listing} />;
+    case 'applications':
+      return <ApplicationsSection listing={listing} />;
+    case 'messages':
+      return <MessagesSection listing={listing} />;
+    case 'followers':
+      return <FollowersSection listing={listing} />;
+    case 'social':
+      return <SocialSection listing={listing} />;
+    case 'events':
+      return <EventsSection listing={listing} />;
+    case 'posts':
+      return <PostsSection listing={listing} />;
+    case 'profile':
+      return <ProfileSection listing={listing} listingType={listingType} user={user} />;
+    default:
+      return <OverviewSection listing={listing} data={data} network={network} />;
+  }
+}
+
+function OverviewSection({ listing, data, network }) {
+  const stats = data?.stats || {};
+  const healthScore = stats.health_score || 0;
+  const recentActivity = data?.recent_activity || [];
+  const upcomingEvents = data?.upcoming_events || [];
+
+  return (
+    <div className="section-overview">
+      <div className="section-header">
+        <h2>Welcome back, {listing.name}!</h2>
+        <p className="subtitle">Here's what's happening with your listing</p>
       </div>
 
-      <div className="dashboard-main">
-        <div className="dashboard-header">
-          <div>
-            <h1>{activeListing?.name}</h1>
-            <p className="listing-type">
-              {activeListing?.listing_type === 'church' ? '⛪' : '👤'} {activeListing?.role}
-            </p>
+      <div className="health-card">
+        <div className="health-score">
+          <div className="score-circle" style={{ '--score': healthScore }}>
+            <span className="score-value">{healthScore}</span>
+            <span className="score-label">Health Score</span>
           </div>
         </div>
+        <div className="health-tips">
+          <h3>Quick Tips to Improve</h3>
+          <ul>
+            <li>✓ Add more photos (current: {stats.photo_count || 0})</li>
+            <li>✓ Complete your profile details</li>
+            <li>✓ Post regular updates</li>
+            <li>✓ Respond to visitor messages</li>
+          </ul>
+        </div>
+      </div>
 
-        <div className="dashboard-tabs">
-          <button
-            className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('overview')}
-          >
-            Overview
-          </button>
-          <button
-            className={`tab ${activeTab === 'messages' ? 'active' : ''}`}
-            onClick={() => setActiveTab('messages')}
-          >
-            Messages
-          </button>
-          <button
-            className={`tab ${activeTab === 'analytics' ? 'active' : ''}`}
-            onClick={() => setActiveTab('analytics')}
-          >
-            Analytics
-          </button>
-          {networkData && networkData.branches && networkData.branches.length > 0 && (
-            <button
-              className={`tab ${activeTab === 'branches' ? 'active' : ''}`}
-              onClick={() => setActiveTab('branches')}
-            >
-              Manage Branches
-            </button>
+      <div className="metrics-grid">
+        <div className="metric-card">
+          <div className="metric-icon">👁️</div>
+          <div className="metric-value">{stats.views_30d || 0}</div>
+          <div className="metric-label">Profile Views (30d)</div>
+          <div className="metric-change positive">+12%</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-icon">👥</div>
+          <div className="metric-value">{stats.visitors_30d || 0}</div>
+          <div className="metric-label">Visitors (30d)</div>
+          <div className="metric-change positive">+8%</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-icon">❤️</div>
+          <div className="metric-value">{stats.followers || 0}</div>
+          <div className="metric-label">Followers</div>
+          <div className="metric-change positive">+5</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-icon">💬</div>
+          <div className="metric-value">{stats.messages_unread || 0}</div>
+          <div className="metric-label">Unread Messages</div>
+        </div>
+      </div>
+
+      {network && network.branches && network.branches.length > 0 && (
+        <div className="network-overview">
+          <h3>Network Overview</h3>
+          <div className="network-stats">
+            <p>Parent: {network.parent?.name || 'None'}</p>
+            <p>Branches: {network.branches.length}</p>
+            <p>Total Network Members: {network.total_members || 0}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="two-col">
+        <div className="activity-feed">
+          <h3>Recent Activity</h3>
+          {recentActivity.length === 0 ? (
+            <p className="empty-state">No recent activity</p>
+          ) : (
+            <ul className="activity-list">
+              {recentActivity.slice(0, 5).map((activity, i) => (
+                <li key={i}>
+                  <span className="activity-icon">{activity.icon || '•'}</span>
+                  <span className="activity-text">{activity.text}</span>
+                  <span className="activity-time">{activity.time}</span>
+                </li>
+              ))}
+            </ul>
           )}
-          <button
-            className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-          >
-            Settings
-          </button>
         </div>
 
-        <div className="dashboard-content">
-          {activeTab === 'overview' && renderOverview()}
-          {activeTab === 'messages' && (
-            <div className="tab-content">
-              <h2>Messages</h2>
-              <p>No messages yet.</p>
-            </div>
-          )}
-          {activeTab === 'analytics' && (
-            <div className="tab-content">
-              <h2>Analytics</h2>
-              <p>Analytics coming soon.</p>
-            </div>
-          )}
-          {activeTab === 'branches' && networkData && (
-            <div className="tab-content">
-              <h2>Manage Branches</h2>
-              <div className="branches-list">
-                {networkData.branches.map((branch) => (
-                  <div key={branch.id} className="branch-card">
-                    <h3>{branch.name}</h3>
-                    <p>{branch.address}, {branch.city}</p>
-                    <div className="branch-actions">
-                      <button onClick={() => {
-                        const branchListing = listings.find(l => l.listing_id === branch.id);
-                        if (branchListing) switchListing(branchListing);
-                      }}>View Dashboard</button>
-                      <button>Edit</button>
-                      <button>Manage Team</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button className="btn-primary" style={{ marginTop: '1rem' }}>+ Add Branch</button>
-            </div>
-          )}
-          {activeTab === 'settings' && (
-            <div className="tab-content">
-              <h2>Settings</h2>
-              <p>Settings coming soon.</p>
-            </div>
+        <div className="upcoming-events">
+          <h3>Upcoming Events</h3>
+          {upcomingEvents.length === 0 ? (
+            <p className="empty-state">No upcoming events</p>
+          ) : (
+            <ul className="events-list">
+              {upcomingEvents.slice(0, 3).map((event, i) => (
+                <li key={i}>
+                  <strong>{event.title}</strong>
+                  <span>{event.date} • {event.time}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function InsightsSection({ listing, data }) {
+  return (
+    <div className="section-insights">
+      <h2>AI Insights</h2>
+      <div className="insight-card">
+        <h3>🤖 AI Analyser</h3>
+        <p>Your listing is performing well in searches for "church near me" and "sunday service".</p>
+        <p>Suggestion: Add more keywords like "family church" and "youth ministry" to improve discoverability.</p>
+      </div>
+      <div className="insight-card">
+        <h3>📈 Trending</h3>
+        <p>Top trending keywords in your area: community events, worship nights, bible study groups</p>
+      </div>
+      <div className="insight-card">
+        <h3>💡 How to Improve</h3>
+        <ul>
+          <li>Add high-quality photos (boosts views by 40%)</li>
+          <li>Post weekly updates (increases engagement by 25%)</li>
+          <li>Enable online bookings (converts 15% more visitors)</li>
+        </ul>
+      </div>
+      <div className="insight-card">
+        <h3>👥 Audience Insights</h3>
+        <p>Most visitors are aged 25-44, visiting on Sundays and Wednesdays.</p>
+      </div>
+      <div className="insight-card">
+        <h3>⚖️ Compare with Similar Listings</h3>
+        <p>You're in the top 20% for profile completeness, but 50% below average for social media activity.</p>
+      </div>
+    </div>
+  );
+}
+
+function VisitorsSection({ listing }) {
+  const [visitors, setVisitors] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchVisitors();
+  }, [listing]);
+
+  const fetchVisitors = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await axios.get(`${API_BASE}/api/visits/${listing.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setVisitors(res.data.visits || []);
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to fetch visitors:', err);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="section-visitors">
+      <h2>Visitors</h2>
+      {loading ? (
+        <p>Loading visitors...</p>
+      ) : visitors.length === 0 ? (
+        <p className="empty-state">No visitors yet</p>
+      ) : (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Visit Date</th>
+              <th>QR Code</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visitors.map((visitor, i) => (
+              <tr key={i}>
+                <td>{visitor.name}</td>
+                <td>{visitor.email}</td>
+                <td>{visitor.phone || 'N/A'}</td>
+                <td>{visitor.visit_date}</td>
+                <td>{visitor.qr_scanned ? '✓' : '–'}</td>
+                <td><button className="btn-small">View</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function SermonsSection({ listing }) {
+  return (
+    <div className="section-sermons">
+      <h2>Sermons</h2>
+      <button className="btn-primary">+ Upload Sermon</button>
+      <p className="empty-state">No sermons uploaded yet</p>
+    </div>
+  );
+}
+
+function BookingsSection({ listing }) {
+  return (
+    <div className="section-bookings">
+      <h2>Bookings</h2>
+      <p className="empty-state">No bookings yet</p>
+    </div>
+  );
+}
+
+function EnquiriesSection({ listing }) {
+  return (
+    <div className="section-enquiries">
+      <h2>Enquiries</h2>
+      <p className="empty-state">No enquiries yet</p>
+    </div>
+  );
+}
+
+function ApplicationsSection({ listing }) {
+  return (
+    <div className="section-applications">
+      <h2>Applications</h2>
+      <p className="empty-state">No applications yet</p>
+    </div>
+  );
+}
+
+function MessagesSection({ listing }) {
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchMessages();
+  }, [listing]);
+
+  const fetchMessages = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await axios.get(`${API_BASE}/api/messages/${listing.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMessages(res.data.messages || []);
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to fetch messages:', err);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="section-messages">
+      <h2>Messages</h2>
+      {loading ? (
+        <p>Loading messages...</p>
+      ) : messages.length === 0 ? (
+        <p className="empty-state">No messages yet</p>
+      ) : (
+        <ul className="messages-list">
+          {messages.map((msg, i) => (
+            <li key={i} className={msg.read ? 'read' : 'unread'}>
+              <div className="msg-header">
+                <strong>{msg.sender_name}</strong>
+                <span className="msg-time">{msg.created_at}</span>
+              </div>
+              <p className="msg-preview">{msg.content}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function FollowersSection({ listing }) {
+  const [followers, setFollowers] = useState([]);
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchFollowers();
+  }, [listing]);
+
+  const fetchFollowers = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await axios.get(`${API_BASE}/api/follows/count/church/${listing.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCount(res.data.count || 0);
+      setFollowers(res.data.followers || []);
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to fetch followers:', err);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="section-followers">
+      <h2>Followers ({count})</h2>
+      {loading ? (
+        <p>Loading followers...</p>
+      ) : followers.length === 0 ? (
+        <p className="empty-state">No followers yet</p>
+      ) : (
+        <ul className="followers-list">
+          {followers.map((follower, i) => (
+            <li key={i}>
+              <img src={follower.avatar || '/default-avatar.png'} alt={follower.name} />
+              <span>{follower.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SocialSection({ listing }) {
+  return (
+    <div className="section-social">
+      <h2>Social Media</h2>
+      <p>Connect your social media accounts to auto-post updates.</p>
+      <div className="social-buttons">
+        <button className="btn-social facebook">Connect Facebook</button>
+        <button className="btn-social instagram">Connect Instagram</button>
+        <button className="btn-social twitter">Connect Twitter</button>
+      </div>
+    </div>
+  );
+}
+
+function EventsSection({ listing }) {
+  return (
+    <div className="section-events">
+      <h2>Events</h2>
+      <button className="btn-primary">+ Create Event</button>
+      <p className="empty-state">No events yet</p>
+    </div>
+  );
+}
+
+function PostsSection({ listing }) {
+  return (
+    <div className="section-posts">
+      <h2>Posts & Feed</h2>
+      <button className="btn-primary">+ New Post</button>
+      <p className="empty-state">No posts yet</p>
+    </div>
+  );
+}
+
+function ProfileSection({ listing, listingType, user }) {
+  return (
+    <div className="section-profile">
+      <h2>Profile Settings</h2>
+      <form className="profile-form">
+        <div className="form-group">
+          <label>Listing Name</label>
+          <input type="text" defaultValue={listing.name} />
+        </div>
+        <div className="form-group">
+          <label>Description</label>
+          <textarea rows="4" defaultValue={listing.description}></textarea>
+        </div>
+        <div className="form-group">
+          <label>Address</label>
+          <input type="text" defaultValue={listing.address} />
+        </div>
+        <div className="form-group">
+          <label>Phone</label>
+          <input type="tel" defaultValue={listing.phone} />
+        </div>
+        <div className="form-group">
+          <label>Email</label>
+          <input type="email" defaultValue={listing.email} />
+        </div>
+        <div className="form-group">
+          <label>Website</label>
+          <input type="url" defaultValue={listing.website} />
+        </div>
+        <button type="submit" className="btn-primary">Save Changes</button>
+      </form>
     </div>
   );
 }
