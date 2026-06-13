@@ -1,384 +1,188 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, Request, File, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, EmailStr, validator
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from pydantic import BaseModel, EmailStr, Field, HttpUrl
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
-from pymongo import MongoClient, GEOSPHERE
-from bson import ObjectId
 import os
-from dotenv import load_dotenv
-import certifi
-import jwt
+from motor.motor_asyncio import AsyncIOMotorClient
+import anthropic
 from passlib.context import CryptContext
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import smtplib
+import jwt
+from slugify import slugify
+import qrcode
+from io import BytesIO
+import base64
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet
+from ics import Calendar, Event as ICSEvent
+import resend
 import secrets
-import re
 
-load_dotenv()
+from routers import planner_router, tools_router, analytics_router, search_router, events_router
 
-app = FastAPI(title="ChurchNavigator API")
+app = FastAPI(title="ChurchNavigator API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://churchnavigator.com", "https://www.churchnavigator.com"],
+    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000"), "https://churchnavigator.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 MONGODB_URI = os.getenv("MONGODB_URI")
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_DAYS = 30
+if not MONGODB_URI:
+    raise ValueError("MONGODB_URI environment variable not set")
 
-client = MongoClient(MONGODB_URI, tlsCAFile=certifi.where())
-db = client["ChurchNavigator"]
-churches_collection = db["churches"]
-users_collection = db["users"]
-analytics_collection = db["analytics"]
-messages_collection = db["messages"]
+client = AsyncIOMotorClient(MONGODB_URI)
+db_name = "ChurchNavigator" if os.getenv("ENVIRONMENT") == "production" else "DEV-ChurchNavigator"
+db = client[db_name]
 
-churches_collection.create_index([("location", GEOSPHERE)])
-churches_collection.create_index("slug", unique=True)
-users_collection.create_index("email", unique=True)
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+if ANTHROPIC_API_KEY:
+    anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+else:
+    anthropic_client = None
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")
 
-class Church(BaseModel):
-    name: str
-    slug: str
-    denomination: Optional[str] = None
-    address: str
-    postcode: str
-    city: str
-    location: Dict[str, Any]
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    website: Optional[str] = None
-    description: Optional[str] = None
-    logo_url: Optional[str] = None
-    images: Optional[List[str]] = []
-    service_times: Optional[List[Dict[str, Any]]] = []
-    ministries: Optional[List[str]] = []
-    facilities: Optional[List[str]] = []
-    languages: Optional[List[str]] = []
-    social_media: Optional[Dict[str, str]] = {}
-    status: str = "active"
-    verified: bool = False
-    parent_church_id: Optional[str] = None
-    is_branch: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-class UserRegister(BaseModel):
-    email: EmailStr
-    password: str
-    first_name: str
-    last_name: str
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-class ListingRole(BaseModel):
-    listing_id: str
-    listing_type: str
-    role: str
-    slug: str
-    name: str
-
-class UserListingsResponse(BaseModel):
-    listings: List[Dict[str, Any]]
-
-class NetworkStatsResponse(BaseModel):
-    parent: Dict[str, Any]
-    branches: List[Dict[str, Any]]
-    combined_stats: Dict[str, Any]
-    branch_performance: List[Dict[str, Any]]
-    insights: Dict[str, Any]
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=JWT_EXPIRATION_DAYS)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-def verify_token(token: str):
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
-    except jwt.JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-async def get_current_user(authorization: str = Depends(lambda: None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid authorization header")
-    token = authorization.split(" ")[1]
-    payload = verify_token(token)
-    user = users_collection.find_one({"_id": ObjectId(payload["user_id"])})
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return user
+app.include_router(planner_router, prefix="/api/planner", tags=["planner"])
+app.include_router(tools_router, prefix="/api/tools", tags=["tools"])
+app.include_router(analytics_router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(search_router, prefix="/api/search", tags=["search"])
+app.include_router(events_router, prefix="/api/events", tags=["events"])
 
 @app.get("/")
-def read_root():
-    return {"message": "ChurchNavigator API", "version": "1.0"}
+async def root():
+    return {"status": "ok", "service": "ChurchNavigator API", "version": "2.0.0", "database": db_name}
 
-@app.post("/api/auth/register", response_model=TokenResponse)
-async def register(user_data: UserRegister):
-    if users_collection.find_one({"email": user_data.email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    hashed_password = pwd_context.hash(user_data.password)
-    user_doc = {
-        "email": user_data.email,
-        "password": hashed_password,
-        "first_name": user_data.first_name,
-        "last_name": user_data.last_name,
-        "listings": [],
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
-    }
-    result = users_collection.insert_one(user_doc)
-    
-    token = create_access_token({"user_id": str(result.inserted_id), "email": user_data.email})
-    return {"access_token": token, "token_type": "bearer"}
+@app.get("/health")
+async def health_check():
+    try:
+        await db.command("ping")
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.utcnow().isoformat()}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {str(e)}")
 
-@app.post("/api/auth/login", response_model=TokenResponse)
-async def login(credentials: UserLogin):
-    user = users_collection.find_one({"email": credentials.email})
-    if not user or not pwd_context.verify(credentials.password, user["password"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    token = create_access_token({"user_id": str(user["_id"]), "email": user["email"]})
-    return {"access_token": token, "token_type": "bearer"}
+class ListingCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    denomination: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    website: Optional[HttpUrl] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    open_to_visits: Optional[bool] = False
+    capacity: Optional[int] = None
+    founded_year: Optional[int] = None
 
-@app.get("/api/users/me/listings", response_model=UserListingsResponse)
-async def get_user_listings(authorization: str = Depends(lambda: None)):
-    user = await get_current_user(authorization)
-    
-    listings = []
-    for listing_ref in user.get("listings", []):
-        listing_type = listing_ref.get("listing_type", "church")
-        listing_id = listing_ref.get("listing_id")
-        
-        if listing_type == "church":
-            church = churches_collection.find_one({"_id": ObjectId(listing_id)})
-            if church:
-                views_count = analytics_collection.count_documents({"church_id": listing_id, "event_type": "view"})
-                checkins_count = analytics_collection.count_documents({"church_id": listing_id, "event_type": "checkin"})
-                followers_count = analytics_collection.count_documents({"church_id": listing_id, "event_type": "follow"})
-                messages_count = messages_collection.count_documents({"church_id": listing_id, "status": "unread"})
-                
-                listings.append({
-                    "listing_id": listing_id,
-                    "listing_type": "church",
-                    "role": listing_ref.get("role", "admin"),
-                    "slug": church.get("slug"),
-                    "name": church.get("name"),
-                    "logo_url": church.get("logo_url"),
-                    "is_branch": church.get("is_branch", False),
-                    "parent_church_id": church.get("parent_church_id"),
-                    "stats": {
-                        "views": views_count,
-                        "checkins": checkins_count,
-                        "followers": followers_count,
-                        "messages": messages_count
-                    }
-                })
-        elif listing_type == "pastor":
-            listings.append({
-                "listing_id": listing_id,
-                "listing_type": "pastor",
-                "role": "owner",
-                "slug": listing_ref.get("slug"),
-                "name": listing_ref.get("name"),
-                "logo_url": listing_ref.get("logo_url"),
-                "stats": {
-                    "views": 0,
-                    "checkins": 0,
-                    "followers": 0,
-                    "messages": 0
-                }
-            })
-    
-    return {"listings": listings}
+class VisitorCheckIn(BaseModel):
+    email: EmailStr
+    name: str
+    phone: Optional[str] = None
+    source: str = "walk_in"
+    notes: Optional[str] = None
 
-@app.get("/api/churches/{slug}/network", response_model=NetworkStatsResponse)
-async def get_church_network(slug: str, authorization: str = Depends(lambda: None)):
-    user = await get_current_user(authorization)
+@app.post("/api/churches")
+async def create_church(listing: ListingCreate):
+    slug = slugify(listing.name)
+    existing = await db.churches.find_one({"slug": slug})
+    if existing:
+        counter = 1
+        while await db.churches.find_one({"slug": f"{slug}-{counter}"}):
+            counter += 1
+        slug = f"{slug}-{counter}"
     
-    parent_church = churches_collection.find_one({"slug": slug})
-    if not parent_church:
-        raise HTTPException(status_code=404, detail="Church not found")
+    church_data = listing.dict()
+    church_data["slug"] = slug
+    church_data["created_at"] = datetime.utcnow()
+    church_data["listing_type"] = "church"
     
-    parent_id = str(parent_church["_id"])
-    user_has_access = any(l.get("listing_id") == parent_id for l in user.get("listings", []))
-    if not user_has_access:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if listing.latitude and listing.longitude:
+        church_data["location"] = {"type": "Point", "coordinates": [listing.longitude, listing.latitude]}
     
-    branches = list(churches_collection.find({"parent_church_id": parent_id, "status": "active"}))
-    
-    all_church_ids = [parent_id] + [str(b["_id"]) for b in branches]
-    
-    total_views = analytics_collection.count_documents({"church_id": {"$in": all_church_ids}, "event_type": "view"})
-    total_checkins = analytics_collection.count_documents({"church_id": {"$in": all_church_ids}, "event_type": "checkin"})
-    total_followers = analytics_collection.count_documents({"church_id": {"$in": all_church_ids}, "event_type": "follow"})
-    total_messages = messages_collection.count_documents({"church_id": {"$in": all_church_ids}})
-    
-    branch_performance = []
-    for branch in branches:
-        branch_id = str(branch["_id"])
-        views = analytics_collection.count_documents({"church_id": branch_id, "event_type": "view"})
-        checkins = analytics_collection.count_documents({"church_id": branch_id, "event_type": "checkin"})
-        followers = analytics_collection.count_documents({"church_id": branch_id, "event_type": "follow"})
-        messages = messages_collection.count_documents({"church_id": branch_id, "status": "unread"})
-        
-        health_score = min(100, (views / 10) + (checkins * 2) + (followers / 5))
-        status = "good" if health_score > 50 else "needs_attention" if health_score > 20 else "critical"
-        
-        branch_performance.append({
-            "branch_id": branch_id,
-            "name": branch.get("name"),
-            "slug": branch.get("slug"),
-            "views": views,
-            "checkins": checkins,
-            "followers": followers,
-            "messages": messages,
-            "health_score": round(health_score, 1),
-            "status": status
-        })
-    
-    branch_performance.sort(key=lambda x: x["health_score"], reverse=True)
-    
-    best_branch = branch_performance[0] if branch_performance else None
-    worst_branch = branch_performance[-1] if branch_performance else None
-    
-    insights = {
-        "best_performing": best_branch.get("name") if best_branch else None,
-        "needs_attention": worst_branch.get("name") if worst_branch and worst_branch["status"] != "good" else None,
-        "recommendations": [
-            f"Consider cross-promoting {best_branch.get('name')} content across network" if best_branch else "Add branches to build your network",
-            f"Schedule visit to {worst_branch.get('name')} to boost engagement" if worst_branch and worst_branch["status"] != "good" else "Keep up the great work!"
-        ]
-    }
-    
-    parent_data = {
-        "id": parent_id,
-        "name": parent_church.get("name"),
-        "slug": parent_church.get("slug"),
-        "logo_url": parent_church.get("logo_url")
-    }
-    
-    branches_data = [{
-        "id": str(b["_id"]),
-        "name": b.get("name"),
-        "slug": b.get("slug"),
-        "logo_url": b.get("logo_url"),
-        "address": b.get("address"),
-        "city": b.get("city")
-    } for b in branches]
-    
-    return {
-        "parent": parent_data,
-        "branches": branches_data,
-        "combined_stats": {
-            "total_views": total_views,
-            "total_checkins": total_checkins,
-            "total_followers": total_followers,
-            "total_messages": total_messages,
-            "total_branches": len(branches)
-        },
-        "branch_performance": branch_performance,
-        "insights": insights
-    }
-
-@app.get("/api/churches")
-async def get_churches(
-    lat: Optional[float] = None,
-    lng: Optional[float] = None,
-    radius: Optional[int] = 5000,
-    denomination: Optional[str] = None,
-    city: Optional[str] = None,
-    limit: int = Query(default=50, le=100)
-):
-    query = {"status": "active"}
-    
-    if denomination:
-        query["denomination"] = denomination
-    if city:
-        query["city"] = {"$regex": city, "$options": "i"}
-    
-    if lat is not None and lng is not None:
-        query["location"] = {
-            "$near": {
-                "$geometry": {"type": "Point", "coordinates": [lng, lat]},
-                "$maxDistance": radius
-            }
-        }
-    
-    churches = list(churches_collection.find(query).limit(limit))
-    
-    for church in churches:
-        church["_id"] = str(church["_id"])
-        if "parent_church_id" in church:
-            church["parent_church_id"] = str(church["parent_church_id"])
-    
-    return {"churches": churches, "count": len(churches)}
+    result = await db.churches.insert_one(church_data)
+    church_data["_id"] = str(result.inserted_id)
+    return {"success": True, "slug": slug, "church": church_data}
 
 @app.get("/api/churches/{slug}")
 async def get_church(slug: str):
-    church = churches_collection.find_one({"slug": slug})
+    church = await db.churches.find_one({"slug": slug})
+    if not church:
+        raise HTTPException(status_code=404, detail="Church not found")
+    church["_id"] = str(church["_id"])
+    return church
+
+@app.post("/api/churches/{slug}/visit")
+async def check_in_visitor(slug: str, visitor: VisitorCheckIn):
+    church = await db.churches.find_one({"slug": slug})
     if not church:
         raise HTTPException(status_code=404, detail="Church not found")
     
-    church["_id"] = str(church["_id"])
-    if "parent_church_id" in church:
-        church["parent_church_id"] = str(church["parent_church_id"])
+    church_id = str(church["_id"])
+    existing_visitor = await db.visitors.find_one({"email": visitor.email, "church_id": church_id})
     
-    return church
+    if existing_visitor:
+        total_visits = existing_visitor.get("total_visits", 0) + 1
+        journey_stage = "returning" if total_visits == 2 else "engaged" if total_visits >= 3 else "first_visit"
+        
+        await db.visitors.update_one(
+            {"_id": existing_visitor["_id"]},
+            {"$set": {"last_visit_date": datetime.utcnow(), "total_visits": total_visits, "journey_stage": journey_stage}}
+        )
+        return {"success": True, "visitor_id": str(existing_visitor["_id"]), "total_visits": total_visits, "journey_stage": journey_stage}
+    else:
+        visitor_data = visitor.dict()
+        visitor_data["church_id"] = church_id
+        visitor_data["visit_date"] = datetime.utcnow()
+        visitor_data["last_visit_date"] = datetime.utcnow()
+        visitor_data["total_visits"] = 1
+        visitor_data["journey_stage"] = "first_visit"
+        
+        result = await db.visitors.insert_one(visitor_data)
+        return {"success": True, "visitor_id": str(result.inserted_id), "total_visits": 1, "journey_stage": "first_visit"}
 
-@app.post("/api/churches")
-async def create_church(church: Church, authorization: str = Depends(lambda: None)):
-    user = await get_current_user(authorization)
+@app.get("/api/visitors/export")
+async def export_visitors_csv(church_id: Optional[str] = None):
+    query = {"church_id": church_id} if church_id else {}
+    visitors = await db.visitors.find(query).to_list(length=10000)
     
-    if churches_collection.find_one({"slug": church.slug}):
-        raise HTTPException(status_code=400, detail="Slug already exists")
+    csv_lines = ["Email,Name,Phone,Source,Journey Stage,Total Visits,First Visit,Last Visit"]
+    for v in visitors:
+        csv_lines.append(f"{v.get('email','')},{v.get('name','')},{v.get('phone','')},{v.get('source','')},{v.get('journey_stage','')},{v.get('total_visits',0)},{v.get('visit_date','').isoformat() if v.get('visit_date') else ''},{v.get('last_visit_date','').isoformat() if v.get('last_visit_date') else ''}")
     
-    church_dict = church.dict()
-    result = churches_collection.insert_one(church_dict)
-    
-    users_collection.update_one(
-        {"_id": user["_id"]},
-        {"$push": {"listings": {"listing_id": str(result.inserted_id), "listing_type": "church", "role": "admin", "slug": church.slug, "name": church.name}}}
-    )
-    
-    church_dict["_id"] = str(result.inserted_id)
-    return church_dict
+    csv_content = "\n".join(csv_lines)
+    return StreamingResponse(iter([csv_content]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=visitors.csv"})
 
-@app.post("/api/analytics/track")
-async def track_event(
-    church_id: str,
-    event_type: str,
-    metadata: Optional[Dict[str, Any]] = None
-):
-    event = {
-        "church_id": church_id,
-        "event_type": event_type,
-        "metadata": metadata or {},
-        "timestamp": datetime.utcnow()
-    }
-    analytics_collection.insert_one(event)
-    return {"status": "success"}
+@app.post("/api/chat")
+async def chat_endpoint(request: Request):
+    body = await request.json()
+    message = body.get("message", "")
+    listing_type = body.get("listing_type", "church")
+    listing_slug = body.get("listing_slug", "")
+    
+    if not anthropic_client:
+        return {"response": "I'm currently offline. Please contact us directly.", "fallback": True}
+    
+    try:
+        response = anthropic_client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=500,
+            messages=[{"role": "user", "content": f"You are a helpful assistant for a {listing_type}. Answer this question concisely: {message}"}]
+        )
+        return {"response": response.content[0].text, "fallback": False}
+    except Exception as e:
+        return {"response": "I'm having trouble connecting right now. Please try again later.", "fallback": True, "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
