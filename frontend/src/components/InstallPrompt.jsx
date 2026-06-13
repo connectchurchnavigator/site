@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 
 const InstallPrompt = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -6,19 +7,21 @@ const InstallPrompt = () => {
   const [pageViews, setPageViews] = useState(0);
 
   useEffect(() => {
-    const dismissed = localStorage.getItem('pwaInstallDismissed');
-    if (dismissed === 'true') return;
-
+    const dismissed = localStorage.getItem('installPromptDismissed');
     const views = parseInt(localStorage.getItem('pageViews') || '0', 10);
-    const newViews = views + 1;
-    setPageViews(newViews);
-    localStorage.setItem('pageViews', newViews.toString());
+    setPageViews(views + 1);
+    localStorage.setItem('pageViews', (views + 1).toString());
+
+    if (dismissed === 'true') {
+      return;
+    }
 
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      if (newViews >= 2) {
-        setShowPrompt(true);
+      
+      if (views + 1 >= 2) {
+        setTimeout(() => setShowPrompt(true), 3000);
       }
     };
 
@@ -26,7 +29,8 @@ const InstallPrompt = () => {
 
     window.addEventListener('appinstalled', () => {
       setShowPrompt(false);
-      localStorage.setItem('pwaInstallDismissed', 'true');
+      setDeferredPrompt(null);
+      localStorage.setItem('installPromptDismissed', 'true');
     });
 
     return () => {
@@ -39,102 +43,61 @@ const InstallPrompt = () => {
 
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-
+    
     if (outcome === 'accepted') {
-      console.log('User accepted the install prompt');
+      setShowPrompt(false);
     }
-
     setDeferredPrompt(null);
-    setShowPrompt(false);
   };
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    localStorage.setItem('pwaInstallDismissed', 'true');
+    localStorage.setItem('installPromptDismissed', 'true');
   };
 
-  if (!showPrompt) return null;
+  if (!showPrompt || !deferredPrompt) {
+    return null;
+  }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.content}>
-        <div style={styles.icon}>📱</div>
-        <div style={styles.text}>
-          <div style={styles.title}>Install ChurchNavigator</div>
-          <div style={styles.subtitle}>Get quick access from your home screen</div>
+    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg shadow-2xl p-4 z-50 animate-slide-up">
+      <button
+        onClick={handleDismiss}
+        className="absolute top-2 right-2 p-1 hover:bg-white/20 rounded-full transition-colors"
+        aria-label="Dismiss"
+      >
+        <X size={16} />
+      </button>
+      
+      <div className="flex items-start gap-3 pr-6">
+        <div className="flex-shrink-0 w-12 h-12 bg-white rounded-lg flex items-center justify-center">
+          <img src="/logo192.png" alt="ChurchNavigator" className="w-10 h-10" />
         </div>
-        <button onClick={handleInstallClick} style={styles.installButton}>
-          Install
-        </button>
-        <button onClick={handleDismiss} style={styles.closeButton} aria-label="Close">
-          ✕
-        </button>
+        
+        <div className="flex-1">
+          <h3 className="font-semibold text-lg mb-1">Install ChurchNavigator</h3>
+          <p className="text-sm text-purple-100 mb-3">
+            Add to your home screen for quick access and offline viewing
+          </p>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={handleInstallClick}
+              className="px-4 py-2 bg-white text-purple-600 rounded-lg font-medium text-sm hover:bg-purple-50 transition-colors"
+            >
+              Install
+            </button>
+            <button
+              onClick={handleDismiss}
+              className="px-4 py-2 bg-purple-800/50 text-white rounded-lg font-medium text-sm hover:bg-purple-800/70 transition-colors"
+            >
+              Not Now
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
-};
-
-const styles = {
-  container: {
-    position: 'fixed',
-    bottom: '20px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: 9999,
-    maxWidth: '500px',
-    width: 'calc(100% - 40px)',
-    animation: 'slideUp 0.3s ease-out'
-  },
-  content: {
-    background: 'linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)',
-    borderRadius: '12px',
-    padding: '16px 20px',
-    boxShadow: '0 8px 24px rgba(124, 58, 237, 0.3)',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    position: 'relative'
-  },
-  icon: {
-    fontSize: '32px',
-    flexShrink: 0
-  },
-  text: {
-    flex: 1,
-    color: 'white'
-  },
-  title: {
-    fontSize: '16px',
-    fontWeight: '600',
-    marginBottom: '4px'
-  },
-  subtitle: {
-    fontSize: '14px',
-    opacity: 0.95
-  },
-  installButton: {
-    background: 'white',
-    color: '#7c3aed',
-    border: 'none',
-    padding: '10px 20px',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    flexShrink: 0,
-    transition: 'transform 0.2s'
-  },
-  closeButton: {
-    background: 'transparent',
-    border: 'none',
-    color: 'white',
-    fontSize: '20px',
-    cursor: 'pointer',
-    padding: '4px 8px',
-    marginLeft: '-8px',
-    opacity: 0.8,
-    transition: 'opacity 0.2s'
-  }
 };
 
 export default InstallPrompt;
