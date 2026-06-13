@@ -1,247 +1,165 @@
-from fastapi import APIRouter, HTTPException, Depends
-from motor.motor_asyncio import AsyncIOMotorDatabase
-from database import get_database
-from models import Church
-from typing import List, Dict, Any
+from fastapi import APIRouter, HTTPException, Depends, status
+from pydantic import BaseModel
+from typing import List, Optional, Literal
 from datetime import datetime
-import anthropic
-import os
-import json
 from bson import ObjectId
+import os
+
+from database import db
+from auth import get_current_user
+from email_service import send_email
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-if not ANTHROPIC_API_KEY:
-    raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+LISTING_TYPES = [
+    "church",
+    "pastor",
+    "worship_leader",
+    "media_team",
+    "event",
+    "bible_college"
+]
 
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+class ApproveRequest(BaseModel):
+    pass
 
-batch_jobs = {}
+class RejectRequest(BaseModel):
+    reason: str
 
+def get_admin_user(current_user: dict = Depends(get_current_user)):
+    if not current_user.get("is_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
 
-def create_enrichment_prompt(church_data: Dict[str, Any], task_type: str) -> str:
-    name = church_data.get("name", "")
-    denomination = church_data.get("denomination", "Christian")
-    city = church_data.get("city", "")
-    ministries = church_data.get("ministries", [])
-    worship_styles = church_data.get("worship_styles", [])
+@router.get("/moderation-queue")
+async def get_moderation_queue(admin: dict = Depends(get_admin_user)):
+    queue = []
     
-    if task_type == "bio":
-        ministries_str = ", ".join(ministries[:5]) if ministries else "various ministries"
-        return f"""Write a warm, welcoming 2-paragraph description for {name}, a {denomination} church in {city}. They offer {ministries_str}. Write in second person, inviting tone. Focus on community, faith, and welcome. Keep it under 200 words. Return ONLY the description text, no preamble."""
-    
-    elif task_type == "tagline":
-        worship_str = ", ".join(worship_styles[:2]) if worship_styles else "worship"
-        return f"""Create a punchy, memorable tagline for {name}, a {denomination} church with {worship_str}. Maximum 10 words. Inspiring and welcoming. Return ONLY the tagline, no quotes or explanation."""
-    
-    elif task_type == "ministries":
-        if not ministries:
-            return ""
-        ministries_list = ", ".join(ministries[:10])
-        return f"""For each ministry, write a one-sentence description (15-25 words). Ministries: {ministries_list}. Return ONLY valid JSON format: {{"ministry_name": "description", ...}}. No markdown, no explanation."""
-    
-    elif task_type == "seo":
-        return f"""Write a compelling SEO meta description for {name}, a {denomination} church in {city}. Exactly 150-155 characters. Include keywords: church, {city}, {denomination}. Return ONLY the meta description text."""
-    
-    return ""
-
-
-@router.post("/enrich/run")
-async def run_enrichment(db: AsyncIOMotorDatabase = Depends(get_database)):
-    churches_cursor = db.churches.find({
-        "$or": [
-            {"description": {"$exists": False}},
-            {"description": ""},
-            {"description": {"$regex": "^.{0,49}$"}}
-        ],
-        "name": {"$exists": True, "$ne": ""}
-    }).limit(500)
-    
-    churches = await churches_cursor.to_list(length=500)
-    
-    if not churches:
-        return {"message": "No churches need enrichment", "count": 0}
-    
-    requests = []
-    church_map = {}
-    
-    for idx, church in enumerate(churches):
-        church_id = str(church["_id"])
-        church_map[f"bio_{idx}"] = {"church_id": church_id, "task": "bio"}
-        church_map[f"tagline_{idx}"] = {"church_id": church_id, "task": "tagline"}
-        church_map[f"seo_{idx}"] = {"church_id": church_id, "task": "seo"}
+    for listing_type in LISTING_TYPES:
+        collection_name = f"{listing_type}s" if listing_type != "media_team" else "media_teams"
+        collection = db[collection_name]
         
-        requests.append({
-            "custom_id": f"bio_{idx}",
-            "params": {
-                "model": "claude-3-5-haiku-20241022",
-                "max_tokens": 300,
-                "messages": [
-                    {"role": "user", "content": create_enrichment_prompt(church, "bio")}
-                ]
-            }
-        })
+        pending_listings = collection.find({"moderation_status": "pending"})
         
-        requests.append({
-            "custom_id": f"tagline_{idx}",
-            "params": {
-                "model": "claude-3-5-haiku-20241022",
-                "max_tokens": 50,
-                "messages": [
-                    {"role": "user", "content": create_enrichment_prompt(church, "tagline")}
-                ]
-            }
-        })
-        
-        requests.append({
-            "custom_id": f"seo_{idx}",
-            "params": {
-                "model": "claude-3-5-haiku-20241022",
-                "max_tokens": 100,
-                "messages": [
-                    {"role": "user", "content": create_enrichment_prompt(church, "seo")}
-                ]
-            }
-        })
-        
-        if church.get("ministries"):
-            church_map[f"ministries_{idx}"] = {"church_id": church_id, "task": "ministries"}
-            requests.append({
-                "custom_id": f"ministries_{idx}",
-                "params": {
-                    "model": "claude-3-5-haiku-20241022",
-                    "max_tokens": 500,
-                    "messages": [
-                        {"role": "user", "content": create_enrichment_prompt(church, "ministries")}
-                    ]
+        for listing in pending_listings:
+            user = None
+            if listing.get("user_id"):
+                user = db.users.find_one({"_id": ObjectId(listing["user_id"])})
+            
+            queue.append({
+                "id": str(listing["_id"]),
+                "type": listing_type,
+                "name": listing.get("name") or listing.get("title") or listing.get("church_name") or "Untitled",
+                "image": listing.get("image_url") or listing.get("logo_url") or listing.get("photo_url"),
+                "location": listing.get("location") or listing.get("city"),
+                "denomination": listing.get("denomination"),
+                "created_at": listing.get("created_at"),
+                "submitter_name": user.get("name") if user else "Unknown",
+                "submitter_email": user.get("email") if user else "Unknown",
+                "preview_data": {
+                    "description": (listing.get("description") or listing.get("bio") or "")[:200],
+                    "website": listing.get("website"),
+                    "email": listing.get("email") or listing.get("contact_email"),
+                    "phone": listing.get("phone") or listing.get("contact_phone")
                 }
             })
     
-    try:
-        message_batch = client.messages.batches.create(
-            requests=requests
-        )
-        
-        batch_id = message_batch.id
-        batch_jobs[batch_id] = {
-            "status": "processing",
-            "created_at": datetime.utcnow().isoformat(),
-            "church_count": len(churches),
-            "request_count": len(requests),
-            "church_map": church_map
-        }
-        
-        return {
-            "message": "Batch enrichment started",
-            "batch_id": batch_id,
-            "churches_processing": len(churches),
-            "total_requests": len(requests)
-        }
+    queue.sort(key=lambda x: x.get("created_at") or datetime.min, reverse=True)
+    return {"queue": queue, "total": len(queue)}
+
+@router.post("/moderation/{listing_type}/{listing_id}/approve")
+async def approve_listing(listing_type: str, listing_id: str, admin: dict = Depends(get_admin_user)):
+    if listing_type not in LISTING_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid listing type")
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Batch creation failed: {str(e)}")
-
-
-@router.get("/enrich/status/{batch_id}")
-async def get_enrichment_status(batch_id: str, db: AsyncIOMotorDatabase = Depends(get_database)):
-    if batch_id not in batch_jobs:
-        raise HTTPException(status_code=404, detail="Batch job not found")
+    collection_name = f"{listing_type}s" if listing_type != "media_team" else "media_teams"
+    collection = db[collection_name]
     
     try:
-        batch = client.messages.batches.retrieve(batch_id)
-        
-        status_info = {
-            "batch_id": batch_id,
-            "status": batch.processing_status,
-            "request_counts": {
-                "processing": batch.request_counts.processing,
-                "succeeded": batch.request_counts.succeeded,
-                "errored": batch.request_counts.errored,
-                "canceled": batch.request_counts.canceled,
-                "expired": batch.request_counts.expired
-            },
-            "created_at": batch_jobs[batch_id]["created_at"],
-            "church_count": batch_jobs[batch_id]["church_count"]
-        }
-        
-        if batch.processing_status == "ended":
-            results_url = batch.results_url
-            if results_url and batch_jobs[batch_id]["status"] != "completed":
-                await process_batch_results(batch_id, db)
-                batch_jobs[batch_id]["status"] = "completed"
-                status_info["status"] = "completed"
-        
-        return status_info
+        listing_oid = ObjectId(listing_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid listing ID")
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
+    listing = collection.find_one({"_id": listing_oid})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    
+    collection.update_one(
+        {"_id": listing_oid},
+        {"$set": {"moderation_status": "approved", "approved_at": datetime.utcnow()}}
+    )
+    
+    if listing.get("user_id"):
+        user = db.users.find_one({"_id": ObjectId(listing["user_id"])})
+        if user and user.get("email"):
+            listing_name = listing.get("name") or listing.get("title") or listing.get("church_name") or "Your listing"
+            try:
+                await send_email(
+                    to_email=user["email"],
+                    template_id="05",
+                    template_data={
+                        "user_name": user.get("name", "User"),
+                        "listing_type": listing_type.replace("_", " ").title(),
+                        "listing_name": listing_name,
+                        "listing_url": f"https://churchnavigator.com/{listing_type}/{listing_id}"
+                    }
+                )
+            except Exception as e:
+                print(f"Email send failed: {e}")
+    
+    return {"success": True, "message": "Listing approved"}
 
-
-async def process_batch_results(batch_id: str, db: AsyncIOMotorDatabase):
+@router.post("/moderation/{listing_type}/{listing_id}/reject")
+async def reject_listing(
+    listing_type: str,
+    listing_id: str,
+    reject_data: RejectRequest,
+    admin: dict = Depends(get_admin_user)
+):
+    if listing_type not in LISTING_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid listing type")
+    
+    collection_name = f"{listing_type}s" if listing_type != "media_team" else "media_teams"
+    collection = db[collection_name]
+    
     try:
-        results = []
-        for result in client.messages.batches.results(batch_id):
-            results.append(result)
-        
-        church_map = batch_jobs[batch_id]["church_map"]
-        enrichments = {}
-        
-        for result in results:
-            if result.result.type == "succeeded":
-                custom_id = result.custom_id
-                if custom_id not in church_map:
-                    continue
-                
-                church_id = church_map[custom_id]["church_id"]
-                task = church_map[custom_id]["task"]
-                
-                content = result.result.message.content[0].text.strip()
-                
-                if church_id not in enrichments:
-                    enrichments[church_id] = {}
-                
-                if task == "bio":
-                    enrichments[church_id]["description"] = content
-                elif task == "tagline":
-                    enrichments[church_id]["tagline"] = content
-                elif task == "seo":
-                    enrichments[church_id]["seo_meta_description"] = content[:155]
-                elif task == "ministries":
-                    try:
-                        ministries_data = json.loads(content)
-                        enrichments[church_id]["ministry_descriptions"] = ministries_data
-                    except:
-                        pass
-        
-        for church_id, data in enrichments.items():
-            data["enriched_by_ai"] = True
-            data["enriched_at"] = datetime.utcnow()
-            
-            await db.churches.update_one(
-                {"_id": ObjectId(church_id)},
-                {"$set": data}
-            )
-        
-        batch_jobs[batch_id]["enriched_count"] = len(enrichments)
-        
-    except Exception as e:
-        print(f"Error processing batch results: {str(e)}")
-        batch_jobs[batch_id]["status"] = "error"
-        batch_jobs[batch_id]["error"] = str(e)
-
-
-@router.get("/enrich/jobs")
-async def list_enrichment_jobs():
-    return {
-        "jobs": [
-            {
-                "batch_id": bid,
-                "status": info["status"],
-                "created_at": info["created_at"],
-                "church_count": info["church_count"],
-                "enriched_count": info.get("enriched_count", 0)
-            }
-            for bid, info in batch_jobs.items()
-        ]
-    }
+        listing_oid = ObjectId(listing_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid listing ID")
+    
+    listing = collection.find_one({"_id": listing_oid})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    
+    collection.update_one(
+        {"_id": listing_oid},
+        {"$set": {
+            "moderation_status": "rejected",
+            "rejection_reason": reject_data.reason,
+            "rejected_at": datetime.utcnow()
+        }}
+    )
+    
+    if listing.get("user_id"):
+        user = db.users.find_one({"_id": ObjectId(listing["user_id"])})
+        if user and user.get("email"):
+            listing_name = listing.get("name") or listing.get("title") or listing.get("church_name") or "Your listing"
+            try:
+                await send_email(
+                    to_email=user["email"],
+                    template_id="12",
+                    template_data={
+                        "user_name": user.get("name", "User"),
+                        "listing_type": listing_type.replace("_", " ").title(),
+                        "listing_name": listing_name,
+                        "rejection_reason": reject_data.reason,
+                        "edit_url": f"https://churchnavigator.com/dashboard/listings"
+                    }
+                )
+            except Exception as e:
+                print(f"Email send failed: {e}")
+    
+    return {"success": True, "message": "Listing rejected"}
