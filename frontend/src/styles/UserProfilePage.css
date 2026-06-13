@@ -1,0 +1,448 @@
+.user-profile-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.profile-loading,
+.profile-error {
+  text-align: center;
+  padding: 4rem;
+  font-size: 1.25rem;
+  color: #6b46c1;
+}
+
+.profile-header {
+  background: linear-gradient(135deg, #9f7aea 0%, #6b46c1 100%);
+  border-radius: 16px;
+  padding: 2.5rem;
+  color: white;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(107, 70, 193, 0.15);
+}
+
+.profile-header-content {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.profile-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: white;
+  flex-shrink: 0;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #6b46c1;
+  background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+}
+
+.profile-info h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.member-since {
+  margin: 0;
+  opacity: 0.95;
+  font-size: 1rem;
+}
+
+.edit-profile-btn {
+  margin-left: auto;
+  padding: 0.75rem 1.5rem;
+  background: white;
+  color: #6b46c1;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-profile-btn:hover {
+  background: #f3e8ff;
+  transform: translateY(-2px);
+}
+
+.edit-profile-section {
+  background: #f9fafb;
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.edit-profile-section input {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.edit-profile-section button {
+  padding: 0.75rem 1.5rem;
+  background: #6b46c1;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.profile-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 2rem;
+  overflow-x: auto;
+}
+
+.profile-tabs button {
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #6b7280;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.profile-tabs button:hover {
+  color: #6b46c1;
+}
+
+.profile-tabs button.active {
+  color: #6b46c1;
+  border-bottom-color: #6b46c1;
+}
+
+.profile-content {
+  min-height: 400px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  padding: 2rem;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(107, 70, 193, 0.1);
+}
+
+.stat-card h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2.5rem;
+  color: #6b46c1;
+  font-weight: 700;
+}
+
+.stat-card p {
+  margin: 0;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.recent-activity h2 {
+  margin: 0 0 1rem 0;
+  color: #1f2937;
+  font-size: 1.5rem;
+}
+
+.recent-activity ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.recent-activity li {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.activity-time {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.no-activity,
+.no-items {
+  text-align: center;
+  color: #6b7280;
+  padding: 3rem;
+  font-size: 1.125rem;
+}
+
+.churches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.church-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
+}
+
+.church-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(107, 70, 193, 0.15);
+}
+
+.church-card img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+}
+
+.church-card h3 {
+  margin: 1rem 1rem 0.5rem 1rem;
+  color: #1f2937;
+  font-size: 1.125rem;
+}
+
+.church-card p {
+  margin: 0 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.denomination {
+  color: #9f7aea !important;
+  font-weight: 600;
+  margin-bottom: 1rem !important;
+}
+
+.church-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+.church-actions a,
+.church-actions button {
+  flex: 1;
+  padding: 0.625rem;
+  text-align: center;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: none;
+  border: none;
+  transition: all 0.2s;
+}
+
+.church-actions a {
+  background: #6b46c1;
+  color: white;
+}
+
+.church-actions button {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.church-actions a:hover {
+  background: #553c9a;
+}
+
+.church-actions button:hover {
+  background: #e5e7eb;
+}
+
+.events-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.event-item {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.event-item h3 {
+  margin: 0 0 0.5rem 0;
+  color: #1f2937;
+  font-size: 1.125rem;
+}
+
+.event-item p {
+  margin: 0.25rem 0;
+  color: #6b7280;
+}
+
+.church-name {
+  color: #9f7aea !important;
+  font-weight: 600;
+}
+
+.view-ticket,
+.review-btn {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #6b46c1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.view-ticket:hover,
+.review-btn:hover {
+  background: #553c9a;
+}
+
+.past-events-heading,
+.prayers-offered-heading {
+  margin-top: 2.5rem;
+  color: #1f2937;
+  font-size: 1.5rem;
+}
+
+.prayer-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.prayer-list li {
+  background: white;
+  padding: 1.25rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.prayer-text {
+  margin: 0 0 0.75rem 0;
+  color: #1f2937;
+  line-height: 1.6;
+}
+
+.prayer-meta {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.notification-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.notification-toggles label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.notification-toggles input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #6b46c1;
+}
+
+.notification-toggles select {
+  margin-left: 0.5rem;
+  padding: 0.5rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.save-settings-btn {
+  margin-top: 2rem;
+  padding: 0.875rem 2rem;
+  background: #6b46c1;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.save-settings-btn:hover {
+  background: #553c9a;
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .user-profile-page {
+    padding: 1rem;
+  }
+
+  .profile-header {
+    padding: 1.5rem;
+  }
+
+  .profile-header-content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .edit-profile-btn {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .churches-grid {
+    grid-template-columns: 1fr;
+  }
+}
