@@ -1,20 +1,26 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import HomePage from './pages/HomePage';
 import ChurchDetailPage from './pages/ChurchDetailPage';
-import LoginPage from './pages/LoginPage';
-import AuthCallback from './pages/AuthCallback';
+import AdminModerationPage from './pages/AdminModerationPage';
 import './App.css';
 
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/church/:id" element={<ChurchDetailPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-      </Routes>
+      <div className="App">
+        <Navbar />
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/church/:id" element={<ChurchDetailPage />} />
+            <Route path="/admin/moderation" element={<AdminModerationPage />} />
+          </Routes>
+        </main>
+        <Footer />
+      </div>
     </Router>
   );
 }
