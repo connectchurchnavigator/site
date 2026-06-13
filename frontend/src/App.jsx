@@ -1,48 +1,21 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Home from './pages/Home';
-import ChurchDetail from './pages/ChurchDetail';
-import SearchResults from './pages/SearchResults';
-import Dashboard from './pages/Dashboard';
-import FlyerGenerator from './pages/Dashboard/FlyerGenerator';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import NotFound from './pages/NotFound';
-import { AuthProvider } from './context/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import Header from './components/Header';
-import Footer from './components/Footer';
+import HomePage from './pages/HomePage';
+import ChurchDetailPage from './pages/ChurchDetailPage';
+import LoginPage from './pages/LoginPage';
+import AuthCallback from './pages/AuthCallback';
+import './App.css';
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="app">
-          <Header />
-          <main>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/search" element={<SearchResults />} />
-              <Route path="/church/:slug" element={<ChurchDetail />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="/dashboard/flyers" element={
-                <ProtectedRoute>
-                  <FlyerGenerator />
-                </ProtectedRoute>
-              } />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </main>
-          <Footer />
-        </div>
-      </Router>
-    </AuthProvider>
+    <Router>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/church/:id" element={<ChurchDetailPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+      </Routes>
+    </Router>
   );
 }
 
