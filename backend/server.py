@@ -1,40 +1,34 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from routers import churches, events, pastors, media_teams, worship_leaders, chat
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
-
-app = FastAPI(title="ChurchNavigator API", version="2.0")
+app = FastAPI(title="ChurchNavigator API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://churchnavigator.com",
+        "https://www.churchnavigator.com",
+        "https://dev.churchnavigator.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-MONGO_URI = os.getenv("MONGO_URI")
-client = AsyncIOMotorClient(MONGO_URI)
-db = client.get_database("DEV-ChurchNavigator" if os.getenv("ENV") == "dev" else "ChurchNavigator")
-
-from routers import search
-
-app.include_router(search.router)
-
-@app.on_event("startup")
-async def startup_event():
-    await db.listings.create_index([("name", "text"), ("description", "text"), ("city", "text"), ("denomination", "text")])
-    await db.listings.create_index([("moderation_status", 1), ("listing_type", 1)])
-    await db.listings.create_index([("location", "2dsphere")])
-    print("✅ MongoDB indexes created")
+app.include_router(churches.router, tags=["churches"])
+app.include_router(events.router, tags=["events"])
+app.include_router(pastors.router, tags=["pastors"])
+app.include_router(media_teams.router, tags=["media_teams"])
+app.include_router(worship_leaders.router, tags=["worship_leaders"])
+app.include_router(chat.router, tags=["chat"])
 
 @app.get("/")
-def root():
-    return {"message": "ChurchNavigator API v2.0 - MongoDB Atlas Search", "status": "operational"}
+async def root():
+    return {"message": "ChurchNavigator API", "version": "1.0"}
 
 @app.get("/health")
-def health():
-    return {"status": "healthy", "database": "connected"}
+async def health():
+    return {"status": "healthy"}
