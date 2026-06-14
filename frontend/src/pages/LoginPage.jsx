@@ -1,26 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import './LoginPage.css';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:8000';
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-function LoginPage() {
+const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const errorParam = params.get('error');
-    if (errorParam === 'google_auth_failed') {
-      setError('Google login failed. Please try again.');
-    } else if (errorParam === 'facebook_auth_failed') {
-      setError('Facebook login failed. Please try again.');
+    const token = searchParams.get('token');
+    const errorParam = searchParams.get('error');
+
+    if (token) {
+      localStorage.setItem('auth_token', token);
+      navigate('/');
     }
-  }, [location]);
+
+    if (errorParam) {
+      const errorMessages = {
+        google_auth_failed: 'Google authentication failed. Please try again.',
+        facebook_auth_failed: 'Facebook authentication failed. Please try again.'
+      };
+      setError(errorMessages[errorParam] || 'Authentication failed.');
+    }
+  }, [searchParams, navigate]);
 
   const handleEmailLogin = async (e) => {
     e.preventDefault();
@@ -31,17 +39,16 @@ function LoginPage() {
       const response = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.detail || 'Login failed');
       }
 
-      localStorage.setItem('authToken', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      const data = await response.json();
+      localStorage.setItem('auth_token', data.token);
       navigate('/');
     } catch (err) {
       setError(err.message);
@@ -50,35 +57,41 @@ function LoginPage() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    window.location.href = `${API_BASE}/api/auth/google/login`;
-  };
-
-  const handleFacebookLogin = () => {
-    window.location.href = `${API_BASE}/api/auth/facebook/login`;
+  const handleSocialLogin = (provider) => {
+    window.location.href = `${API_BASE}/api/auth/${provider}/login`;
   };
 
   return (
     <div className="login-page">
       <div className="login-container">
-        <h1>Welcome Back</h1>
-        <p className="subtitle">Sign in to ChurchNavigator</p>
+        <div className="login-header">
+          <h1>Welcome Back</h1>
+          <p>Sign in to continue to ChurchNavigator</p>
+        </div>
 
         {error && <div className="error-message">{error}</div>}
 
         <div className="social-login-buttons">
-          <button onClick={handleGoogleLogin} className="social-btn google-btn">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
-              <path d="M9.003 18c2.43 0 4.467-.806 5.956-2.18L12.05 13.56c-.806.54-1.837.86-3.047.86-2.344 0-4.328-1.584-5.036-3.711H.96v2.332C2.438 15.983 5.482 18 9.003 18z" fill="#34A853"/>
-              <path d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71 0-.593.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-              <path d="M9.003 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.464.891 11.426 0 9.003 0 5.482 0 2.438 2.017.96 4.958L3.967 7.29c.708-2.127 2.692-3.71 5.036-3.71z" fill="#EA4335"/>
+          <button
+            className="social-btn google-btn"
+            onClick={() => handleSocialLogin('google')}
+            type="button"
+          >
+            <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
             </svg>
             Continue with Google
           </button>
 
-          <button onClick={handleFacebookLogin} className="social-btn facebook-btn">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">
+          <button
+            className="social-btn facebook-btn"
+            onClick={() => handleSocialLogin('facebook')}
+            type="button"
+          >
+            <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#1877F2">
               <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
             </svg>
             Continue with Facebook
@@ -91,14 +104,15 @@ function LoginPage() {
 
         <form onSubmit={handleEmailLogin} className="login-form">
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">Email Address</label>
             <input
               type="email"
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="your@email.com"
+              disabled={loading}
+              placeholder="you@example.com"
             />
           </div>
 
@@ -110,7 +124,8 @@ function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="••••••••"
+              disabled={loading}
+              placeholder="Enter your password"
             />
           </div>
 
@@ -119,12 +134,17 @@ function LoginPage() {
           </button>
         </form>
 
-        <p className="signup-link">
-          Don't have an account? <Link to="/signup">Sign up</Link>
-        </p>
+        <div className="login-footer">
+          <p>
+            Don't have an account? <Link to="/register">Sign up</Link>
+          </p>
+          <p>
+            <Link to="/forgot-password">Forgot password?</Link>
+          </p>
+        </div>
       </div>
     </div>
   );
-}
+};
 
 export default LoginPage;
