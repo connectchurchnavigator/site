@@ -1,62 +1,69 @@
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
-from enum import Enum
+from bson import ObjectId
 
-class LocationType(str, Enum):
-    IN_PERSON = "in-person"
-    ONLINE = "online"
-    HYBRID = "hybrid"
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
 
-class Frequency(str, Enum):
-    WEEKLY = "weekly"
-    BIWEEKLY = "biweekly"
-    MONTHLY = "monthly"
+    @classmethod
+    def validate(cls, v):
+        if not ObjectId.is_valid(v):
+            raise ValueError("Invalid objectid")
+        return ObjectId(v)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(type="string")
 
 class SmallGroupBase(BaseModel):
-    name: str = Field(..., min_length=3, max_length=100)
-    description: str = Field(..., max_length=500)
-    leader_name: str = Field(..., min_length=2, max_length=100)
+    name: str
+    description: str
+    leader_name: str
     leader_contact: EmailStr
-    meeting_day: str = Field(..., pattern="^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$")
-    meeting_time: str = Field(..., pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")
-    frequency: Frequency
-    location_type: LocationType
-    address_or_link: str = Field(..., max_length=300)
-    capacity: int = Field(ge=2, le=100)
-    current_members: int = Field(default=0, ge=0)
-    age_group: Optional[str] = Field(None, max_length=50)
-    topics: List[str] = Field(default_factory=list, max_items=10)
+    meeting_day: str
+    meeting_time: str
+    frequency: str
+    location_type: Literal["in-person", "online", "hybrid"]
+    address_or_link: str
+    capacity: int
+    current_members: int = 0
+    age_group: Optional[str] = None
+    topics: List[str] = []
     is_open_to_join: bool = True
 
 class SmallGroupCreate(SmallGroupBase):
     church_id: str
 
 class SmallGroupUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=3, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
-    leader_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    name: Optional[str] = None
+    description: Optional[str] = None
+    leader_name: Optional[str] = None
     leader_contact: Optional[EmailStr] = None
-    meeting_day: Optional[str] = Field(None, pattern="^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$")
-    meeting_time: Optional[str] = Field(None, pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$")
-    frequency: Optional[Frequency] = None
-    location_type: Optional[LocationType] = None
-    address_or_link: Optional[str] = Field(None, max_length=300)
-    capacity: Optional[int] = Field(None, ge=2, le=100)
-    current_members: Optional[int] = Field(None, ge=0)
-    age_group: Optional[str] = Field(None, max_length=50)
-    topics: Optional[List[str]] = Field(None, max_items=10)
+    meeting_day: Optional[str] = None
+    meeting_time: Optional[str] = None
+    frequency: Optional[str] = None
+    location_type: Optional[Literal["in-person", "online", "hybrid"]] = None
+    address_or_link: Optional[str] = None
+    capacity: Optional[int] = None
+    current_members: Optional[int] = None
+    age_group: Optional[str] = None
+    topics: Optional[List[str]] = None
     is_open_to_join: Optional[bool] = None
 
 class SmallGroup(SmallGroupBase):
-    id: str
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     church_id: str
-    created_at: datetime
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
-        from_attributes = True
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str, datetime: lambda v: v.isoformat()}
 
 class JoinRequest(BaseModel):
-    name: str = Field(..., min_length=2, max_length=100)
+    name: str
     email: EmailStr
-    message: Optional[str] = Field(None, max_length=500)
+    message: Optional[str] = None
