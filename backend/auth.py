@@ -1,61 +1,136 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import RedirectResponse
+from authlib.integrations.starlette_client import OAuth
+from pydantic import BaseModel
 from datetime import datetime, timedelta
-from typing import Optional
+from jose import jwt
 import os
-from bson import ObjectId
+from typing import Optional
 
-from models import User, TokenData
-from database import get_database
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 10080
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_EXPIRATION = int(os.getenv("JWT_EXPIRATION_MINUTES", "43200"))
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth = OAuth()
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+oauth.register(
+    name="google",
+    client_id=os.getenv("GOOGLE_CLIENT_ID"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+oauth.register(
+    name="facebook",
+    client_id=os.getenv("FACEBOOK_APP_ID"),
+    client_secret=os.getenv("FACEBOOK_APP_SECRET"),
+    authorize_url="https://www.facebook.com/v12.0/dialog/oauth",
+    access_token_url="https://graph.facebook.com/v12.0/oauth/access_token",
+    client_kwargs={"scope": "email public_profile"},
+)
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+class UserResponse(BaseModel):
+    token: str
+    user: dict
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+def create_jwt_token(user_data: dict) -> str:
+    expires = datetime.utcnow() + timedelta(minutes=JWT_EXPIRATION)
+    payload = {
+        "sub": str(user_data["_id"]),
+        "email": user_data["email"],
+        "exp": expires
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+async def get_or_create_user(db, email: str, name: str, provider: str) -> dict:
+    users = db["users"]
+    user = users.find_one({"email": email})
+    
+    if user:
+        if user.get("auth_provider") != provider:
+            users.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"auth_provider": provider, "updated_at": datetime.utcnow()}}
+            )
+        return user
+    
+    new_user = {
+        "email": email,
+        "name": name,
+        "auth_provider": provider,
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+        "is_active": True
+    }
+    result = users.insert_one(new_user)
+    new_user["_id"] = result.inserted_id
+    return new_user
+
+@router.get("/google/login")
+async def google_login(request: Request):
+    redirect_uri = f"{request.base_url}api/auth/google/callback"
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+@router.get("/google/callback")
+async def google_callback(request: Request):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-        token_data = TokenData(email=email)
-    except JWTError:
-        raise credentials_exception
+        token = await oauth.google.authorize_access_token(request)
+        user_info = token.get("userinfo")
+        
+        if not user_info or not user_info.get("email"):
+            raise HTTPException(status_code=400, detail="Email not provided by Google")
+        
+        db = request.app.mongodb
+        user = await get_or_create_user(
+            db,
+            email=user_info["email"],
+            name=user_info.get("name", user_info["email"]),
+            provider="google"
+        )
+        
+        jwt_token = create_jwt_token(user)
+        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
     
-    db = get_database()
-    user = db.users.find_one({"email": token_data.email})
-    if user is None:
-        raise credentials_exception
-    
-    return User(**user)
+    except Exception as e:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=google_auth_failed")
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)):
-    if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
+@router.get("/facebook/login")
+async def facebook_login(request: Request):
+    redirect_uri = f"{request.base_url}api/auth/facebook/callback"
+    return await oauth.facebook.authorize_redirect(request, redirect_uri)
+
+@router.get("/facebook/callback")
+async def facebook_callback(request: Request):
+    try:
+        token = await oauth.facebook.authorize_access_token(request)
+        
+        resp = await oauth.facebook.get(
+            "https://graph.facebook.com/me?fields=id,name,email",
+            token=token
+        )
+        user_info = resp.json()
+        
+        if not user_info.get("email"):
+            raise HTTPException(status_code=400, detail="Email not provided by Facebook")
+        
+        db = request.app.mongodb
+        user = await get_or_create_user(
+            db,
+            email=user_info["email"],
+            name=user_info.get("name", user_info["email"]),
+            provider="facebook"
+        )
+        
+        jwt_token = create_jwt_token(user)
+        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
+    
+    except Exception as e:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=facebook_auth_failed}")
+
+@router.post("/login")
+async def login(request: Request, email: str, password: str):
+    raise HTTPException(status_code=501, detail="Email/password login not yet implemented")
