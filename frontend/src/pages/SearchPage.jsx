@@ -1,106 +1,80 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import {
-  Search, Filter, MapPin, Calendar, DollarSign,
-  Sparkles, Church, Users, Music, Video, BookOpen,
-  Star, CheckCircle, Navigation
-} from 'lucide-react';
+import { FiSearch, FiMapPin, FiFilter, FiStar, FiCheck } from 'react-icons/fi';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.churchnavigator.com';
 
-const TYPE_OPTIONS = [
-  { value: '', label: 'All', icon: Search },
-  { value: 'church', label: 'Churches', icon: Church },
-  { value: 'event', label: 'Events', icon: Calendar },
-  { value: 'pastor', label: 'Pastors', icon: Users },
-  { value: 'worship_leader', label: 'Worship Leaders', icon: Music },
-  { value: 'media_team', label: 'Media Teams', icon: Video },
-  { value: 'bible_college', label: 'Bible Colleges', icon: BookOpen }
+const LISTING_TYPES = [
+  { value: '', label: 'All' },
+  { value: 'church', label: 'Churches' },
+  { value: 'event', label: 'Events' },
+  { value: 'pastor', label: 'Pastors' },
+  { value: 'worship_leader', label: 'Worship Leaders' },
+  { value: 'media_team', label: 'Media Teams' },
+  { value: 'bible_college', label: 'Bible Colleges' }
 ];
 
 const UK_CITIES = [
-  'London', 'Birmingham', 'Manchester', 'Leeds', 'Glasgow', 'Sheffield',
-  'Liverpool', 'Edinburgh', 'Bristol', 'Cardiff', 'Belfast', 'Newcastle',
-  'Nottingham', 'Leicester', 'Coventry', 'Bradford', 'Southampton'
+  'London', 'Birmingham', 'Manchester', 'Leeds', 'Glasgow', 'Liverpool',
+  'Edinburgh', 'Bristol', 'Sheffield', 'Newcastle', 'Cardiff', 'Leicester'
 ];
 
 const DENOMINATIONS = [
   'Pentecostal', 'Baptist', 'Anglican', 'Methodist', 'Catholic',
-  'Presbyterian', 'Evangelical', 'Charismatic', 'Reformed', 'Independent'
+  'Presbyterian', 'Evangelical', 'Independent', 'RCCG', 'Assemblies of God'
 ];
 
-const SearchPage = () => {
+export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
-  
   const [query, setQuery] = useState(searchParams.get('q') || '');
-  const [type, setType] = useState(searchParams.get('type') || '');
-  const [city, setCity] = useState(searchParams.get('city') || '');
-  const [denomination, setDenomination] = useState(searchParams.get('denomination') || '');
-  const [showFilters, setShowFilters] = useState(false);
-  const [showAI, setShowAI] = useState(false);
-  
   const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showAI, setShowAI] = useState(false);
+  const [aiAnswer, setAiAnswer] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiAnswer, setAiAnswer] = useState(null);
-  const [hasMore, setHasMore] = useState(false);
   
-  const [userLocation, setUserLocation] = useState(null);
-  const [useLocation, setUseLocation] = useState(false);
+  const [filters, setFilters] = useState({
+    type: searchParams.get('type') || '',
+    city: searchParams.get('city') || '',
+    denomination: searchParams.get('denomination') || ''
+  });
 
   useEffect(() => {
-    if (navigator.geolocation && useLocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        () => setUseLocation(false)
-      );
-    }
-  }, [useLocation]);
-
-  useEffect(() => {
-    performSearch();
-  }, [searchParams, page]);
-
-  const performSearch = async () => {
-    setLoading(true);
-    setAiAnswer(null);
+    const q = searchParams.get('q') || '';
+    const type = searchParams.get('type') || '';
+    const city = searchParams.get('city') || '';
+    const denomination = searchParams.get('denomination') || '';
     
+    setQuery(q);
+    setFilters({ type, city, denomination });
+    
+    if (q || type || city || denomination) {
+      performSearch(q, { type, city, denomination }, 1);
+    }
+  }, [searchParams]);
+
+  const performSearch = async (searchQuery, searchFilters, searchPage) => {
+    setLoading(true);
     try {
-      const params = {
-        q: searchParams.get('q') || '',
-        type: searchParams.get('type') || '',
-        city: searchParams.get('city') || '',
-        denomination: searchParams.get('denomination') || '',
-        page,
-        per_page: 20
-      };
-      
-      if (useLocation && userLocation) {
-        params.lat = userLocation.lat;
-        params.lng = userLocation.lng;
-        params.distance_km = 50;
-      }
-      
-      const endpoint = params.type 
-        ? `${API_URL}/api/search/${params.type}s`
-        : `${API_URL}/api/search`;
-      
-      const response = await axios.get(endpoint, { params });
-      
-      setResults(response.data.results);
-      setTotal(response.data.total);
-      setHasMore(response.data.has_more);
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('q', searchQuery);
+      if (searchFilters.type) params.append('type', searchFilters.type);
+      if (searchFilters.city) params.append('city', searchFilters.city);
+      if (searchFilters.denomination) params.append('denomination', searchFilters.denomination);
+      params.append('page', searchPage);
+      params.append('limit', '20');
+
+      const response = await axios.get(`${API_URL}/api/search?${params.toString()}`);
+      setResults(response.data.results || []);
+      setTotal(response.data.total || 0);
+      setPage(searchPage);
     } catch (error) {
       console.error('Search failed:', error);
+      setResults([]);
     } finally {
       setLoading(false);
     }
@@ -109,224 +83,220 @@ const SearchPage = () => {
   const handleSearch = (e) => {
     e.preventDefault();
     const params = new URLSearchParams();
-    if (query) params.set('q', query);
-    if (type) params.set('type', type);
-    if (city) params.set('city', city);
-    if (denomination) params.set('denomination', denomination);
+    if (query) params.append('q', query);
+    if (filters.type) params.append('type', filters.type);
+    if (filters.city) params.append('city', filters.city);
+    if (filters.denomination) params.append('denomination', filters.denomination);
     setSearchParams(params);
-    setPage(1);
+  };
+
+  const handleFilterChange = (key, value) => {
+    const newFilters = { ...filters, [key]: value };
+    setFilters(newFilters);
+    const params = new URLSearchParams();
+    if (query) params.append('q', query);
+    if (newFilters.type) params.append('type', newFilters.type);
+    if (newFilters.city) params.append('city', newFilters.city);
+    if (newFilters.denomination) params.append('denomination', newFilters.denomination);
+    setSearchParams(params);
   };
 
   const handleAISearch = async () => {
     if (!query || query.length < 10) {
-      alert('Please enter a more detailed question for AI search.');
+      alert('Please enter a detailed question (at least 10 characters)');
       return;
     }
     
     setAiLoading(true);
+    setShowAI(true);
     try {
-      const response = await axios.get(`${API_URL}/api/search/conversational`, {
-        params: { q: query }
-      });
-      setAiAnswer(response.data.answer);
-      setShowAI(true);
+      const response = await axios.get(`${API_URL}/api/search/conversational?q=${encodeURIComponent(query)}`);
+      setAiAnswer(response.data.answer || 'No AI response available');
     } catch (error) {
       if (error.response?.status === 429) {
-        alert('Daily AI search limit reached. Please use standard search.');
+        setAiAnswer('Daily AI search limit reached. Please use standard search or try again tomorrow.');
       } else {
-        alert('AI search failed. Please try standard search.');
+        setAiAnswer('AI search failed. Please try standard search instead.');
       }
     } finally {
       setAiLoading(false);
     }
   };
 
-  const ResultCard = ({ item }) => (
-    <div 
-      className="bg-white rounded-lg shadow hover:shadow-lg transition p-4 cursor-pointer"
-      onClick={() => navigate(`/${item.listing_type}/${item.slug}`)}
-    >
-      <div className="flex gap-4">
-        {item.image && (
-          <img 
-            src={item.image} 
-            alt={item.name}
-            className="w-24 h-24 object-cover rounded"
-          />
-        )}
-        <div className="flex-1">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                {item.name}
-                {item.is_verified && <CheckCircle className="w-4 h-4 text-blue-600" />}
-              </h3>
-              <p className="text-gray-600 text-sm">
-                {item.city} {item.denomination && `• ${item.denomination}`}
-              </p>
-            </div>
-            {item.rating > 0 && (
-              <div className="flex items-center gap-1">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-medium">{item.rating.toFixed(1)}</span>
-                <span className="text-xs text-gray-500">({item.total_reviews})</span>
-              </div>
-            )}
-          </div>
-          {item.description && (
-            <p className="text-gray-700 text-sm mt-2 line-clamp-2">
-              {item.description}
-            </p>
-          )}
-          {item.distance_km && (
-            <p className="text-sm text-blue-600 mt-1 flex items-center gap-1">
-              <Navigation className="w-3 h-3" />
-              {item.distance_km.toFixed(1)} km away
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <form onSubmit={handleSearch} className="mb-6">
-          <div className="flex gap-2 mb-4">
+        <form onSubmit={handleSearch} className="mb-8">
+          <div className="flex gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+              <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search churches, events, pastors..."
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <button
               type="submit"
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              disabled={loading}
+              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
             >
-              {loading ? 'Searching...' : 'Search'}
+              Search
             </button>
             <button
               type="button"
               onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-100 transition"
+              className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
             >
-              <Filter className="w-5 h-5" />
+              <FiFilter /> Filters
             </button>
           </div>
-
-          <div className="flex flex-wrap gap-2 mb-4">
-            {TYPE_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setType(opt.value)}
-                  className={`px-4 py-2 rounded-full border flex items-center gap-2 transition ${
-                    type === opt.value
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white hover:border-blue-600'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-white rounded-lg border">
-              <div>
-                <label className="block text-sm font-medium mb-1">City</label>
-                <select
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="w-full border rounded px-3 py-2"
-                >
-                  <option value="">All Cities</option>
-                  {UK_CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Denomination</label>
-                <select
-                  value={denomination}
-                  onChange={(e) => setDenomination(e.target.value)}
-                  className="w-full border rounded px-3 py-2"
-                >
-                  <option value="">All Denominations</option>
-                  {DENOMINATIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className="flex items-end">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useLocation}
-                    onChange={(e) => setUseLocation(e.target.checked)}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-sm">Search near me</span>
-                  <MapPin className="w-4 h-4 text-blue-600" />
-                </label>
-              </div>
-            </div>
-          )}
         </form>
 
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-gray-600">
-            {total > 0 ? `${total} results found` : 'No results'}
-          </p>
-          <button
-            onClick={handleAISearch}
-            disabled={aiLoading || !query}
-            className="flex items-center gap-2 px-4 py-2 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition disabled:opacity-50"
-          >
-            <Sparkles className="w-4 h-4" />
-            {aiLoading ? 'Asking AI...' : 'Ask AI Assistant'}
-          </button>
-        </div>
-
-        {showAI && aiAnswer && (
-          <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-            <div className="flex items-start gap-2">
-              <Sparkles className="w-5 h-5 text-purple-600 mt-1" />
+        {showFilters && (
+          <div className="mb-8 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <h3 className="font-semibold text-purple-900 mb-2">AI Assistant Answer</h3>
-                <p className="text-gray-700 whitespace-pre-wrap">{aiAnswer}</p>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                <select
+                  value={filters.type}
+                  onChange={(e) => handleFilterChange('type', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  {LISTING_TYPES.map(t => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+                <select
+                  value={filters.city}
+                  onChange={(e) => handleFilterChange('city', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Cities</option>
+                  {UK_CITIES.map(city => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Denomination</label>
+                <select
+                  value={filters.denomination}
+                  onChange={(e) => handleFilterChange('denomination', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Denominations</option>
+                  {DENOMINATIONS.map(denom => (
+                    <option key={denom} value={denom}>{denom}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
         )}
 
-        <div className="space-y-4">
-          {results.map((item) => (
-            <ResultCard key={item._id || item.slug} item={item} />
-          ))}
+        <div className="mb-6 flex justify-between items-center">
+          <p className="text-gray-600">
+            {loading ? 'Searching...' : `${total} results found`}
+          </p>
+          <button
+            onClick={handleAISearch}
+            disabled={aiLoading}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
+          >
+            {aiLoading ? 'AI Thinking...' : '🤖 Ask AI (Optional)'}
+          </button>
         </div>
 
-        {hasMore && (
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setPage(page + 1)}
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-            >
-              {loading ? 'Loading...' : 'Load More'}
-            </button>
+        {showAI && aiAnswer && (
+          <div className="mb-8 p-6 bg-purple-50 border border-purple-200 rounded-lg">
+            <h3 className="font-semibold text-purple-900 mb-2">AI Recommendation:</h3>
+            <p className="text-gray-700">{aiAnswer}</p>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          </div>
+        ) : results.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-lg shadow-sm">
+            <p className="text-gray-500">No results found. Try different keywords or filters.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {results.map((result) => (
+              <Link
+                key={result._id}
+                to={`/listing/${result.slug}`}
+                className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden border border-gray-200"
+              >
+                {result.image && (
+                  <img
+                    src={result.image}
+                    alt={result.name}
+                    className="w-full h-48 object-cover"
+                  />
+                )}
+                <div className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-lg text-gray-900">{result.name}</h3>
+                    {result.is_verified && (
+                      <FiCheck className="text-blue-600 bg-blue-100 rounded-full p-1" size={20} />
+                    )}
+                  </div>
+                  {result.description && (
+                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">{result.description}</p>
+                  )}
+                  <div className="flex items-center gap-4 text-sm text-gray-500">
+                    {result.city && (
+                      <span className="flex items-center gap-1">
+                        <FiMapPin size={14} /> {result.city}
+                      </span>
+                    )}
+                    {result.rating && (
+                      <span className="flex items-center gap-1">
+                        <FiStar size={14} /> {result.rating.toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                  {result.denomination && (
+                    <span className="inline-block mt-3 px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
+                      {result.denomination}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {total > 20 && (
+          <div className="mt-8 flex justify-center gap-2">
+            {page > 1 && (
+              <button
+                onClick={() => performSearch(query, filters, page - 1)}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Previous
+              </button>
+            )}
+            <span className="px-4 py-2 text-gray-600">Page {page}</span>
+            {page * 20 < total && (
+              <button
+                onClick={() => performSearch(query, filters, page + 1)}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Next
+              </button>
+            )}
           </div>
         )}
       </div>
     </div>
   );
-};
-
-export default SearchPage;
+}
