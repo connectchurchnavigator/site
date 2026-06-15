@@ -1,48 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Helmet } from 'react-helmet-async';
-import { Loader2, Download, Link as LinkIcon, Share2, RefreshCw } from 'lucide-react';
+import { FiDownload, FiShare2, FiRefreshCw, FiCopy } from 'react-icons/fi';
+import { FaWhatsapp } from 'react-icons/fa';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.churchnavigator.com';
 
 const TEMPLATES = [
-  { id: 'bold', name: 'Bold', description: 'Modern high-contrast design', color: '#5B21B6' },
-  { id: 'minimal', name: 'Minimal', description: 'Clean elegant simplicity', color: '#1E293B' },
-  { id: 'elegant', name: 'Elegant', description: 'Sophisticated formal style', color: '#881337' },
-  { id: 'gospel', name: 'Gospel', description: 'Traditional warm tones', color: '#EA580C' }
+  { id: 'bold', name: 'Bold', description: 'Vibrant and energetic', color: 'bg-red-500' },
+  { id: 'minimal', name: 'Minimal', description: 'Clean and modern', color: 'bg-gray-400' },
+  { id: 'elegant', name: 'Elegant', description: 'Sophisticated design', color: 'bg-purple-600' },
+  { id: 'gospel', name: 'Gospel', description: 'Traditional church', color: 'bg-amber-600' }
 ];
 
-const FlyerGeneratorPage = () => {
+function FlyerGeneratorPage() {
   const { eventSlug } = useParams();
   const navigate = useNavigate();
   const [selectedTemplate, setSelectedTemplate] = useState('bold');
   const [loading, setLoading] = useState(false);
-  const [flyerData, setFlyerData] = useState(null);
-  const [error, setError] = useState(null);
-  const [copying, setCopying] = useState(false);
-
-  useEffect(() => {
-    if (eventSlug) {
-      generateFlyer(selectedTemplate);
-    }
-  }, [eventSlug]);
+  const [htmlContent, setHtmlContent] = useState('');
+  const [shareUrl, setShareUrl] = useState('');
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const generateFlyer = async (template) => {
     setLoading(true);
-    setError(null);
+    setError('');
     try {
       const response = await axios.post(
         `${API_BASE}/api/tools/flyer-generator/generate/${eventSlug}`,
         { template }
       );
-      setFlyerData(response.data);
+      setHtmlContent(response.data.html_content);
+      setShareUrl(response.data.share_url);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to generate flyer');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (eventSlug) {
+      generateFlyer(selectedTemplate);
+    }
+  }, [eventSlug]);
 
   const handleTemplateChange = (template) => {
     setSelectedTemplate(template);
@@ -67,33 +69,26 @@ const FlyerGeneratorPage = () => {
     }
   };
 
-  const handleCopyLink = async () => {
-    if (!flyerData) return;
-    setCopying(true);
-    try {
-      await navigator.clipboard.writeText(flyerData.share_url);
-      setTimeout(() => setCopying(false), 2000);
-    } catch (err) {
-      setError('Failed to copy link');
-      setCopying(false);
-    }
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShareWhatsApp = () => {
-    if (!flyerData) return;
-    const text = encodeURIComponent(`Check out this event flyer: ${flyerData.share_url}`);
+  const handleWhatsApp = () => {
+    const text = encodeURIComponent(`Check out this event flyer: ${shareUrl}`);
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
   if (!eventSlug) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Event Flyer Generator</h1>
-          <p className="text-gray-600 mb-6">Please select an event to generate a flyer</p>
+      <div className="min-h-screen bg-gray-50 py-12 px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-3xl font-bold mb-4">Flyer Generator</h1>
+          <p className="text-gray-600">Please select an event to generate a flyer.</p>
           <button
             onClick={() => navigate('/events')}
-            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+            className="mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Browse Events
           </button>
@@ -103,129 +98,105 @@ const FlyerGeneratorPage = () => {
   }
 
   return (
-    <>
-      <Helmet>
-        <title>Flyer Generator - ChurchNavigator</title>
-        <meta name="description" content="Generate beautiful event flyers powered by AI" />
-      </Helmet>
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Event Flyer Generator</h1>
+          <p className="text-gray-600">Create beautiful flyers for your event in seconds</p>
+        </div>
 
-      <div className="min-h-screen bg-gray-50 py-8 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Event Flyer Generator</h1>
-            <p className="text-gray-600">Create stunning flyers for your event in seconds</p>
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="md:col-span-1 space-y-6">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-semibold mb-4">Choose Template</h2>
+              <div className="space-y-3">
+                {TEMPLATES.map((template) => (
+                  <button
+                    key={template.id}
+                    onClick={() => handleTemplateChange(template.id)}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                      selectedTemplate === template.id
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded ${template.color}`} />
+                      <div>
+                        <div className="font-semibold">{template.name}</div>
+                        <div className="text-sm text-gray-500">{template.description}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm p-6 space-y-3">
+              <button
+                onClick={handleDownloadPDF}
+                disabled={!htmlContent || loading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                <FiDownload /> Download PDF
+              </button>
+              <button
+                onClick={handleCopyLink}
+                disabled={!shareUrl || loading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                <FiCopy /> {copied ? 'Copied!' : 'Copy Share Link'}
+              </button>
+              <button
+                onClick={handleWhatsApp}
+                disabled={!shareUrl || loading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                <FaWhatsapp /> Share on WhatsApp
+              </button>
+              <button
+                onClick={() => generateFlyer(selectedTemplate)}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <FiRefreshCw className={loading ? 'animate-spin' : ''} /> Regenerate
+              </button>
+            </div>
           </div>
 
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 space-y-6">
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Choose Template</h2>
-                <div className="space-y-3">
-                  {TEMPLATES.map((template) => (
-                    <button
-                      key={template.id}
-                      onClick={() => handleTemplateChange(template.id)}
-                      className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                        selectedTemplate === template.id
-                          ? 'border-purple-600 bg-purple-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-12 h-12 rounded-lg"
-                          style={{ backgroundColor: template.color }}
-                        />
-                        <div>
-                          <div className="font-semibold text-gray-900">{template.name}</div>
-                          <div className="text-sm text-gray-600">{template.description}</div>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+          <div className="md:col-span-2">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-semibold mb-4">Preview</h2>
+              {loading ? (
+                <div className="flex items-center justify-center h-96">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                 </div>
-              </div>
-
-              {flyerData && (
-                <div className="bg-white rounded-lg shadow-sm p-6 space-y-3">
-                  <button
-                    onClick={handleDownloadPDF}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    <Download size={20} />
-                    Download PDF
-                  </button>
-
-                  <button
-                    onClick={handleCopyLink}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                  >
-                    {copying ? (
-                      <>
-                        <Loader2 size={20} className="animate-spin" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <LinkIcon size={20} />
-                        Copy Share Link
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={handleShareWhatsApp}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <Share2 size={20} />
-                    Share on WhatsApp
-                  </button>
-
-                  <button
-                    onClick={() => generateFlyer(selectedTemplate)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <RefreshCw size={20} />
-                    Regenerate
-                  </button>
+              ) : htmlContent ? (
+                <div className="border-2 border-gray-200 rounded-lg overflow-hidden">
+                  <iframe
+                    srcDoc={htmlContent}
+                    className="w-full h-[800px]"
+                    title="Flyer Preview"
+                    sandbox="allow-same-origin"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-96 text-gray-400">
+                  Select a template to generate your flyer
                 </div>
               )}
-            </div>
-
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Preview</h2>
-                {loading ? (
-                  <div className="flex items-center justify-center h-96">
-                    <Loader2 size={48} className="animate-spin text-purple-600" />
-                  </div>
-                ) : flyerData ? (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <iframe
-                      srcDoc={flyerData.html_content}
-                      className="w-full"
-                      style={{ height: '842px' }}
-                      title="Flyer Preview"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-96 text-gray-500">
-                    Select a template to generate your flyer
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
-};
+}
 
 export default FlyerGeneratorPage;
