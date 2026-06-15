@@ -1,50 +1,34 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import HomePage from './pages/HomePage';
-import SearchPage from './pages/SearchPage';
+import ChurchesPage from './pages/ChurchesPage';
 import ChurchDetailPage from './pages/ChurchDetailPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
-import ToolsPage from './pages/tools/ToolsPage';
-import QRCheckInPage from './pages/tools/QRCheckInPage';
-import SocialHealthPage from './pages/tools/SocialHealthPage';
-
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#7c3aed',
-    },
-    secondary: {
-      main: '#ec4899',
-    },
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-  },
-});
+import EventsPage from './pages/EventsPage';
+import WorshipLeadersPage from './pages/WorshipLeadersPage';
+import MediaTeamsPage from './pages/MediaTeamsPage';
+import FlyerGeneratorPage from './pages/tools/FlyerGeneratorPage';
 
 function App() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/church/:slug" element={<ChurchDetailPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/dashboard/tools" element={<ToolsPage />} />
-          <Route path="/dashboard/tools/qr-checkin" element={<QRCheckInPage />} />
-          <Route path="/dashboard/tools/social-health" element={<SocialHealthPage />} />
-        </Routes>
-      </Router>
-    </ThemeProvider>
+    <Router>
+      <div className="flex flex-col min-h-screen">
+        <Navbar />
+        <main className="flex-grow">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/churches" element={<ChurchesPage />} />
+            <Route path="/churches/:slug" element={<ChurchDetailPage />} />
+            <Route path="/events" element={<EventsPage />} />
+            <Route path="/worship-leaders" element={<WorshipLeadersPage />} />
+            <Route path="/media-teams" element={<MediaTeamsPage />} />
+            <Route path="/tools/flyer-generator/:eventSlug" element={<FlyerGeneratorPage />} />
+          </Routes>
+        </main>
+        <Footer />
+      </div>
+    </Router>
   );
 }
 
