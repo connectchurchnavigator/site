@@ -1,50 +1,51 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
-from datetime import datetime
 
 from database import db
-from routes import churches, auth, events, listings, visitor_tracking, premium_tools
+from routers import churches, auth, reviews, events, media, worship, sites
+from middleware.sites_middleware import SitesMiddleware
 
-app = FastAPI(title="ChurchNavigator API")
+app = FastAPI(title='ChurchNavigator API', version='2.0.0')
+
+app.add_middleware(SitesMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://churchnavigator.com",
-        "https://www.churchnavigator.com",
-        "http://localhost:3000",
-        "http://localhost:5173"
+        'http://localhost:3000',
+        'https://churchnavigator.com',
+        'https://dev.churchnavigator.com'
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
-app.include_router(churches.router)
 app.include_router(auth.router)
+app.include_router(churches.router)
+app.include_router(reviews.router)
 app.include_router(events.router)
-app.include_router(listings.router)
-app.include_router(visitor_tracking.router)
-app.include_router(premium_tools.router)
+app.include_router(media.router)
+app.include_router(worship.router)
+app.include_router(sites.router)
 
-@app.get("/")
+@app.get('/')
 async def root():
-    return {"message": "ChurchNavigator API", "version": "1.0.0"}
+    return {'message': 'ChurchNavigator API v2.0', 'status': 'running'}
 
-@app.get("/health")
+@app.get('/health')
 async def health():
-    try:
-        db.command("ping")
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.utcnow().isoformat()}
-    except Exception as e:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "unhealthy", "database": "disconnected", "error": str(e)}
-        )
+    return {'status': 'healthy'}
 
-if __name__ == "__main__":
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={'detail': str(exc)}
+    )
+
+if __name__ == '__main__':
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 8000)))
