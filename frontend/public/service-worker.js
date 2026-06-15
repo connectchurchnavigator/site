@@ -1,84 +1,78 @@
-const CACHE_NAME = 'churchnavigator-v1.0.0';
-const OFFLINE_URL = '/offline.html';
+const CACHE_NAME = 'churchnavigator-v1';
+const RUNTIME_CACHE = 'runtime-cache-v1';
 
-const PRECACHE_URLS = [
+const STATIC_ASSETS = [
   '/',
-  '/offline.html',
   '/index.html',
-  '/static/css/main.css',
-  '/static/js/main.js',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/offline.html',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS.map(url => new Request(url, { cache: 'reload' })));
-    })
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
+        cacheNames
+          .filter((name) => name !== CACHE_NAME && name !== RUNTIME_CACHE)
+          .map((name) => caches.delete(name))
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate') {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  if (request.method !== 'GET') return;
+
+  if (url.origin === location.origin) {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          return cache.match(OFFLINE_URL);
+      caches.match(request).then((cached) => {
+        const fetched = fetch(request).then((response) => {
+          if (response.ok && (request.destination === 'style' || request.destination === 'script' || request.destination === 'image')) {
+            const responseClone = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => {
+              cache.put(request, responseClone);
+            });
+          }
+          return response;
+        }).catch(() => {
+          return caches.match('/offline.html');
         });
+
+        return cached || fetched;
       })
     );
-    return;
-  }
-
-  if (event.request.url.startsWith('https://api.churchnavigator.com')) {
+  } else if (url.hostname.includes('api.churchnavigator.com') || url.hostname.includes('ik.imagekit.io')) {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
+      fetch(request).then((response) => {
+        if (response.ok) {
           const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
+          caches.open(RUNTIME_CACHE).then((cache) => {
+            cache.put(request, responseClone);
           });
-          return response;
-        })
-        .catch(() => {
-          return caches.match(event.request);
-        })
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      if (response) {
-        return response;
-      }
-      return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
         }
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
-        });
         return response;
-      });
-    })
-  );
+      }).catch(() => {
+        return caches.match(request);
+      })
+    );
+  }
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
