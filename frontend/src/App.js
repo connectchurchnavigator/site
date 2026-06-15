@@ -1,30 +1,30 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Header from './components/Header';
-import Footer from './components/Footer';
-import InstallPrompt from './components/InstallPrompt';
+import { HelmetProvider } from 'react-helmet-async';
 import HomePage from './pages/HomePage';
 import ChurchDetailPage from './pages/ChurchDetailPage';
-import SearchPage from './pages/SearchPage';
-import AboutPage from './pages/AboutPage';
+import EventsPage from './pages/EventsPage';
+import WorshipLeadersPage from './pages/WorshipLeadersPage';
+import MediaTeamsPage from './pages/MediaTeamsPage';
+import FlyerGeneratorPage from './pages/tools/FlyerGeneratorPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
   return (
-    <Router>
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/church/:slug" element={<ChurchDetailPage />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/about" element={<AboutPage />} />
-          </Routes>
-        </main>
-        <Footer />
-        <InstallPrompt />
-      </div>
-    </Router>
+    <HelmetProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/churches/:slug" element={<ChurchDetailPage />} />
+          <Route path="/events" element={<EventsPage />} />
+          <Route path="/worship-leaders" element={<WorshipLeadersPage />} />
+          <Route path="/media-teams" element={<MediaTeamsPage />} />
+          <Route path="/tools/flyer-generator/:eventSlug" element={<FlyerGeneratorPage />} />
+          <Route path="/flyers/:eventSlug" element={<FlyerGeneratorPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Router>
+    </HelmetProvider>
   );
 }
 
