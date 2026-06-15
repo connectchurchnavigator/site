@@ -2,43 +2,59 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 const InstallPrompt = () => {
-  const [showPrompt, setShowPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showPrompt, setShowPrompt] = useState(false);
   const [pageViews, setPageViews] = useState(0);
 
   useEffect(() => {
     const dismissed = localStorage.getItem('pwa-install-dismissed');
     const installed = localStorage.getItem('pwa-installed');
-    const views = parseInt(localStorage.getItem('page-views') || '0', 10);
-    
-    setPageViews(views + 1);
-    localStorage.setItem('page-views', (views + 1).toString());
+    const views = parseInt(localStorage.getItem('pwa-page-views') || '0', 10);
 
-    if (dismissed || installed || views < 2) {
-      return;
-    }
+    setPageViews(views + 1);
+    localStorage.setItem('pwa-page-views', String(views + 1));
+
+    if (dismissed || installed) return;
 
     const handler = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setShowPrompt(true);
+      if (views >= 1) {
+        setShowPrompt(true);
+      }
     };
 
     window.addEventListener('beforeinstallprompt', handler);
 
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', () => {
+      localStorage.setItem('pwa-installed', 'true');
+      setShowPrompt(false);
+    });
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
   }, []);
+
+  useEffect(() => {
+    if (deferredPrompt && pageViews >= 2) {
+      const dismissed = localStorage.getItem('pwa-install-dismissed');
+      if (!dismissed) {
+        setShowPrompt(true);
+      }
+    }
+  }, [pageViews, deferredPrompt]);
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
 
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    
+
     if (outcome === 'accepted') {
       localStorage.setItem('pwa-installed', 'true');
     }
-    
+
     setDeferredPrompt(null);
     setShowPrompt(false);
   };
@@ -51,39 +67,39 @@ const InstallPrompt = () => {
   if (!showPrompt) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md z-50 animate-slide-up">
-      <div className="bg-white rounded-lg shadow-2xl border border-purple-100 p-4">
+    <div className="fixed bottom-0 left-0 right-0 z-50 p-4 animate-slide-up">
+      <div className="max-w-lg mx-auto bg-gradient-to-r from-purple-600 to-violet-600 rounded-xl shadow-2xl p-4 text-white">
         <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
+          <div className="flex-shrink-0 w-12 h-12 bg-white rounded-lg flex items-center justify-center text-2xl">
+            ⛪
           </div>
-          
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-semibold text-gray-900 mb-1">
-              Install ChurchNavigator
-            </h3>
-            <p className="text-xs text-gray-600 mb-3">
-              Add to your home screen for quick access and offline browsing
+          <div className="flex-1">
+            <h3 className="font-semibold text-lg mb-1">Install ChurchNavigator</h3>
+            <p className="text-sm text-purple-100 mb-3">
+              Get quick access from your home screen - works offline!
             </p>
-            
             <div className="flex gap-2">
               <button
                 onClick={handleInstall}
-                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+                className="bg-white text-purple-600 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-purple-50 transition-colors"
               >
-                Install
+                Install App
               </button>
               <button
                 onClick={handleDismiss}
-                className="px-3 text-gray-400 hover:text-gray-600 transition-colors"
-                aria-label="Dismiss"
+                className="text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-white/10 transition-colors"
               >
-                <X className="w-5 h-5" />
+                Not Now
               </button>
             </div>
           </div>
+          <button
+            onClick={handleDismiss}
+            className="flex-shrink-0 text-white hover:bg-white/10 rounded-full p-1 transition-colors"
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
         </div>
       </div>
     </div>
