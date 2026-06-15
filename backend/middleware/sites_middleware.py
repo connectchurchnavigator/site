@@ -1,6 +1,7 @@
-from fastapi import Request
-from fastapi.responses import HTMLResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import HTMLResponse
 from database import db
+import re
 
 SIGNATURE_HTML = '''
 <div style="background:linear-gradient(135deg,#1e0a4a,#3b1f8c);padding:20px 40px;text-align:center;border-top:3px solid #7c3aed;margin-top:60px">
@@ -16,41 +17,58 @@ SIGNATURE_HTML = '''
 </div>
 '''
 
-def inject_signature(html: str, church_slug: str, domain: str) -> str:
-    meta_signature = f'''<link rel="canonical" href="https://churchnavigator.com/churches/{church_slug}"/>
-<meta name="generator" content="ChurchNavigator Sites"/>'''
-    html = html.replace('</head>', meta_signature + '</head>', 1)
-    html = html.replace('</body>', SIGNATURE_HTML.format(church_slug=church_slug, domain=domain) + '</body>', 1)
-    return html
+META_SIGNATURE = '''
+<link rel="canonical" href="https://churchnavigator.com/churches/{church_slug}"/>
+<meta name="generator" content="ChurchNavigator Sites"/>
+'''
 
-async def sites_middleware(request: Request, call_next):
-    host = request.headers.get('host', '')
-    
-    site = await db.church_sites.find_one({
-        'domain': host,
-        'hosting_status': 'active'
-    })
-    
-    if site:
-        path = request.url.path.strip('/')
-        page = path if path else 'home'
+class SitesMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        host = request.headers.get('host', '')
         
-        pages = site.get('pages', {})
-        html = pages.get(page, pages.get('home', ''))
+        if host.startswith('www.'):
+            host = host[4:]
         
-        if html:
-            html = inject_signature(html, site.get('church_slug', ''), site.get('domain', ''))
+        site = await db.church_sites.find_one({
+            'domain': host,
+            'hosting_status': 'active'
+        })
+        
+        if site:
+            church = await db.churches.find_one({'_id': site['church_id']})
+            if not church:
+                return await call_next(request)
             
-            await db.site_visits.insert_one({
-                'domain': host,
-                'church_slug': site.get('church_slug', ''),
-                'page': page,
-                'visited_at': datetime.utcnow(),
-                'user_agent': request.headers.get('user-agent', ''),
-                'referer': request.headers.get('referer', '')
-            })
+            path = request.url.path.strip('/')
+            
+            if not path or path == 'index.html':
+                page = 'home'
+            else:
+                page = path.replace('.html', '')
+            
+            html = site.get('pages', {}).get(page, site.get('pages', {}).get('home', '<h1>Site not found</h1>'))
+            
+            html = self._inject_signature(html, church['slug'], host)
+            
+            await db.site_analytics.update_one(
+                {'church_id': site['church_id'], 'date': {'$gte': datetime.utcnow().replace(hour=0, minute=0, second=0)}},
+                {'$inc': {'page_views': 1, f'pages.{page}': 1}},
+                upsert=True
+            )
             
             return HTMLResponse(content=html)
+        
+        return await call_next(request)
     
-    response = await call_next(request)
-    return response
+    def _inject_signature(self, html: str, church_slug: str, domain: str) -> str:
+        meta_sig = META_SIGNATURE.format(church_slug=church_slug)
+        if '<head>' in html and '</head>' in html:
+            html = html.replace('</head>', meta_sig + '</head>', 1)
+        
+        footer_sig = SIGNATURE_HTML.format(church_slug=church_slug, domain=domain)
+        if '</body>' in html:
+            html = html.replace('</body>', footer_sig + '</body>', 1)
+        
+        return html
+
+from datetime import datetime
