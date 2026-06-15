@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, List, Literal
+from typing import Optional, List
 from datetime import datetime
 from bson import ObjectId
 
@@ -17,67 +17,50 @@ class PyObjectId(ObjectId):
         field_schema.update(type="string")
 
 class SmallGroupBase(BaseModel):
-    name: str = Field(..., min_length=3, max_length=100)
-    description: str = Field(..., max_length=500)
-    leader_name: str = Field(..., max_length=100)
+    church_id: str
+    name: str
+    description: str
+    leader_name: str
     leader_contact: EmailStr
-    meeting_day: str = Field(..., max_length=20)
-    meeting_time: str = Field(..., max_length=20)
-    frequency: str = Field(..., max_length=50)
-    location_type: Literal["in-person", "online", "hybrid"]
-    address_or_link: str = Field(..., max_length=300)
-    capacity: int = Field(..., ge=2, le=100)
-    current_members: int = Field(default=0, ge=0)
-    age_group: Optional[str] = Field(None, max_length=50)
-    topics: List[str] = Field(default_factory=list)
-    is_open_to_join: bool = Field(default=True)
+    meeting_day: str
+    meeting_time: str
+    frequency: str
+    location_type: str
+    address_or_link: str
+    capacity: Optional[int] = None
+    current_members: int = 0
+    age_group: Optional[str] = None
+    topics: List[str] = []
+    is_open_to_join: bool = True
 
 class SmallGroupCreate(SmallGroupBase):
-    church_id: str
+    pass
 
 class SmallGroupUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=3, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
-    leader_name: Optional[str] = Field(None, max_length=100)
+    name: Optional[str] = None
+    description: Optional[str] = None
+    leader_name: Optional[str] = None
     leader_contact: Optional[EmailStr] = None
-    meeting_day: Optional[str] = Field(None, max_length=20)
-    meeting_time: Optional[str] = Field(None, max_length=20)
-    frequency: Optional[str] = Field(None, max_length=50)
-    location_type: Optional[Literal["in-person", "online", "hybrid"]] = None
-    address_or_link: Optional[str] = Field(None, max_length=300)
-    capacity: Optional[int] = Field(None, ge=2, le=100)
-    current_members: Optional[int] = Field(None, ge=0)
-    age_group: Optional[str] = Field(None, max_length=50)
+    meeting_day: Optional[str] = None
+    meeting_time: Optional[str] = None
+    frequency: Optional[str] = None
+    location_type: Optional[str] = None
+    address_or_link: Optional[str] = None
+    capacity: Optional[int] = None
+    current_members: Optional[int] = None
+    age_group: Optional[str] = None
     topics: Optional[List[str]] = None
     is_open_to_join: Optional[bool] = None
 
-class SmallGroupInDB(SmallGroupBase):
-    id: str = Field(default_factory=lambda: str(ObjectId()), alias="_id")
-    church_id: str
+class SmallGroup(SmallGroupBase):
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
     class Config:
-        populate_by_name = True
-        json_encoders = {ObjectId: str}
-
-class SmallGroupResponse(SmallGroupBase):
-    id: str
-    church_id: str
-    created_at: datetime
-    church_name: Optional[str] = None
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str, datetime: lambda v: v.isoformat()}
 
 class JoinRequest(BaseModel):
-    name: str = Field(..., min_length=2, max_length=100)
+    name: str
     email: EmailStr
-    message: Optional[str] = Field(None, max_length=500)
-
-class JoinRequestInDB(JoinRequest):
-    id: str = Field(default_factory=lambda: str(ObjectId()), alias="_id")
-    group_id: str
-    church_id: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    status: str = Field(default="pending")
-    
-    class Config:
-        populate_by_name = True
-        json_encoders = {ObjectId: str}
+    message: Optional[str] = None
