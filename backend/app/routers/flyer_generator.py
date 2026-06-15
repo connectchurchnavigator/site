@@ -1,25 +1,23 @@
 from fastapi import APIRouter, HTTPException, Response
-from fastapi.responses import HTMLResponse, FileResponse
-from pydantic import BaseModel
-from typing import Optional
-import anthropic
+from app.database import db
+from anthropic import Anthropic
 import os
 from datetime import datetime
+from weasyprint import HTML, CSS
 import qrcode
 import io
 import base64
-from weasyprint import HTML
-import tempfile
+from bson import ObjectId
 
 router = APIRouter(prefix="/api/tools/flyer-generator", tags=["flyer-generator"])
+anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-from ..database import get_database
-
-CLAUDE_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
-
-class FlyerRequest(BaseModel):
-    template: str = "bold"
+TEMPLATE_STYLES = {
+    "bold": "Modern, high-contrast design with bold colors, large typography, and geometric shapes. Use vibrant accent colors.",
+    "minimal": "Clean, simple design with plenty of white space, subtle colors, and elegant sans-serif fonts. Focus on clarity.",
+    "elegant": "Sophisticated design with serif fonts, muted colors, and refined layout. Professional and timeless.",
+    "gospel": "Warm, welcoming design with traditional church aesthetics, script fonts for accents, and inspirational imagery through CSS."
+}
 
 def generate_qr_code(url: str) -> str:
     qr = qrcode.QRCode(version=1, box_size=10, border=2)
@@ -29,142 +27,125 @@ def generate_qr_code(url: str) -> str:
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
-    return base64.b64encode(buffer.getvalue()).decode()
-
-def get_flyer_prompt(event_data: dict, template: str, qr_base64: str) -> str:
-    speakers_text = ""
-    if event_data.get("speakers"):
-        speakers_text = "Speakers: " + ", ".join([s.get("name", "Unknown") for s in event_data["speakers"]])
-    
-    price_text = "FREE" if event_data.get("is_free") else f"£{event_data.get('price', 0)}"
-    
-    return f"""Generate a complete, self-contained HTML flyer for this church event. Use ONLY inline CSS, no external resources.
-
-Event Details:
-- Name: {event_data.get('name', 'Event')}
-- Date: {event_data.get('start_date', 'TBA')}
-- Time: {event_data.get('start_time', 'TBA')}
-- Venue: {event_data.get('venue', {}).get('name', 'TBA')}
-- Address: {event_data.get('venue', {}).get('address', '')}
-- {speakers_text}
-- Price: {price_text}
-- Description: {event_data.get('description', '')[:200]}
-- Church: {event_data.get('church_name', 'Church')}
-
-Template Style: {template.upper()}
-- bold: Vibrant colors, large fonts, energetic (use reds, oranges, blacks)
-- minimal: Clean white space, simple typography, modern (use grays, whites, one accent color)
-- elegant: Sophisticated serif fonts, muted colors (use burgundy, navy, gold accents)
-- gospel: Traditional church aesthetic, crosses, warm tones (use purples, golds, whites)
-
-Requirements:
-1. A5 portrait format (148mm x 210mm = 559px x 794px at 96dpi)
-2. All CSS inline in <style> tag
-3. Event name in LARGE bold text (40-60px)
-4. Date/time/venue prominently displayed
-5. Price badge: {"green 'FREE' badge" if event_data.get('is_free') else "gold price badge"}
-6. Include this QR code (base64): data:image/png;base64,{qr_base64}
-7. Small footer: "Powered by ChurchNavigator.com"
-8. Church name: {event_data.get('church_name', 'Church')}
-9. Use the {template} style template exactly
-10. Make it print-ready and visually stunning
-
-Return ONLY the complete HTML, starting with <!DOCTYPE html>. No explanations."""
+    return base64.b64encode(buffer.read()).decode()
 
 @router.post("/generate/{event_slug}")
-async def generate_flyer(event_slug: str, request: FlyerRequest):
-    db = get_database()
-    event = db.events.find_one({"slug": event_slug})
+async def generate_flyer(event_slug: str, template: str = "bold"):
+    if template not in TEMPLATE_STYLES:
+        raise HTTPException(status_code=400, detail="Invalid template")
+    
+    event = await db.events.find_one({"slug": event_slug})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
+    church = await db.churches.find_one({"_id": ObjectId(event["church_id"])})
+    church_name = church["name"] if church else "Church"
+    church_logo = church.get("logo_url", "") if church else ""
+    
     event_url = f"https://churchnavigator.com/events/{event_slug}"
-    qr_base64 = generate_qr_code(event_url)
+    qr_data = generate_qr_code(event_url)
     
-    prompt = get_flyer_prompt(event, request.template, qr_base64)
+    speakers_text = ""
+    if event.get("speakers"):
+        speakers_list = "\n".join([f"- {s['name']} ({s.get('role', 'Speaker')})" for s in event["speakers"]])
+        speakers_text = f"Speakers:\n{speakers_list}"
     
-    try:
-        message = client.messages.create(
-            model="claude-3-haiku-20240307",
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        html_content = message.content[0].text
-        
-        if not html_content.strip().startswith("<!DOCTYPE") and not html_content.strip().startswith("<html"):
-            html_content = "<!DOCTYPE html>\n" + html_content
-        
-        flyer_doc = {
-            "event_id": str(event["_id"]),
-            "event_slug": event_slug,
-            "template": request.template,
-            "html_content": html_content,
-            "generated_at": datetime.utcnow(),
-            "qr_code": qr_base64
-        }
-        
-        db.flyers.update_one(
-            {"event_slug": event_slug, "template": request.template},
-            {"$set": flyer_doc},
-            upsert=True
-        )
-        
-        return {
-            "success": True,
-            "html_content": html_content,
-            "share_url": f"https://churchnavigator.com/flyers/{event_slug}",
-            "template": request.template
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Flyer generation failed: {str(e)}")
+    price_text = "FREE" if event.get("is_free", True) else f"£{event.get('price', 0)}"
+    
+    prompt = f"""Generate a complete, self-contained HTML flyer for this event. The HTML must be a single file with all CSS inline in a <style> tag.
+
+EVENT DETAILS:
+- Name: {event['name']}
+- Date: {event.get('start_date', 'TBA')}
+- Time: {event.get('start_time', 'TBA')}
+- Venue: {event.get('venue', 'TBA')}
+- Description: {event.get('description', '')[:200]}
+- Price: {price_text}
+- {speakers_text}
+- Church: {church_name}
+
+DESIGN STYLE: {TEMPLATE_STYLES[template]}
+
+REQUIREMENTS:
+1. A5 portrait format (148mm x 210mm = 559px x 794px at 96dpi)
+2. Responsive, print-ready layout
+3. Include QR code as: <img src="data:image/png;base64,{qr_data}" alt="QR Code" style="width:80px;height:80px;">
+4. Display church logo if available: {church_logo}
+5. Price badge styled prominently (green if FREE, gold if paid)
+6. All CSS must be inline in <style> tag - no external resources
+7. Use web-safe fonts only (Arial, Georgia, Helvetica, Times New Roman)
+8. Footer: "Powered by ChurchNavigator.com" in small text
+9. Use CSS for all visual elements - no external images except logo and QR
+10. Make it beautiful and print-ready
+
+Return ONLY the complete HTML, nothing else."""
+    
+    message = anthropic_client.messages.create(
+        model="claude-3-haiku-20240307",
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    
+    html_content = message.content[0].text
+    
+    flyer_doc = {
+        "event_id": str(event["_id"]),
+        "event_slug": event_slug,
+        "template": template,
+        "html_content": html_content,
+        "generated_at": datetime.utcnow()
+    }
+    
+    await db.flyers.update_one(
+        {"event_slug": event_slug, "template": template},
+        {"$set": flyer_doc},
+        upsert=True
+    )
+    
+    return {
+        "success": True,
+        "html_content": html_content,
+        "share_url": f"https://churchnavigator.com/flyers/{event_slug}?template={template}",
+        "template": template
+    }
 
 @router.get("/pdf/{event_slug}")
 async def download_pdf(event_slug: str, template: str = "bold"):
-    db = get_database()
-    flyer = db.flyers.find_one({"event_slug": event_slug, "template": template})
-    
+    flyer = await db.flyers.find_one({"event_slug": event_slug, "template": template})
     if not flyer:
         raise HTTPException(status_code=404, detail="Flyer not found. Generate it first.")
     
     try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as html_file:
-            html_file.write(flyer["html_content"])
-            html_path = html_file.name
-        
-        pdf_path = html_path.replace('.html', '.pdf')
-        HTML(html_path).write_pdf(pdf_path)
-        
-        os.unlink(html_path)
-        
-        return FileResponse(
-            pdf_path,
+        pdf_bytes = HTML(string=flyer["html_content"]).write_pdf()
+        return Response(
+            content=pdf_bytes,
             media_type="application/pdf",
-            filename=f"{event_slug}-flyer.pdf",
-            background=None
+            headers={
+                "Content-Disposition": f"attachment; filename={event_slug}-flyer.pdf"
+            }
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
 
-@router.get("/share/{event_slug}", response_class=HTMLResponse)
-async def share_flyer(event_slug: str, template: str = "bold"):
-    db = get_database()
-    flyer = db.flyers.find_one({"event_slug": event_slug, "template": template})
-    
+@router.get("/share/{event_slug}")
+async def get_flyer_html(event_slug: str, template: str = "bold"):
+    flyer = await db.flyers.find_one({"event_slug": event_slug, "template": template})
     if not flyer:
-        return HTMLResponse(
-            content="<html><body><h1>Flyer not found</h1><p>This flyer has not been generated yet.</p></body></html>",
-            status_code=404
-        )
+        raise HTTPException(status_code=404, detail="Flyer not found")
     
-    return HTMLResponse(content=flyer["html_content"])
+    return Response(content=flyer["html_content"], media_type="text/html")
 
-@router.get("/templates")
-async def get_templates():
+@router.get("/list/{event_slug}")
+async def list_flyers(event_slug: str):
+    flyers = await db.flyers.find({"event_slug": event_slug}).to_list(length=10)
     return {
-        "templates": [
-            {"id": "bold", "name": "Bold", "description": "Vibrant and energetic"},
-            {"id": "minimal", "name": "Minimal", "description": "Clean and modern"},
-            {"id": "elegant", "name": "Elegant", "description": "Sophisticated design"},
-            {"id": "gospel", "name": "Gospel", "description": "Traditional church aesthetic"}
+        "event_slug": event_slug,
+        "flyers": [
+            {
+                "template": f["template"],
+                "generated_at": f["generated_at"],
+                "share_url": f"https://churchnavigator.com/flyers/{event_slug}?template={f['template']}"
+            }
+            for f in flyers
         ]
     }
