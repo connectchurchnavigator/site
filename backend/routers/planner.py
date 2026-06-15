@@ -1,529 +1,589 @@
-from fastapi import APIRouter, HTTPException, Depends, Body, Query
-from fastapi.responses import StreamingResponse, Response
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional, List
+from datetime import datetime
 from bson import ObjectId
-import anthropic
-import os
-import secrets
-import io
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.pdfgen import canvas
-import qrcode
-import base64
-from ..database import db
-from ..models import MinistryTrip, TripMessage, TripCollaborator, TripVisit, TripAnalysis, ChatMessage
-from ..auth import get_current_user
+from pydantic import BaseModel, Field
+import math
+
+from database import db
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/planner", tags=["planner"])
-claude_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-TRAVEL_COSTS = {
-    ("London", "Birmingham"): {"train": 65, "fuel": 35, "time_hours": 2.5},
-    ("London", "Manchester"): {"train": 85, "fuel": 45, "time_hours": 3.0},
-    ("Birmingham", "Manchester"): {"train": 45, "fuel": 25, "time_hours": 1.5},
-    ("London", "Leeds"): {"train": 75, "fuel": 40, "time_hours": 2.8},
-    ("London", "Bristol"): {"train": 55, "fuel": 30, "time_hours": 2.0},
+class ChurchInPicker(BaseModel):
+    id: str
+    name: str
+    city: str
+    postcode: Optional[str] = None
+    denomination: Optional[str] = None
+    congregation_size: Optional[int] = None
+    photo_url: Optional[str] = None
+    open_to_visits: bool = False
+    languages: List[str] = []
+    service_days: List[str] = []
+    match_score: Optional[int] = None
+    distance_miles: Optional[float] = None
+
+class AddChurchToTripRequest(BaseModel):
+    church_id: str
+    day_number: int
+    time_slot: str
+    visit_type: str
+    notes: Optional[str] = None
+
+class SaveTemplateRequest(BaseModel):
+    name: str
+    description: str
+    tags: List[str]
+    visibility: str
+    include_notes: bool = True
+
+class CreateTripFromTemplateRequest(BaseModel):
+    template_id: str
+    start_date: str
+    missionary_name: str
+    missionary_denomination: Optional[str] = None
+    missionary_focus: Optional[str] = None
+    missionary_languages: List[str] = []
+    customizations: Optional[dict] = None
+
+LANGUAGE_CONTEXT = {
+    "Telugu": {
+        "region": "South Asian",
+        "context": "UK Telugu Christian community is one of the fastest-growing congregations. Birmingham has 23 Telugu churches, many meeting in homes or rented halls.",
+        "worship_style": "Extended worship sessions with contemporary and traditional Telugu Christian songs. Prophetic ministry highly valued.",
+        "service_length": "2-3 hours typical, often longer on special occasions",
+        "topics": "Family values, prosperity, healing, breakthrough, spiritual warfare",
+        "etiquette": "Even a greeting or scripture in Telugu will be deeply appreciated. Dress modestly and conservatively."
+    },
+    "Tamil": {
+        "region": "South Asian",
+        "context": "Large Sri Lankan and Indian Tamil diaspora. Strong church attendance culture, especially among Sri Lankan Tamil Christians.",
+        "worship_style": "Mix of traditional hymns and contemporary worship. Value reverence and order in services.",
+        "service_length": "2-2.5 hours",
+        "topics": "Faith in adversity, family unity, education, healing",
+        "etiquette": "Formal greetings appreciated. Remove shoes if entering homes. Modest dress essential."
+    },
+    "Yoruba": {
+        "region": "African",
+        "context": "Largest Nigerian diaspora in UK (~500,000). Vibrant, expressive worship culture with strong Pentecostal influence.",
+        "worship_style": "High-energy praise and worship, dance, prophetic declarations. Expect 'praise breaks' and spontaneous worship.",
+        "service_length": "3-4 hours common, especially on Sundays",
+        "topics": "Breakthrough, prosperity, deliverance, spiritual warfare, covenant blessings",
+        "etiquette": "Dress very well - appearance matters. Be prepared for long services. Accepting prayer cloth or anointing oil is respectful."
+    },
+    "Igbo": {
+        "region": "African",
+        "context": "Strong Igbo Christian community across UK, particularly London and Manchester. Known for entrepreneurial spirit.",
+        "worship_style": "Energetic worship with traditional Igbo gospel songs. Value testimonies and practical teaching.",
+        "service_length": "2.5-3.5 hours",
+        "topics": "Business success, prosperity, family, breakthrough, wisdom",
+        "etiquette": "Professional attire recommended. Punctuality valued. Gift-giving culture - small token appreciated."
+    },
+    "Twi": {
+        "region": "African",
+        "context": "Ghanaian Akan-speaking community. Strong Presbyterian and Pentecostal traditions. Very hospitable.",
+        "worship_style": "Mix of hymns and contemporary worship. Choirs highly valued. Expect multiple music ministrations.",
+        "service_length": "2.5-3 hours",
+        "topics": "Gratitude, perseverance, education, family values, prosperity",
+        "etiquette": "Formal dress. Greet elders first. Stay for refreshments after service - refusing is considered rude."
+    },
+    "Malayalam": {
+        "region": "South Asian",
+        "context": "Keralite Christian community - ancient Christian heritage. Well-educated, strong church-going culture.",
+        "worship_style": "Liturgical or contemporary depending on tradition (Orthodox, Catholic, Pentecostal). Value reverence.",
+        "service_length": "1.5-2.5 hours",
+        "topics": "Faith and reason, social justice, family, education, spiritual growth",
+        "etiquette": "Formal attire. Intellectual approach appreciated. Many are highly educated professionals."
+    },
+    "Portuguese": {
+        "region": "European",
+        "context": "Brazilian and Portuguese diaspora. Brazilian Pentecostal churches growing rapidly in UK.",
+        "worship_style": "Warm, expressive worship. Brazilian churches very Pentecostal with emphasis on Holy Spirit.",
+        "service_length": "2-3 hours",
+        "topics": "Victory, breakthrough, healing, family restoration, prosperity",
+        "etiquette": "Friendly and informal culture. Hugs and physical greetings common. Expect strong emotional expression."
+    },
+    "Spanish": {
+        "region": "European",
+        "context": "Latin American diaspora from various countries. Growing Spanish-speaking evangelical movement.",
+        "worship_style": "Passionate worship with Latin rhythms. Strong emphasis on prayer and intercession.",
+        "service_length": "2-3 hours",
+        "topics": "Faith, family, deliverance, provision, identity in Christ",
+        "etiquette": "Warm greetings. Family-oriented culture. Children often present throughout service."
+    },
+    "Amharic": {
+        "region": "African",
+        "context": "Ethiopian and Eritrean Orthodox and evangelical communities. Ancient Christian heritage.",
+        "worship_style": "Orthodox churches very liturgical. Evangelical churches more contemporary but retain cultural elements.",
+        "service_length": "2-4 hours (Orthodox longer)",
+        "topics": "Fasting, prayer, spiritual discipline, perseverance, heritage",
+        "etiquette": "Very formal and respectful. Remove shoes in Orthodox churches. Modest dress essential."
+    },
+    "Mandarin": {
+        "region": "East Asian",
+        "context": "Growing Chinese Christian community, mix of mainland and diaspora. Often highly educated.",
+        "worship_style": "Contemporary worship with Chinese Christian songs. Value teaching and discipleship.",
+        "service_length": "1.5-2 hours",
+        "topics": "Discipleship, spiritual growth, wisdom, family, purpose",
+        "etiquette": "Formal and reserved culture. Intellectual sermons appreciated. Tea and fellowship highly valued."
+    },
+    "Korean": {
+        "region": "East Asian",
+        "context": "Strong Korean Christian community. Known for prayer and early morning prayer meetings.",
+        "worship_style": "Fervent prayer, contemporary worship. Very committed to spiritual disciplines.",
+        "service_length": "2-2.5 hours (plus prayer meetings)",
+        "topics": "Prayer, spiritual breakthrough, missions, perseverance, holiness",
+        "etiquette": "Very respectful of hierarchy. Bow to elders. Expect intense prayer sessions. Remove shoes often."
+    },
+    "Filipino": {
+        "region": "Southeast Asian",
+        "context": "Large Filipino community, predominantly Catholic but growing evangelical presence. Very hospitable.",
+        "worship_style": "Joyful, musical worship. Strong choir tradition. Mix of traditional and contemporary.",
+        "service_length": "1.5-2.5 hours",
+        "topics": "Faith, hope, family, perseverance, gratitude",
+        "etiquette": "Very warm and welcoming. Expect to be invited to meals. Respect for elders paramount."
+    },
+    "Polish": {
+        "region": "European",
+        "context": "Large Polish Catholic community, also growing evangelical churches. Strong Marian devotion.",
+        "worship_style": "Traditional Catholic or contemporary evangelical. Value reverence and tradition.",
+        "service_length": "1-2 hours",
+        "topics": "Faith in hardship, Mary, saints, family values, hope",
+        "etiquette": "Formal attire. Catholics may cross themselves. Respect for tradition important."
+    },
+    "Romanian": {
+        "region": "European",
+        "context": "Growing Romanian community, predominantly Orthodox but increasing Pentecostal presence.",
+        "worship_style": "Orthodox very liturgical. Pentecostal churches energetic with Eastern European worship style.",
+        "service_length": "2-3 hours",
+        "topics": "Miracles, healing, provision, spiritual warfare, family",
+        "etiquette": "Modest dress. Stand during Orthodox services. Strong hospitality culture."
+    },
+    "Arabic": {
+        "region": "Middle Eastern",
+        "context": "Arab Christian diaspora from Egypt, Lebanon, Iraq, Syria. Ancient church traditions.",
+        "worship_style": "Varies by tradition (Coptic, Maronite, Assyrian). Many liturgical, some contemporary.",
+        "service_length": "1.5-3 hours",
+        "topics": "Faith under persecution, heritage, martyrs, family, hope",
+        "etiquette": "Very hospitable. Coffee culture strong. Respect for church fathers and tradition."
+    }
 }
 
-@router.post("/trips")
-async def create_trip(user=Depends(get_current_user)):
-    trip = {
-        "user_id": str(user["_id"]),
-        "status": "planning",
-        "trip_details": {},
-        "conversation": [],
-        "visits": [],
-        "collaborators": [],
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-        "share_token": secrets.token_urlsafe(16)
-    }
-    result = await db.ministry_trips.insert_one(trip)
-    trip["_id"] = result.inserted_id
-    return {"trip_id": str(result.inserted_id), "share_token": trip["share_token"]}
+def calculate_distance(lat1, lon1, lat2, lon2):
+    if None in [lat1, lon1, lat2, lon2]:
+        return None
+    R = 3959
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+    a = math.sin(delta_lat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
 
-@router.post("/trips/{trip_id}/conversation")
-async def add_message(trip_id: str, message: str = Body(..., embed=True), user=Depends(get_current_user)):
-    trip = await db.ministry_trips.find_one({"_id": ObjectId(trip_id), "user_id": str(user["_id"])})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
+@router.get("/church-picker")
+async def get_churches_for_picker(
+    q: Optional[str] = None,
+    city: Optional[str] = None,
+    denomination: Optional[str] = None,
+    size: Optional[str] = None,
+    language: Optional[str] = None,
+    open_to_visits: Optional[bool] = None,
+    service_day: Optional[str] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    radius: Optional[float] = None,
+    trip_id: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
+    user: dict = Depends(get_current_user)
+):
+    query = {"status": "active"}
     
-    user_msg = {"role": "user", "content": message, "timestamp": datetime.utcnow()}
-    conversation = trip.get("conversation", [])
-    conversation.append(user_msg)
+    if q:
+        query["$or"] = [
+            {"name": {"$regex": q, "$options": "i"}},
+            {"city": {"$regex": q, "$options": "i"}},
+            {"pastor_name": {"$regex": q, "$options": "i"}}
+        ]
     
-    system_prompt = """You are an expert UK ministry trip planner. Guide the minister through planning their trip step by step.
-Ask clear questions, make helpful suggestions, and be warm and encouraging.
-When you have enough information (days, cities, focus, budget, church preferences), summarize the plan and say 'READY_TO_ANALYZE'."""
+    if city and city != "All UK":
+        query["city"] = city
     
-    claude_messages = [{"role": m["role"], "content": m["content"]} for m in conversation if m["role"] in ["user", "assistant"]]
+    if denomination and denomination != "All":
+        query["denomination"] = denomination
     
-    response = claude_client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        system=system_prompt,
-        messages=claude_messages
-    )
+    if size:
+        size_ranges = {
+            "Small": {"$lt": 100},
+            "Medium": {"$gte": 100, "$lt": 500},
+            "Large": {"$gte": 500, "$lt": 1000},
+            "Mega": {"$gte": 1000}
+        }
+        if size in size_ranges:
+            query["congregation_size"] = size_ranges[size]
     
-    ai_response = response.content[0].text
-    ai_msg = {"role": "assistant", "content": ai_response, "timestamp": datetime.utcnow()}
-    conversation.append(ai_msg)
+    if language:
+        query["languages"] = language
     
-    update_data = {"conversation": conversation, "updated_at": datetime.utcnow()}
+    if open_to_visits is not None:
+        query["open_to_visits"] = open_to_visits
     
-    if "READY_TO_ANALYZE" in ai_response:
-        trip_details = await extract_trip_details(conversation)
-        update_data["trip_details"] = trip_details
-        update_data["status"] = "ready_for_analysis"
+    if service_day:
+        query["service_days"] = service_day
     
-    await db.ministry_trips.update_one({"_id": ObjectId(trip_id)}, {"$set": update_data})
+    skip = (page - 1) * limit
+    churches_cursor = db.churches.find(query).skip(skip).limit(limit)
+    churches = await churches_cursor.to_list(length=limit)
+    total = await db.churches.count_documents(query)
     
-    return {"response": ai_response, "status": update_data.get("status", "planning")}
-
-async def extract_trip_details(conversation: List[Dict]) -> Dict:
-    full_convo = "\n".join([f"{m['role']}: {m['content']}" for m in conversation])
-    prompt = f"""Extract structured trip details from this conversation:
-{full_convo}
-
-Return JSON with: days, start_date (YYYY-MM-DD if mentioned), cities, ministry_focus, services_per_day, budget, congregation_preference.
-If info not mentioned, use null."""
+    trip = None
+    if trip_id:
+        trip = await db.ministry_trips.find_one({"_id": ObjectId(trip_id)})
     
-    response = claude_client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=512,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    
-    import json
-    try:
-        return json.loads(response.content[0].text)
-    except:
-        return {"days": 7, "cities": ["London", "Birmingham"], "ministry_focus": "preaching"}
-
-@router.post("/trips/{trip_id}/recommend-churches")
-async def recommend_churches(trip_id: str, user=Depends(get_current_user)):
-    trip = await db.ministry_trips.find_one({"_id": ObjectId(trip_id)})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    
-    details = trip.get("trip_details", {})
-    cities = details.get("cities", [])
-    size_pref = details.get("congregation_preference", "medium")
-    
-    size_filter = {}
-    if size_pref == "small":
-        size_filter = {"congregation_size": {"$lt": 100}}
-    elif size_pref == "medium":
-        size_filter = {"congregation_size": {"$gte": 100, "$lte": 500}}
-    elif size_pref == "large":
-        size_filter = {"congregation_size": {"$gt": 500}}
-    
-    query = {"city": {"$in": cities}} if cities else {}
-    if size_filter:
-        query.update(size_filter)
-    
-    churches = await db.churches.find(query).limit(20).to_list(20)
-    
-    recommendations = []
+    result_churches = []
     for church in churches:
-        recommendations.append({
-            "church_id": str(church["_id"]),
-            "name": church.get("name"),
-            "city": church.get("city"),
-            "congregation_size": church.get("congregation_size", 0),
-            "denomination": church.get("denomination"),
-            "pastor_name": church.get("pastor_name"),
-            "contact_email": church.get("email"),
-            "contact_phone": church.get("phone"),
-            "impact_score": min(100, church.get("congregation_size", 50) // 5)
-        })
+        distance = None
+        if lat and lng and church.get("location"):
+            church_coords = church["location"].get("coordinates")
+            if church_coords and len(church_coords) == 2:
+                distance = calculate_distance(lat, lng, church_coords[1], church_coords[0])
+        
+        if radius and distance and distance > radius:
+            continue
+        
+        match_score = None
+        if trip:
+            score = 70
+            if church.get("open_to_visits"):
+                score += 10
+            if language and language in church.get("languages", []):
+                score += 15
+            if trip.get("ministry_focus"):
+                focus_lower = trip["ministry_focus"].lower()
+                church_desc = (church.get("description") or "").lower()
+                if any(word in church_desc for word in focus_lower.split()):
+                    score += 5
+            match_score = min(score, 100)
+        
+        result_churches.append(ChurchInPicker(
+            id=str(church["_id"]),
+            name=church["name"],
+            city=church.get("city", ""),
+            postcode=church.get("postcode"),
+            denomination=church.get("denomination"),
+            congregation_size=church.get("congregation_size"),
+            photo_url=church.get("photo_url"),
+            open_to_visits=church.get("open_to_visits", False),
+            languages=church.get("languages", []),
+            service_days=church.get("service_days", []),
+            match_score=match_score,
+            distance_miles=round(distance, 1) if distance else None
+        ))
     
-    recommendations.sort(key=lambda x: x["impact_score"], reverse=True)
-    return {"recommendations": recommendations[:10]}
+    return {
+        "churches": result_churches,
+        "total": total,
+        "page": page,
+        "pages": math.ceil(total / limit)
+    }
 
-@router.post("/trips/{trip_id}/visits")
-async def add_visit(trip_id: str, visit: Dict = Body(...), user=Depends(get_current_user)):
+@router.post("/trips/{trip_id}/add-church")
+async def add_church_to_trip(
+    trip_id: str,
+    request: AddChurchToTripRequest,
+    user: dict = Depends(get_current_user)
+):
     trip = await db.ministry_trips.find_one({"_id": ObjectId(trip_id)})
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
     
-    visit_obj = {
-        "church_id": visit["church_id"],
-        "church_name": visit["church_name"],
-        "service_time": datetime.fromisoformat(visit["service_time"]),
-        "service_type": visit.get("service_type", "Sunday Service"),
-        "confirmed": False,
+    if str(trip["created_by"]) != str(user["_id"]) and str(user["_id"]) not in [str(c) for c in trip.get("collaborators", [])]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    church = await db.churches.find_one({"_id": ObjectId(request.church_id)})
+    if not church:
+        raise HTTPException(status_code=404, detail="Church not found")
+    
+    visit = {
+        "church_id": request.church_id,
+        "church_name": church["name"],
+        "day_number": request.day_number,
+        "time_slot": request.time_slot,
+        "visit_type": request.visit_type,
+        "notes": request.notes,
         "status": "pending",
-        "estimated_attendance": visit.get("estimated_attendance", 100),
-        "estimated_honorarium": visit.get("estimated_honorarium", 100),
-        "contact_email": visit.get("contact_email"),
-        "contact_phone": visit.get("contact_phone")
+        "added_at": datetime.utcnow()
     }
+    
+    itinerary = trip.get("itinerary", [])
+    itinerary.append(visit)
     
     await db.ministry_trips.update_one(
         {"_id": ObjectId(trip_id)},
-        {"$push": {"visits": visit_obj}, "$set": {"updated_at": datetime.utcnow()}}
+        {"$set": {"itinerary": itinerary, "updated_at": datetime.utcnow()}}
+    )
+    
+    return {"success": True, "visit": visit}
+
+@router.get("/languages")
+async def get_languages():
+    pipeline = [
+        {"$unwind": "$languages"},
+        {"$group": {"_id": "$languages", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    
+    result = await db.churches.aggregate(pipeline).to_list(length=100)
+    
+    languages = []
+    for item in result:
+        lang = item["_id"]
+        languages.append({
+            "name": lang,
+            "count": item["count"],
+            "region": LANGUAGE_CONTEXT.get(lang, {}).get("region", "Other"),
+            "has_context": lang in LANGUAGE_CONTEXT
+        })
+    
+    return {"languages": languages}
+
+@router.get("/languages/{language}/context")
+async def get_language_context(language: str):
+    if language not in LANGUAGE_CONTEXT:
+        return {"context": None}
+    return {"context": LANGUAGE_CONTEXT[language]}
+
+@router.post("/templates")
+async def create_template(
+    request: SaveTemplateRequest,
+    trip_id: str = Query(...),
+    user: dict = Depends(get_current_user)
+):
+    trip = await db.ministry_trips.find_one({"_id": ObjectId(trip_id)})
+    if not trip:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    
+    if str(trip["created_by"]) != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Only trip owner can create template")
+    
+    churches = []
+    cities = set()
+    for visit in trip.get("itinerary", []):
+        church = await db.churches.find_one({"_id": ObjectId(visit["church_id"])})
+        if church:
+            cities.add(church.get("city", ""))
+            churches.append({
+                "church_id": visit["church_id"],
+                "church_name": visit["church_name"],
+                "day_number": visit["day_number"],
+                "time_slot": visit["time_slot"],
+                "visit_type": visit["visit_type"],
+                "notes": visit.get("notes") if request.include_notes else None
+            })
+    
+    total_days = max([v["day_number"] for v in trip.get("itinerary", [])], default=1)
+    
+    template = {
+        "created_by": user["_id"],
+        "org_id": user.get("org_id"),
+        "name": request.name,
+        "description": request.description,
+        "tags": request.tags,
+        "visibility": request.visibility,
+        "trip_structure": {
+            "total_days": total_days,
+            "cities": list(cities),
+            "churches": churches,
+            "daily_structure": trip.get("daily_structure", [])
+        },
+        "use_count": 0,
+        "avg_trip_score": 0,
+        "last_used": None,
+        "reviews": [],
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    result = await db.planner_templates.insert_one(template)
+    template["_id"] = str(result.inserted_id)
+    
+    return {"success": True, "template_id": str(result.inserted_id)}
+
+@router.get("/templates")
+async def get_templates(
+    visibility: Optional[str] = None,
+    tag: Optional[str] = None,
+    q: Optional[str] = None,
+    page: int = 1,
+    limit: int = 20,
+    user: dict = Depends(get_current_user)
+):
+    query = {}
+    
+    if visibility == "my":
+        query["created_by"] = user["_id"]
+    elif visibility == "org":
+        query["$or"] = [
+            {"visibility": "org", "org_id": user.get("org_id")},
+            {"created_by": user["_id"]}
+        ]
+    elif visibility == "public":
+        query["visibility"] = "public"
+    elif visibility == "curated":
+        query["visibility"] = "curated"
+    else:
+        query["$or"] = [
+            {"created_by": user["_id"]},
+            {"visibility": "org", "org_id": user.get("org_id")},
+            {"visibility": "public"},
+            {"visibility": "curated"}
+        ]
+    
+    if tag:
+        query["tags"] = tag
+    
+    if q:
+        query["$or"] = [
+            {"name": {"$regex": q, "$options": "i"}},
+            {"description": {"$regex": q, "$options": "i"}}
+        ]
+    
+    skip = (page - 1) * limit
+    templates_cursor = db.planner_templates.find(query).sort("use_count", -1).skip(skip).limit(limit)
+    templates = await templates_cursor.to_list(length=limit)
+    total = await db.planner_templates.count_documents(query)
+    
+    for template in templates:
+        template["_id"] = str(template["_id"])
+        template["created_by"] = str(template["created_by"])
+        creator = await db.users.find_one({"_id": ObjectId(template["created_by"])})
+        template["creator_name"] = creator.get("name") if creator else "Unknown"
+    
+    return {
+        "templates": templates,
+        "total": total,
+        "page": page,
+        "pages": math.ceil(total / limit)
+    }
+
+@router.get("/templates/{template_id}")
+async def get_template(template_id: str, user: dict = Depends(get_current_user)):
+    template = await db.planner_templates.find_one({"_id": ObjectId(template_id)})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    if template["visibility"] == "private" and str(template["created_by"]) != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Template is private")
+    
+    if template["visibility"] == "org":
+        if str(template["created_by"]) != str(user["_id"]) and template.get("org_id") != user.get("org_id"):
+            raise HTTPException(status_code=403, detail="Template is organization-only")
+    
+    template["_id"] = str(template["_id"])
+    template["created_by"] = str(template["created_by"])
+    
+    creator = await db.users.find_one({"_id": ObjectId(template["created_by"])})
+    template["creator_name"] = creator.get("name") if creator else "Unknown"
+    
+    return {"template": template}
+
+@router.post("/trips/from-template")
+async def create_trip_from_template(
+    request: CreateTripFromTemplateRequest,
+    user: dict = Depends(get_current_user)
+):
+    template = await db.planner_templates.find_one({"_id": ObjectId(request.template_id)})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    if template["visibility"] == "private" and str(template["created_by"]) != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Template is private")
+    
+    if template["visibility"] == "org":
+        if str(template["created_by"]) != str(user["_id"]) and template.get("org_id") != user.get("org_id"):
+            raise HTTPException(status_code=403, detail="Template is organization-only")
+    
+    start_date = datetime.fromisoformat(request.start_date)
+    
+    itinerary = []
+    for church_item in template["trip_structure"]["churches"]:
+        itinerary.append({
+            "church_id": church_item["church_id"],
+            "church_name": church_item["church_name"],
+            "day_number": church_item["day_number"],
+            "time_slot": church_item["time_slot"],
+            "visit_type": church_item["visit_type"],
+            "notes": church_item.get("notes"),
+            "status": "pending"
+        })
+    
+    trip = {
+        "created_by": user["_id"],
+        "template_id": request.template_id,
+        "missionary_name": request.missionary_name,
+        "missionary_denomination": request.missionary_denomination,
+        "ministry_focus": request.missionary_focus,
+        "languages": request.missionary_languages,
+        "start_date": start_date,
+        "total_days": template["trip_structure"]["total_days"],
+        "itinerary": itinerary,
+        "collaborators": [],
+        "status": "draft",
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    result = await db.ministry_trips.insert_one(trip)
+    
+    await db.planner_templates.update_one(
+        {"_id": ObjectId(request.template_id)},
+        {
+            "$inc": {"use_count": 1},
+            "$set": {"last_used": datetime.utcnow()}
+        }
+    )
+    
+    return {"success": True, "trip_id": str(result.inserted_id)}
+
+@router.put("/templates/{template_id}")
+async def update_template(
+    template_id: str,
+    request: SaveTemplateRequest,
+    user: dict = Depends(get_current_user)
+):
+    template = await db.planner_templates.find_one({"_id": ObjectId(template_id)})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    if str(template["created_by"]) != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Only template creator can update")
+    
+    await db.planner_templates.update_one(
+        {"_id": ObjectId(template_id)},
+        {
+            "$set": {
+                "name": request.name,
+                "description": request.description,
+                "tags": request.tags,
+                "visibility": request.visibility,
+                "updated_at": datetime.utcnow()
+            }
+        }
     )
     
     return {"success": True}
 
-@router.post("/trips/{trip_id}/full-analysis")
-async def full_analysis(trip_id: str, user=Depends(get_current_user)):
-    trip = await db.ministry_trips.find_one({"_id": ObjectId(trip_id)})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
+@router.delete("/templates/{template_id}")
+async def delete_template(template_id: str, user: dict = Depends(get_current_user)):
+    template = await db.planner_templates.find_one({"_id": ObjectId(template_id)})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
     
-    visits = trip.get("visits", [])
-    details = trip.get("trip_details", {})
+    if str(template["created_by"]) != str(user["_id"]):
+        raise HTTPException(status_code=403, detail="Only template creator can delete")
     
-    cost_analysis = calculate_cost_analysis(visits, details)
-    time_analysis = calculate_time_analysis(visits, details)
-    impact_analysis = calculate_impact_analysis(visits)
-    risk_analysis = calculate_risk_analysis(visits, cost_analysis)
+    await db.planner_templates.delete_one({"_id": ObjectId(template_id)})
     
-    recommendations = await generate_recommendations(trip_id, visits, cost_analysis, time_analysis, impact_analysis, risk_analysis)
-    
-    overall_score = int(
-        (cost_analysis["cost_efficiency"] * 0.25) +
-        (time_analysis["efficiency_score"] * 0.20) +
-        (impact_analysis["impact_score"] * 0.30) +
-        ((100 - risk_analysis["risk_score"]) * 0.15) +
-        (90 * 0.10)
-    )
-    
-    analysis = {
-        "cost_analysis": cost_analysis,
-        "time_analysis": time_analysis,
-        "impact_analysis": impact_analysis,
-        "risk_analysis": risk_analysis,
-        "recommendations": recommendations,
-        "overall_score": overall_score,
-        "generated_at": datetime.utcnow()
-    }
-    
-    await db.ministry_trips.update_one(
-        {"_id": ObjectId(trip_id)},
-        {"$set": {"analysis": analysis, "updated_at": datetime.utcnow()}}
-    )
-    
-    return analysis
-
-def calculate_cost_analysis(visits: List[Dict], details: Dict) -> Dict:
-    total_travel = 0
-    cities = []
-    for v in visits:
-        city = v.get("church_name", "").split(",")[-1].strip() if "," in v.get("church_name", "") else "London"
-        cities.append(city)
-    
-    for i in range(len(cities) - 1):
-        route = (cities[i], cities[i+1])
-        if route in TRAVEL_COSTS:
-            total_travel += TRAVEL_COSTS[route]["train"]
-        else:
-            total_travel += 50
-    
-    nights = details.get("days", 7) - 1
-    accommodation_total = nights * 55
-    host_offers = sum(1 for v in visits if v.get("accommodation_offered"))
-    accommodation_saving = host_offers * 55
-    
-    food_total = details.get("days", 7) * 25
-    meal_offers = sum(1 for v in visits if v.get("meal_offered"))
-    food_saving = meal_offers * 20
-    
-    expected_income = sum(v.get("estimated_honorarium", 100) for v in visits)
-    total_costs = total_travel + accommodation_total + food_total - accommodation_saving - food_saving
-    net = expected_income - total_costs
-    
-    cost_efficiency = min(100, int((net / max(total_costs, 1)) * 100 + 50)) if total_costs > 0 else 85
-    
-    return {
-        "travel": {"total": total_travel, "per_visit": total_travel / max(len(visits), 1)},
-        "accommodation": {"nights": nights, "total": accommodation_total, "saving": accommodation_saving},
-        "food": {"total": food_total, "saving": food_saving},
-        "expected_income": expected_income,
-        "total_costs": total_costs,
-        "net": net,
-        "verdict": "PROFITABLE" if net > 0 else "REQUIRES FUNDING",
-        "cost_efficiency": cost_efficiency
-    }
-
-def calculate_time_analysis(visits: List[Dict], details: Dict) -> Dict:
-    total_ministry_hours = len(visits) * 2
-    total_travel_hours = len(visits) * 1.5
-    total_days = details.get("days", 7)
-    
-    daily_schedule = {}
-    for v in visits:
-        day = v["service_time"].strftime("%Y-%m-%d")
-        if day not in daily_schedule:
-            daily_schedule[day] = []
-        daily_schedule[day].append(v)
-    
-    busiest_day = max(daily_schedule.items(), key=lambda x: len(x[1])) if daily_schedule else ("N/A", [])
-    
-    efficiency_score = min(100, int((total_ministry_hours / max(total_travel_hours, 1)) * 40))
-    
-    return {
-        "total_ministry_hours": total_ministry_hours,
-        "total_travel_hours": total_travel_hours,
-        "ratio": round(total_ministry_hours / max(total_travel_hours, 1), 2),
-        "busiest_day": f"{busiest_day[0]} ({len(busiest_day[1])} visits)",
-        "efficiency_score": efficiency_score,
-        "daily_schedule": {k: len(v) for k, v in daily_schedule.items()}
-    }
-
-def calculate_impact_analysis(visits: List[Dict]) -> Dict:
-    total_reach = sum(v.get("estimated_attendance", 100) for v in visits)
-    avg_attendance = total_reach / max(len(visits), 1)
-    impact_score = min(100, int((total_reach / 50) + (len(visits) * 5)))
-    
-    sorted_visits = sorted(visits, key=lambda x: x.get("estimated_attendance", 0), reverse=True)
-    highest = sorted_visits[0] if sorted_visits else {"church_name": "N/A", "estimated_attendance": 0}
-    lowest = sorted_visits[-1] if sorted_visits else {"church_name": "N/A", "estimated_attendance": 0}
-    
-    return {
-        "total_reach": total_reach,
-        "average_attendance": int(avg_attendance),
-        "impact_score": impact_score,
-        "highest_impact": f"{highest.get('church_name')} ({highest.get('estimated_attendance')} people)",
-        "lowest_impact": f"{lowest.get('church_name')} ({lowest.get('estimated_attendance')} people)"
-    }
-
-def calculate_risk_analysis(visits: List[Dict], cost_analysis: Dict) -> Dict:
-    risks = []
-    unconfirmed = sum(1 for v in visits if not v.get("confirmed"))
-    if unconfirmed > 0:
-        risks.append({
-            "risk": f"{unconfirmed} visits not yet confirmed",
-            "severity": "medium",
-            "mitigation": "Send reminder emails to churches"
-        })
-    
-    if cost_analysis["accommodation"]["saving"] == 0:
-        risks.append({
-            "risk": "No accommodation arranged",
-            "severity": "high",
-            "mitigation": "Contact churches to request hosting"
-        })
-    
-    if cost_analysis["net"] < 0:
-        risks.append({
-            "risk": f"Trip has net cost of GBP {abs(cost_analysis['net'])}",
-            "severity": "medium",
-            "mitigation": "Seek additional honorarium or reduce travel costs"
-        })
-    
-    risk_score = len(risks) * 15
-    return {
-        "risks": risks,
-        "risk_score": min(100, risk_score),
-        "level": "HIGH" if risk_score > 60 else "MEDIUM" if risk_score > 30 else "LOW"
-    }
-
-async def generate_recommendations(trip_id: str, visits: List[Dict], cost: Dict, time: Dict, impact: Dict, risk: Dict) -> List[str]:
-    prompt = f"""Generate 5 specific actionable recommendations for this ministry trip:
-Visits: {len(visits)}
-Total reach: {impact['total_reach']}
-Net income: GBP {cost['net']}
-Unconfirmed visits: {sum(1 for v in visits if not v.get('confirmed'))}
-Risks: {len(risk['risks'])}
-
-Provide practical, specific suggestions to improve cost, time efficiency, impact or reduce risk."""
-    
-    response = claude_client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=800,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    
-    text = response.content[0].text
-    lines = [line.strip() for line in text.split("\n") if line.strip() and any(c.isalpha() for c in line)]
-    return lines[:5]
-
-@router.get("/trips/{trip_id}/export/pdf")
-async def export_pdf(trip_id: str, user=Depends(get_current_user)):
-    trip = await db.ministry_trips.find_one({"_id": ObjectId(trip_id)})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.75*inch, bottomMargin=0.75*inch)
-    styles = getSampleStyleSheet()
-    story = []
-    
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#7c3aed'), alignment=TA_CENTER)
-    story.append(Paragraph("Ministry Trip Itinerary", title_style))
-    story.append(Spacer(1, 0.3*inch))
-    
-    user_doc = await db.users.find_one({"_id": ObjectId(trip["user_id"])})
-    minister_name = user_doc.get("name", "Minister") if user_doc else "Minister"
-    story.append(Paragraph(f"<b>Minister:</b> {minister_name}", styles['Normal']))
-    
-    start = trip.get("start_date")
-    end = trip.get("end_date")
-    if start:
-        story.append(Paragraph(f"<b>Dates:</b> {start.strftime('%d %B %Y')} - {end.strftime('%d %B %Y') if end else 'TBD'}", styles['Normal']))
-    
-    story.append(Spacer(1, 0.2*inch))
-    story.append(Paragraph("<b>Trip Overview</b>", styles['Heading2']))
-    
-    visits = trip.get("visits", [])
-    total_reach = sum(v.get("estimated_attendance", 0) for v in visits)
-    
-    overview_data = [
-        ["Total Visits", str(len(visits))],
-        ["Total Reach", str(total_reach)],
-        ["Cities", ", ".join(set(v.get("church_name", "").split(",")[-1].strip() for v in visits))[:50]]
-    ]
-    overview_table = Table(overview_data, colWidths=[2*inch, 4*inch])
-    overview_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f3e8ff')),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
-    ]))
-    story.append(overview_table)
-    
-    if trip.get("analysis"):
-        cost = trip["analysis"].get("cost_analysis", {})
-        story.append(Spacer(1, 0.2*inch))
-        story.append(Paragraph("<b>Cost Summary</b>", styles['Heading2']))
-        cost_data = [
-            ["Expected Income", f"GBP {cost.get('expected_income', 0):.2f}"],
-            ["Total Costs", f"GBP {cost.get('total_costs', 0):.2f}"],
-            ["Net Position", f"GBP {cost.get('net', 0):.2f}"]
-        ]
-        cost_table = Table(cost_data, colWidths=[2*inch, 4*inch])
-        cost_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f3e8ff')),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold')
-        ]))
-        story.append(cost_table)
-    
-    story.append(PageBreak())
-    story.append(Paragraph("<b>Visit Schedule</b>", styles['Heading2']))
-    
-    for idx, visit in enumerate(sorted(visits, key=lambda x: x.get("service_time", datetime.utcnow())), 1):
-        story.append(Spacer(1, 0.15*inch))
-        story.append(Paragraph(f"<b>Visit {idx}: {visit.get('church_name', 'Church')}</b>", styles['Heading3']))
-        
-        service_time = visit.get("service_time")
-        if service_time:
-            story.append(Paragraph(f"Date/Time: {service_time.strftime('%A, %d %B %Y at %I:%M %p')}", styles['Normal']))
-        
-        if visit.get("contact_name"):
-            story.append(Paragraph(f"Contact: {visit['contact_name']}", styles['Normal']))
-        if visit.get("contact_phone"):
-            story.append(Paragraph(f"Phone: {visit['contact_phone']}", styles['Normal']))
-        
-        story.append(Paragraph(f"Expected Attendance: {visit.get('estimated_attendance', 'TBD')}", styles['Normal']))
-        
-        if visit.get("notes"):
-            story.append(Paragraph(f"Notes: {visit['notes']}", styles['Normal']))
-    
-    story.append(PageBreak())
-    story.append(Paragraph("<b>Contact Directory</b>", styles['Heading2']))
-    contact_data = [["Church", "Contact", "Phone", "Email"]]
-    for visit in visits:
-        contact_data.append([
-            visit.get("church_name", "")[:30],
-            visit.get("contact_name", "TBD")[:20],
-            visit.get("contact_phone", "TBD")[:15],
-            visit.get("contact_email", "TBD")[:25]
-        ])
-    
-    contact_table = Table(contact_data, colWidths=[1.5*inch, 1.3*inch, 1.2*inch, 2*inch])
-    contact_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#7c3aed')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
-    ]))
-    story.append(contact_table)
-    
-    story.append(Spacer(1, 0.3*inch))
-    story.append(Paragraph("Prepared by ChurchNavigator Planner", styles['Normal']))
-    
-    doc.build(story)
-    buffer.seek(0)
-    
-    await db.ministry_trips.update_one(
-        {"_id": ObjectId(trip_id)},
-        {"$set": {"pdf_generated_at": datetime.utcnow()}}
-    )
-    
-    return StreamingResponse(buffer, media_type="application/pdf", headers={
-        "Content-Disposition": f"attachment; filename=trip_{trip_id}.pdf"
-    })
-
-@router.post("/trips/{trip_id}/share")
-async def share_trip(trip_id: str, email: str = Body(...), role: str = Body(...), message: str = Body(None), user=Depends(get_current_user)):
-    trip = await db.ministry_trips.find_one({"_id": ObjectId(trip_id)})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    
-    invite_token = secrets.token_urlsafe(16)
-    collaborator = {
-        "email": email,
-        "role": role,
-        "invited_at": datetime.utcnow(),
-        "invite_token": invite_token
-    }
-    
-    await db.ministry_trips.update_one(
-        {"_id": ObjectId(trip_id)},
-        {"$push": {"collaborators": collaborator}}
-    )
-    
-    invite_link = f"https://churchnavigator.com/planner/join/{trip_id}/{invite_token}"
-    
-    return {"success": True, "invite_link": invite_link}
-
-@router.get("/trips/{trip_id}/chat")
-async def get_chat(trip_id: str, limit: int = Query(50), user=Depends(get_current_user)):
-    messages = await db.trip_messages.find({"trip_id": trip_id}).sort("sent_at", -1).limit(limit).to_list(limit)
-    messages.reverse()
-    return {"messages": [{**m, "_id": str(m["_id"])} for m in messages]}
-
-@router.post("/trips/{trip_id}/chat")
-async def send_chat_message(trip_id: str, message: str = Body(..., embed=True), user=Depends(get_current_user)):
-    msg = {
-        "trip_id": trip_id,
-        "sender_id": str(user["_id"]),
-        "sender_name": user.get("name", "User"),
-        "sender_role": "owner",
-        "message": message,
-        "sent_at": datetime.utcnow(),
-        "read_by": [str(user["_id"])]
-    }
-    result = await db.trip_messages.insert_one(msg)
-    msg["_id"] = str(result.inserted_id)
-    return msg
-
-@router.get("/trips/{trip_id}")
-async def get_trip(trip_id: str, user=Depends(get_current_user)):
-    trip = await db.ministry_trips.find_one({"_id": ObjectId(trip_id)})
-    if not trip:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    
-    trip["_id"] = str(trip["_id"])
-    return trip
-
-@router.get("/trips")
-async def list_trips(user=Depends(get_current_user)):
-    trips = await db.ministry_trips.find({"user_id": str(user["_id"])}).sort("created_at", -1).to_list(100)
-    for trip in trips:
-        trip["_id"] = str(trip["_id"])
-    return {"trips": trips}
+    return {"success": True}
