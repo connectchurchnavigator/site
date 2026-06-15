@@ -1,1 +1,4 @@
-[MANUAL ACTION REQUIRED]
+[MANUAL ACTION REQUIRED - IMAGE FILE]
+Create or copy the ChurchNavigator logo as a 512x512px PNG image.
+Save to frontend/public/logo512.png
+Ensure it has transparent background and includes the ChurchNavigator branding (cross/church icon with lavender accent).
