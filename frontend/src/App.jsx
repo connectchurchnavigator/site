@@ -1,22 +1,38 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import AuthCallbackPage from './pages/AuthCallbackPage';
+import { AuthProvider } from './contexts/AuthContext';
+import Navigation from './components/Navigation';
+import Home from './pages/Home';
+import ChurchList from './pages/ChurchList';
+import ChurchDetail from './pages/ChurchDetail';
+import Dashboard from './pages/Dashboard';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import PatternIntelligence from './pages/PatternIntelligence';
+import VisitorJourney from './pages/VisitorJourney';
+import Benchmarking from './pages/Benchmarking';
+import PrivateRoute from './components/PrivateRoute';
 
 function App() {
   return (
-    <Router>
-      <Toaster position="top-right" />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/auth/callback" element={<AuthCallbackPage />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <div className="min-h-screen bg-gray-50">
+          <Navigation />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/churches" element={<ChurchList />} />
+            <Route path="/church/:slug" element={<ChurchDetail />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            <Route path="/tools/pattern-intelligence" element={<PrivateRoute><PatternIntelligence /></PrivateRoute>} />
+            <Route path="/tools/visitor-journey" element={<PrivateRoute><VisitorJourney /></PrivateRoute>} />
+            <Route path="/tools/benchmarking" element={<PrivateRoute><Benchmarking /></PrivateRoute>} />
+          </Routes>
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
 
