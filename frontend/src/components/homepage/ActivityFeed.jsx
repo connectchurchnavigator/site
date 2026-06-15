@@ -1,67 +1,43 @@
-import React, { useEffect, useState } from 'react';
-import { Church, Calendar, Users, Star, QrCode, Trophy, Map, UserPlus } from 'lucide-react';
-import api from '../../services/api';
-import { formatDistanceToNow } from 'date-fns';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import './ActivityFeed.css';
+
+const API_BASE = process.env.REACT_APP_API_BASE || 'https://api.churchnavigator.com';
+
+const iconMap = {
+  church: '⛪',
+  calendar: '📅',
+  users: '👥',
+  star: '⭐',
+  qrcode: '📱',
+  trophy: '🏆',
+  map: '🗺️',
+  person: '👤'
+};
 
 const ActivityFeed = () => {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadActivities();
-    const interval = setInterval(loadActivities, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadActivities = async () => {
+  const fetchActivities = async () => {
     try {
-      const response = await api.get('/homepage/activity?limit=20');
+      const response = await axios.get(`${API_BASE}/homepage/activity?limit=20`);
       setActivities(response.data);
       setLoading(false);
     } catch (error) {
-      console.error('Error loading activity feed:', error);
+      console.error('Error fetching activities:', error);
       setLoading(false);
     }
   };
 
-  const getIcon = (iconName) => {
-    const icons = {
-      church: Church,
-      calendar: Calendar,
-      users: Users,
-      star: Star,
-      qrcode: QrCode,
-      trophy: Trophy,
-      map: Map,
-      person: UserPlus
-    };
-    return icons[iconName] || Church;
-  };
-
-  const getColorClasses = (color) => {
-    const colors = {
-      lavender: 'bg-purple-100 text-purple-600',
-      cyan: 'bg-cyan-100 text-cyan-600',
-      green: 'bg-green-100 text-green-600',
-      amber: 'bg-amber-100 text-amber-600',
-      teal: 'bg-teal-100 text-teal-600',
-      gold: 'bg-yellow-100 text-yellow-600',
-      purple: 'bg-purple-100 text-purple-600',
-      blue: 'bg-blue-100 text-blue-600'
-    };
-    return colors[color] || 'bg-gray-100 text-gray-600';
-  };
+  useEffect(() => {
+    fetchActivities();
+    const interval = setInterval(fetchActivities, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   if (loading) {
-    return (
-      <section className="py-16 bg-gray-50">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-          </div>
-        </div>
-      </section>
-    );
+    return <div className="activity-loading">Loading activity...</div>;
   }
 
   if (activities.length === 0) {
@@ -69,31 +45,28 @@ const ActivityFeed = () => {
   }
 
   return (
-    <section className="py-16 bg-white">
-      <div className="container mx-auto px-4">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">Live Platform Activity</h2>
-        <div className="max-w-3xl mx-auto">
-          <div className="space-y-4">
-            {activities.map((activity, index) => {
-              const Icon = getIcon(activity.icon);
-              const colorClasses = getColorClasses(activity.color);
-              
-              return (
-                <div key={activity._id || index} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition animate-fade-in">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${colorClasses}`}>
-                    <Icon size={20} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 mb-1">{activity.title}</h3>
-                    <p className="text-gray-600 text-sm mb-1">{activity.subtitle}</p>
-                    <p className="text-xs text-gray-400">
-                      {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
-                    </p>
-                  </div>
+    <section className="activity-feed-section">
+      <div className="activity-container">
+        <h2 className="activity-title">Live Platform Activity</h2>
+        <div className="activity-feed">
+          {activities.map((activity, index) => (
+            <div key={activity._id} className="activity-item" style={{ animationDelay: `${index * 0.05}s` }}>
+              <div className="activity-icon" style={{ backgroundColor: activity.color }}>
+                {iconMap[activity.icon] || '📌'}
+              </div>
+              <div className="activity-content">
+                <div className="activity-header">
+                  {activity.link ? (
+                    <a href={activity.link} className="activity-title-link">{activity.title}</a>
+                  ) : (
+                    <div className="activity-title-text">{activity.title}</div>
+                  )}
+                  <span className="activity-time">{activity.time_ago}</span>
                 </div>
-              );
-            })}
-          </div>
+                <div className="activity-subtitle">{activity.subtitle}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </section>
