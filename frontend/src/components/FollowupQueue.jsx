@@ -1,124 +1,122 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
 
 const FollowupQueue = ({ churchId }) => {
-  const { user } = useAuth();
   const [followups, setFollowups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
-  const [editMessage, setEditMessage] = useState('');
-
-  useEffect(() => {
-    fetchFollowups();
-  }, [churchId]);
+  const [editedMessage, setEditedMessage] = useState('');
 
   const fetchFollowups = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/followups/church/${churchId}?status=pending`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
+      const token = localStorage.getItem('auth_token');
+      const response = await axios.get(
+        `${API_BASE}/api/visitors/${churchId}/followup-queue`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      const data = await response.json();
-      setFollowups(data);
-    } catch (error) {
-      console.error('Failed to fetch followups:', error);
+      setFollowups(response.data.followups);
+    } catch (err) {
+      console.error('Error fetching followups:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const sendFollowup = async (id) => {
+  useEffect(() => {
+    if (churchId) fetchFollowups();
+  }, [churchId]);
+
+  const handleSend = async (followupId) => {
     try {
-      const token = localStorage.getItem('token');
-      await fetch(
-        `${process.env.REACT_APP_API_URL}/api/followups/${id}/send`,
-        {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
+      const token = localStorage.getItem('auth_token');
+      await axios.post(
+        `${API_BASE}/api/visitors/followup/${followupId}/send`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
       );
+      alert('Follow-up sent successfully!');
       fetchFollowups();
-    } catch (error) {
-      alert('Failed to send followup');
+    } catch (err) {
+      alert('Failed to send follow-up');
+      console.error(err);
     }
   };
 
-  const updateFollowup = async (id) => {
+  const handleEdit = (followup) => {
+    setEditingId(followup._id);
+    setEditedMessage(followup.message);
+  };
+
+  const handleSaveEdit = async (followupId) => {
     try {
-      const token = localStorage.getItem('token');
-      await fetch(
-        `${process.env.REACT_APP_API_URL}/api/followups/${id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ message: editMessage })
-        }
+      const token = localStorage.getItem('auth_token');
+      await axios.put(
+        `${API_BASE}/api/visitors/followup/${followupId}`,
+        { message: editedMessage },
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       setEditingId(null);
       fetchFollowups();
-    } catch (error) {
-      alert('Failed to update followup');
+    } catch (err) {
+      alert('Failed to update message');
+      console.error(err);
     }
   };
 
-  const dismissFollowup = async (id) => {
-    if (!confirm('Dismiss this follow-up?')) return;
+  const handleDismiss = async (followupId) => {
+    if (!window.confirm('Dismiss this follow-up?')) return;
     try {
-      const token = localStorage.getItem('token');
-      await fetch(
-        `${process.env.REACT_APP_API_URL}/api/followups/${id}`,
-        {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
+      const token = localStorage.getItem('auth_token');
+      await axios.delete(
+        `${API_BASE}/api/visitors/followup/${followupId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       fetchFollowups();
-    } catch (error) {
-      alert('Failed to dismiss followup');
+    } catch (err) {
+      alert('Failed to dismiss');
+      console.error(err);
     }
   };
 
-  if (loading) return <div>Loading follow-ups...</div>;
-  if (followups.length === 0) return <div className="text-gray-500">No pending follow-ups</div>;
+  if (loading) return <div className="text-center py-8">Loading...</div>;
+  if (followups.length === 0) return <div className="text-gray-500 py-8">No pending follow-ups</div>;
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xl font-bold">Follow-up Needed</h3>
+      <h2 className="text-xl font-bold text-gray-800 mb-4">Follow-up Needed</h2>
       {followups.map((followup) => (
-        <div key={followup.id} className="border rounded-lg p-4">
+        <div key={followup._id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
           <div className="flex justify-between items-start mb-2">
             <div>
-              <p className="font-semibold">{followup.visitor_name}</p>
-              <p className="text-sm text-gray-500">{followup.visitor_email}</p>
+              <h3 className="font-semibold text-gray-800">{followup.visitor_name}</h3>
+              <p className="text-sm text-gray-500">
+                {new Date(followup.generated_at).toLocaleDateString('en-GB')}
+              </p>
             </div>
-            <span className="text-xs text-gray-400">
-              {new Date(followup.generated_at).toLocaleDateString()}
+            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+              AI Generated
             </span>
           </div>
-          {editingId === followup.id ? (
+          {editingId === followup._id ? (
             <div>
               <textarea
-                className="w-full border rounded p-2 mb-2"
-                rows="3"
-                value={editMessage}
-                onChange={(e) => setEditMessage(e.target.value)}
+                value={editedMessage}
+                onChange={(e) => setEditedMessage(e.target.value)}
+                className="w-full border border-gray-300 rounded p-2 mb-2"
+                rows="4"
               />
               <div className="flex gap-2">
                 <button
-                  onClick={() => updateFollowup(followup.id)}
-                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+                  onClick={() => handleSaveEdit(followup._id)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setEditingId(null)}
-                  className="px-3 py-1 bg-gray-300 rounded text-sm"
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400"
                 >
                   Cancel
                 </button>
@@ -129,23 +127,20 @@ const FollowupQueue = ({ churchId }) => {
               <p className="text-gray-700 mb-3">{followup.message}</p>
               <div className="flex gap-2">
                 <button
-                  onClick={() => sendFollowup(followup.id)}
-                  className="px-3 py-1 bg-green-600 text-white rounded text-sm"
+                  onClick={() => handleSend(followup._id)}
+                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm"
                 >
-                  Send Email
+                  Send Now
                 </button>
                 <button
-                  onClick={() => {
-                    setEditingId(followup.id);
-                    setEditMessage(followup.message);
-                  }}
-                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+                  onClick={() => handleEdit(followup)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
                 >
                   Edit
                 </button>
                 <button
-                  onClick={() => dismissFollowup(followup.id)}
-                  className="px-3 py-1 bg-gray-300 rounded text-sm"
+                  onClick={() => handleDismiss(followup._id)}
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 text-sm"
                 >
                   Dismiss
                 </button>
