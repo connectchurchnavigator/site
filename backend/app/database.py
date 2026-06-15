@@ -5,33 +5,31 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-MONGO_URL = os.getenv("MONGODB_URL", "mongodb+srv://cluster.mongodb.net")
-DB_NAME = os.getenv("MONGODB_DB", "DEV-ChurchNavigator")
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "DEV-ChurchNavigator")
 
 client = None
-database = None
+db = None
 
 async def connect_to_mongo():
-    global client, database
+    global client, db
     try:
-        client = AsyncIOMotorClient(MONGO_URL)
-        database = client[DB_NAME]
-        await database.command("ping")
-        logger.info(f"Connected to MongoDB: {DB_NAME}")
+        client = AsyncIOMotorClient(MONGODB_URL)
+        db = client[MONGODB_DB_NAME]
         
-        await database.homepage_activity.create_index("created_at", expireAfterSeconds=2592000)
-        await database.cache.create_index("expires_at", expireAfterSeconds=0)
+        await db.homepage_activity.create_index("created_at", expireAfterSeconds=2592000)
+        await db.cache.create_index("expires_at", expireAfterSeconds=0)
         
-        logger.info("Created TTL indexes for homepage_activity and cache")
+        logger.info(f"Connected to MongoDB: {MONGODB_DB_NAME}")
     except Exception as e:
-        logger.error(f"Error connecting to MongoDB: {e}")
+        logger.error(f"Failed to connect to MongoDB: {e}")
         raise
 
 async def close_mongo_connection():
     global client
     if client:
         client.close()
-        logger.info("Closed MongoDB connection")
+        logger.info("MongoDB connection closed")
 
 async def get_database():
-    return database
+    return db
