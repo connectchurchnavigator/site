@@ -1,30 +1,32 @@
 import React, { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
-function AuthCallbackPage() {
+const AuthCallbackPage = () => {
   const navigate = useNavigate();
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const token = params.get('token');
+    const token = searchParams.get('token');
+    const email = searchParams.get('email');
+    const name = searchParams.get('name');
 
     if (token) {
-      localStorage.setItem('authToken', token);
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify({ email, name }));
       navigate('/');
     } else {
       navigate('/login?error=auth_failed');
     }
-  }, [location, navigate]);
+  }, [searchParams, navigate]);
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      <div style={{ textAlign: 'center' }}>
-        <h2>Authenticating...</h2>
-        <p>Please wait while we sign you in.</p>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Completing sign in...</p>
       </div>
     </div>
   );
-}
+};
 
 export default AuthCallbackPage;
