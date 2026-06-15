@@ -1,139 +1,177 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from bson import ObjectId
-from models.small_group import SmallGroup, SmallGroupCreate, SmallGroupUpdate, JoinRequest
-from database import get_database
-from services.email_service import send_email
-import logging
+from backend.models.small_group import (
+    SmallGroupCreate, SmallGroupUpdate, SmallGroupResponse, 
+    JoinRequest, SmallGroupInDB, JoinRequestInDB
+)
+from backend.database import get_database
+from backend.services.email_service import send_email
+from backend.auth import get_current_user
 
-router = APIRouter()
-logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api", tags=["small_groups"])
 
-@router.get("/churches/{slug}/small-groups", response_model=List[SmallGroup])
-async def get_church_small_groups(slug: str):
-    db = get_database()
+@router.get("/churches/{slug}/small-groups", response_model=List[SmallGroupResponse])
+async def get_church_small_groups(slug: str, is_open: Optional[bool] = None):
+    db = await get_database()
     church = await db.churches.find_one({"slug": slug})
     if not church:
         raise HTTPException(status_code=404, detail="Church not found")
     
-    church_id = str(church["_id"])
-    groups = await db.small_groups.find({"church_id": church_id}).to_list(100)
-    return groups
+    query = {"church_id": str(church["_id"])}
+    if is_open is not None:
+        query["is_open_to_join"] = is_open
+    
+    groups = await db.small_groups.find(query).sort("name", 1).to_list(100)
+    response = []
+    for group in groups:
+        group_dict = SmallGroupInDB(**group).dict(by_alias=True)
+        group_dict["id"] = str(group["_id"])
+        group_dict["church_name"] = church.get("name")
+        response.append(SmallGroupResponse(**group_dict))
+    return response
 
-@router.post("/churches/{slug}/small-groups", response_model=SmallGroup, status_code=status.HTTP_201_CREATED)
-async def create_small_group(slug: str, group: SmallGroupCreate):
-    db = get_database()
+@router.post("/churches/{slug}/small-groups", response_model=SmallGroupResponse, status_code=status.HTTP_201_CREATED)
+async def create_small_group(slug: str, group: SmallGroupCreate, current_user: dict = Depends(get_current_user)):
+    db = await get_database()
     church = await db.churches.find_one({"slug": slug})
     if not church:
         raise HTTPException(status_code=404, detail="Church not found")
+    
+    if str(church.get("owner_id")) != str(current_user.get("id")):
+        raise HTTPException(status_code=403, detail="Not authorized to manage this church")
     
     group_dict = group.dict()
     group_dict["church_id"] = str(church["_id"])
     group_dict["created_at"] = datetime.utcnow()
+    group_dict["_id"] = ObjectId()
     
-    result = await db.small_groups.insert_one(group_dict)
-    created_group = await db.small_groups.find_one({"_id": result.inserted_id})
-    return created_group
+    await db.small_groups.insert_one(group_dict)
+    group_dict["id"] = str(group_dict.pop("_id"))
+    group_dict["church_name"] = church.get("name")
+    return SmallGroupResponse(**group_dict)
 
-@router.get("/small-groups/{group_id}", response_model=SmallGroup)
+@router.get("/small-groups/{group_id}", response_model=SmallGroupResponse)
 async def get_small_group(group_id: str):
-    db = get_database()
+    db = await get_database()
     if not ObjectId.is_valid(group_id):
         raise HTTPException(status_code=400, detail="Invalid group ID")
     
     group = await db.small_groups.find_one({"_id": ObjectId(group_id)})
     if not group:
-        raise HTTPException(status_code=404, detail="Small group not found")
-    return group
-
-@router.put("/small-groups/{group_id}", response_model=SmallGroup)
-async def update_small_group(group_id: str, group_update: SmallGroupUpdate):
-    db = get_database()
-    if not ObjectId.is_valid(group_id):
-        raise HTTPException(status_code=400, detail="Invalid group ID")
-    
-    update_data = {k: v for k, v in group_update.dict(exclude_unset=True).items()}
-    if not update_data:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    
-    result = await db.small_groups.update_one(
-        {"_id": ObjectId(group_id)},
-        {"$set": update_data}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Small group not found")
-    
-    updated_group = await db.small_groups.find_one({"_id": ObjectId(group_id)})
-    return updated_group
-
-@router.delete("/small-groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_small_group(group_id: str):
-    db = get_database()
-    if not ObjectId.is_valid(group_id):
-        raise HTTPException(status_code=400, detail="Invalid group ID")
-    
-    result = await db.small_groups.delete_one({"_id": ObjectId(group_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Small group not found")
-    return None
-
-@router.post("/small-groups/{group_id}/join", status_code=status.HTTP_200_OK)
-async def join_small_group(group_id: str, join_request: JoinRequest):
-    db = get_database()
-    if not ObjectId.is_valid(group_id):
-        raise HTTPException(status_code=400, detail="Invalid group ID")
-    
-    group = await db.small_groups.find_one({"_id": ObjectId(group_id)})
-    if not group:
-        raise HTTPException(status_code=404, detail="Small group not found")
-    
-    if not group.get("is_open_to_join", True):
-        raise HTTPException(status_code=400, detail="This group is not currently accepting new members")
+        raise HTTPException(status_code=404, detail="Group not found")
     
     church = await db.churches.find_one({"_id": ObjectId(group["church_id"])})
-    church_name = church.get("name", "Unknown Church") if church else "Unknown Church"
+    group["id"] = str(group.pop("_id"))
+    group["church_name"] = church.get("name") if church else None
+    return SmallGroupResponse(**group)
+
+@router.put("/small-groups/{group_id}", response_model=SmallGroupResponse)
+async def update_small_group(group_id: str, group_update: SmallGroupUpdate, current_user: dict = Depends(get_current_user)):
+    db = await get_database()
+    if not ObjectId.is_valid(group_id):
+        raise HTTPException(status_code=400, detail="Invalid group ID")
+    
+    group = await db.small_groups.find_one({"_id": ObjectId(group_id)})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    church = await db.churches.find_one({"_id": ObjectId(group["church_id"])})
+    if not church or str(church.get("owner_id")) != str(current_user.get("id")):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    update_data = {k: v for k, v in group_update.dict(exclude_unset=True).items() if v is not None}
+    if update_data:
+        await db.small_groups.update_one({"_id": ObjectId(group_id)}, {"$set": update_data})
+    
+    updated_group = await db.small_groups.find_one({"_id": ObjectId(group_id)})
+    updated_group["id"] = str(updated_group.pop("_id"))
+    updated_group["church_name"] = church.get("name")
+    return SmallGroupResponse(**updated_group)
+
+@router.delete("/small-groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_small_group(group_id: str, current_user: dict = Depends(get_current_user)):
+    db = await get_database()
+    if not ObjectId.is_valid(group_id):
+        raise HTTPException(status_code=400, detail="Invalid group ID")
+    
+    group = await db.small_groups.find_one({"_id": ObjectId(group_id)})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    church = await db.churches.find_one({"_id": ObjectId(group["church_id"])})
+    if not church or str(church.get("owner_id")) != str(current_user.get("id")):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.small_groups.delete_one({"_id": ObjectId(group_id)})
+    await db.join_requests.delete_many({"group_id": group_id})
+    return None
+
+@router.post("/small-groups/{group_id}/join", status_code=status.HTTP_201_CREATED)
+async def join_small_group(group_id: str, request: JoinRequest):
+    db = await get_database()
+    if not ObjectId.is_valid(group_id):
+        raise HTTPException(status_code=400, detail="Invalid group ID")
+    
+    group = await db.small_groups.find_one({"_id": ObjectId(group_id)})
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    if not group.get("is_open_to_join"):
+        raise HTTPException(status_code=400, detail="Group is not accepting new members")
+    
+    church = await db.churches.find_one({"_id": ObjectId(group["church_id"])})
+    
+    join_request_dict = request.dict()
+    join_request_dict["group_id"] = group_id
+    join_request_dict["church_id"] = str(group["church_id"])
+    join_request_dict["created_at"] = datetime.utcnow()
+    join_request_dict["status"] = "pending"
+    join_request_dict["_id"] = ObjectId()
+    
+    await db.join_requests.insert_one(join_request_dict)
+    
+    email_subject = f"New Small Group Join Request - {group['name']}"
+    email_body = f"""Hello {group['leader_name']},
+
+A new person has expressed interest in joining your small group '{group['name']}'.
+
+Name: {request.name}
+Email: {request.email}
+Message: {request.message or 'No message provided'}
+
+Please reach out to them directly to coordinate next steps.
+
+Church: {church.get('name', 'Unknown')}
+
+Best regards,
+ChurchNavigator Team"""
     
     try:
-        email_subject = f"New Join Request for {group['name']}"
-        email_body = f"""
-<html>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-    <h2 style="color: #7c3aed;">New Small Group Join Request</h2>
-    <p>Someone has expressed interest in joining your small group:</p>
-    
-    <div style="background-color: #f9fafb; padding: 15px; border-radius: 5px; margin: 20px 0;">
-        <h3 style="margin-top: 0; color: #7c3aed;">{group['name']}</h3>
-        <p><strong>Requester Name:</strong> {join_request.name}</p>
-        <p><strong>Email:</strong> {join_request.email}</p>
-        {f'<p><strong>Message:</strong><br>{join_request.message}</p>' if join_request.message else ''}
-    </div>
-    
-    <p>Please reach out to them directly at <a href="mailto:{join_request.email}">{join_request.email}</a></p>
-    
-    <p style="color: #666; font-size: 0.9em; margin-top: 30px;">
-        This request was sent via ChurchNavigator.com for {church_name}
-    </p>
-</body>
-</html>
-        """
-        
-        await send_email(
-            to_email=group["leader_contact"],
-            subject=email_subject,
-            body=email_body
-        )
-        
-        await db.small_group_join_requests.insert_one({
-            "group_id": group_id,
-            "name": join_request.name,
-            "email": join_request.email,
-            "message": join_request.message,
-            "created_at": datetime.utcnow()
-        })
-        
-        return {"message": "Join request sent successfully"}
+        await send_email(group["leader_contact"], email_subject, email_body)
     except Exception as e:
-        logger.error(f"Error sending join request email: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send join request")
+        pass
+    
+    return {"message": "Join request submitted successfully", "id": str(join_request_dict["_id"])}
+
+@router.get("/churches/{slug}/join-requests", response_model=List[dict])
+async def get_church_join_requests(slug: str, current_user: dict = Depends(get_current_user)):
+    db = await get_database()
+    church = await db.churches.find_one({"slug": slug})
+    if not church:
+        raise HTTPException(status_code=404, detail="Church not found")
+    
+    if str(church.get("owner_id")) != str(current_user.get("id")):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    requests = await db.join_requests.find({"church_id": str(church["_id"])}).sort("created_at", -1).to_list(500)
+    
+    result = []
+    for req in requests:
+        group = await db.small_groups.find_one({"_id": ObjectId(req["group_id"])})
+        req["id"] = str(req.pop("_id"))
+        req["group_name"] = group.get("name") if group else "Unknown Group"
+        result.append(req)
+    
+    return result
