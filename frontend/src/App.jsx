@@ -1,38 +1,50 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import Navigation from './components/Navigation';
-import Home from './pages/Home';
-import ChurchList from './pages/ChurchList';
-import ChurchDetail from './pages/ChurchDetail';
-import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import PatternIntelligence from './pages/PatternIntelligence';
-import VisitorJourney from './pages/VisitorJourney';
-import Benchmarking from './pages/Benchmarking';
-import PrivateRoute from './components/PrivateRoute';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+
+import HomePage from './pages/HomePage';
+import SearchPage from './pages/SearchPage';
+import ChurchDetailPage from './pages/ChurchDetailPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import DashboardPage from './pages/DashboardPage';
+import ToolsPage from './pages/tools/ToolsPage';
+import QRCheckInPage from './pages/tools/QRCheckInPage';
+import SocialHealthPage from './pages/tools/SocialHealthPage';
+
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#7c3aed',
+    },
+    secondary: {
+      main: '#ec4899',
+    },
+  },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+  },
+});
 
 function App() {
   return (
-    <AuthProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
       <Router>
-        <div className="min-h-screen bg-gray-50">
-          <Navigation />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/churches" element={<ChurchList />} />
-            <Route path="/church/:slug" element={<ChurchDetail />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-            <Route path="/tools/pattern-intelligence" element={<PrivateRoute><PatternIntelligence /></PrivateRoute>} />
-            <Route path="/tools/visitor-journey" element={<PrivateRoute><VisitorJourney /></PrivateRoute>} />
-            <Route path="/tools/benchmarking" element={<PrivateRoute><Benchmarking /></PrivateRoute>} />
-          </Routes>
-        </div>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/church/:slug" element={<ChurchDetailPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/dashboard/tools" element={<ToolsPage />} />
+          <Route path="/dashboard/tools/qr-checkin" element={<QRCheckInPage />} />
+          <Route path="/dashboard/tools/social-health" element={<SocialHealthPage />} />
+        </Routes>
       </Router>
-    </AuthProvider>
+    </ThemeProvider>
   );
 }
 
