@@ -17,7 +17,7 @@ export function register(config) {
       if (isLocalhost) {
         checkValidServiceWorker(swUrl, config);
         navigator.serviceWorker.ready.then(() => {
-          console.log('Service worker is ready for local development.');
+          console.log('This web app is being served cache-first by a service worker.');
         });
       } else {
         registerValidSW(swUrl, config);
@@ -38,12 +38,12 @@ function registerValidSW(swUrl, config) {
         installingWorker.onstatechange = () => {
           if (installingWorker.state === 'installed') {
             if (navigator.serviceWorker.controller) {
-              console.log('New content available; please refresh.');
+              console.log('New content is available; please refresh.');
               if (config && config.onUpdate) {
                 config.onUpdate(registration);
               }
             } else {
-              console.log('Content cached for offline use.');
+              console.log('Content is cached for offline use.');
               if (config && config.onSuccess) {
                 config.onSuccess(registration);
               }
@@ -53,15 +53,20 @@ function registerValidSW(swUrl, config) {
       };
     })
     .catch((error) => {
-      console.error('Service worker registration failed:', error);
+      console.error('Error during service worker registration:', error);
     });
 }
 
 function checkValidServiceWorker(swUrl, config) {
-  fetch(swUrl, { headers: { 'Service-Worker': 'script' } })
+  fetch(swUrl, {
+    headers: { 'Service-Worker': 'script' },
+  })
     .then((response) => {
       const contentType = response.headers.get('content-type');
-      if (response.status === 404 || (contentType != null && contentType.indexOf('javascript') === -1)) {
+      if (
+        response.status === 404 ||
+        (contentType != null && contentType.indexOf('javascript') === -1)
+      ) {
         navigator.serviceWorker.ready.then((registration) => {
           registration.unregister().then(() => {
             window.location.reload();
@@ -72,7 +77,7 @@ function checkValidServiceWorker(swUrl, config) {
       }
     })
     .catch(() => {
-      console.log('No internet connection. App is running in offline mode.');
+      console.log('No internet connection found. App is running in offline mode.');
     });
 }
 
