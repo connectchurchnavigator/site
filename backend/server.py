@@ -1,53 +1,44 @@
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
 import os
-from dotenv import load_dotenv
+import asyncio
+import logging
 
-from database import connect_to_mongo, close_mongo_connection
-from routers import churches, worship_leaders, media_teams, events, small_groups
+from app.routers import churches, social
+from app.database import connect_to_mongo, close_mongo_connection
+from app.background_jobs import run_background_jobs
 
-load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await connect_to_mongo()
-    yield
-    await close_mongo_connection()
-
-app = FastAPI(title="ChurchNavigator API", version="1.0.0", lifespan=lifespan)
-
-origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://churchnavigator.com",
-    "https://www.churchnavigator.com",
-    "https://dev.churchnavigator.com",
-]
+app = FastAPI(title="Church Navigator API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["https://churchnavigator.com", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(churches.router)
-app.include_router(worship_leaders.router)
-app.include_router(media_teams.router)
-app.include_router(events.router)
-app.include_router(small_groups.router)
+app.include_router(social.router)
+
+@app.on_event("startup")
+async def startup_event():
+    await connect_to_mongo()
+    if os.getenv("ENABLE_BACKGROUND_JOBS", "true").lower() == "true":
+        asyncio.create_task(run_background_jobs())
+        logger.info("Background jobs started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await close_mongo_connection()
 
 @app.get("/")
 async def root():
-    return {"message": "ChurchNavigator API", "version": "1.0.0", "status": "running"}
+    return {"message": "Church Navigator API", "version": "1.0.0"}
 
 @app.get("/health")
-async def health_check():
+async def health():
     return {"status": "healthy"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
