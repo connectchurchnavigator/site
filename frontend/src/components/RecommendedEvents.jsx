@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
+import { Calendar, MapPin, ChevronRight } from 'lucide-react';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
-
-const RecommendedEvents = ({ userId, limit = 5 }) => {
-  const [recommendations, setRecommendations] = useState([]);
+const RecommendedEvents = ({ userId, title = 'Recommended for You' }) => {
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!userId) {
@@ -17,53 +15,70 @@ const RecommendedEvents = ({ userId, limit = 5 }) => {
 
     const fetchRecommendations = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
-        const response = await axios.get(`${API_BASE}/api/recommendations/events`, {
-          params: { limit },
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setRecommendations(response.data);
-      } catch (err) {
-        setError('Failed to load recommendations');
-        console.error(err);
+        const response = await axios.get(
+          `${process.env.REACT_APP_API_URL}/api/automation/recommendations/events/${userId}`
+        );
+        setEvents(response.data.recommendations || []);
+      } catch (error) {
+        console.error('Error fetching recommendations:', error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchRecommendations();
-  }, [userId, limit]);
+  }, [userId]);
 
-  if (!userId || loading) return null;
-  if (error) return null;
-  if (recommendations.length === 0) return null;
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-6 bg-gray-200 rounded w-1/3"></div>
+          <div className="h-24 bg-gray-200 rounded"></div>
+          <div className="h-24 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (events.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">Recommended for You</h2>
-      <div className="space-y-4">
-        {recommendations.map((event) => (
+    <div className="bg-white rounded-lg shadow">
+      <div className="p-6 border-b border-gray-200">
+        <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+      </div>
+      <div className="divide-y divide-gray-200">
+        {events.map((event) => (
           <Link
             key={event._id}
             to={`/events/${event._id}`}
-            className="block p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all"
+            className="block p-6 hover:bg-gray-50 transition-colors"
           >
-            <div className="flex justify-between items-start">
+            <div className="flex items-start justify-between">
               <div className="flex-1">
-                <h3 className="font-semibold text-lg text-gray-800 mb-1">{event.title}</h3>
-                <p className="text-sm text-gray-600 mb-2">{event.church_name}</p>
-                <p className="text-sm text-gray-500">
-                  {new Date(event.start_date).toLocaleDateString('en-GB', {
-                    weekday: 'short',
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric'
-                  })}
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {event.title}
+                </h3>
+                <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                  {event.description}
                 </p>
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    {new Date(event.start_date).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    {event.church_name}
+                  </div>
+                </div>
               </div>
-              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                {event.city}
-              </span>
+              <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 ml-4" />
             </div>
           </Link>
         ))}
