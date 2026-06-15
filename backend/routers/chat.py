@@ -1,368 +1,335 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import hashlib
 import re
-from motor.motor_asyncio import AsyncIOMotorClient
-from anthropic import Anthropic
 import os
-import json
+from anthropic import Anthropic
+from motor.motor_asyncio import AsyncIOMotorClient
 
-router = APIRouter()
+router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+MONGODB_URL = os.getenv("MONGODB_URL")
+db_client = AsyncIOMotorClient(MONGODB_URL)
+db = db_client["DEV-ChurchNavigator"]
+
+anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+MAX_CLAUDE_CALLS_PER_DAY = 50
+CACHE_TTL_DAYS = 7
 
 class ChatMessage(BaseModel):
-    message: str
-    session_id: str
+    message: str = Field(..., min_length=1, max_length=500)
+    session_id: str = Field(..., min_length=1)
 
 class ChatResponse(BaseModel):
     answer: str
     source: str
     suggested_actions: List[str]
-    contact_prompt: bool
+    contact_prompt: bool = False
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
 
-MONGO_URI = os.getenv("MONGO_URI")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-db_client = AsyncIOMotorClient(MONGO_URI)
-db = db_client["DEV-ChurchNavigator"]
-anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
-
-INTENT_PATTERNS = [
-    {
-        "keywords": ["service time", "when", "what time", "sunday", "morning", "evening", "worship time", "service schedule"],
-        "field": "service_times",
-        "template": "Services are on {service_times}",
-        "applies_to": ["church"]
+INTENT_PATTERNS = {
+    "service_times": {
+        "keywords": ["service", "time", "when", "sunday", "morning", "evening", "worship", "meet", "gathering"],
+        "fields": ["service_times", "sunday_service", "weekday_services"]
     },
-    {
-        "keywords": ["where", "location", "address", "directions", "how to get", "postcode", "find you"],
-        "field": "address",
-        "template": "We're located at {address_full}. {parking_info}",
-        "applies_to": ["church", "event"]
+    "location": {
+        "keywords": ["where", "location", "address", "directions", "parking", "postcode", "find", "map", "how to get"],
+        "fields": ["address", "city", "postcode", "parking", "directions"]
     },
-    {
-        "keywords": ["parking", "park", "disabled access", "accessibility", "wheelchair"],
-        "field": "facilities",
-        "template": "{parking_info}",
-        "applies_to": ["church"]
+    "pastor": {
+        "keywords": ["pastor", "leader", "minister", "reverend", "priest", "vicar", "who runs", "who leads"],
+        "fields": ["pastor_name", "pastor_id", "leadership"]
     },
-    {
-        "keywords": ["pastor", "leader", "who runs", "minister", "reverend", "vicar", "priest"],
-        "field": "pastor_name",
-        "template": "Our pastor is {pastor_name}. Learn more about them on our team page.",
-        "applies_to": ["church"]
+    "denomination": {
+        "keywords": ["denomination", "type", "kind", "tradition", "charismatic", "pentecostal", "baptist", "methodist", "catholic", "anglican"],
+        "fields": ["denomination", "tradition", "affiliation"]
     },
-    {
-        "keywords": ["denomination", "type", "kind of church", "tradition", "charismatic", "pentecostal", "baptist", "anglican"],
-        "field": "denomination",
-        "template": "We are a {denomination} church.",
-        "applies_to": ["church"]
-    },
-    {
+    "kids": {
         "keywords": ["kids", "children", "youth", "family", "babies", "toddlers", "creche", "nursery", "sunday school"],
-        "field": "facilities",
-        "template": "{kids_info}",
-        "applies_to": ["church"]
+        "fields": ["facilities", "kids_program", "youth_ministry", "childrens_ministry"]
     },
-    {
-        "keywords": ["register", "sign up", "how to join", "ticket", "book", "rsvp", "attend"],
-        "field": "registration_url",
-        "template": "{registration_info}",
-        "applies_to": ["event"]
+    "registration": {
+        "keywords": ["register", "sign up", "join", "ticket", "book", "rsvp", "attend"],
+        "fields": ["registration_url", "signup_link", "contact_email"]
     },
-    {
-        "keywords": ["free", "cost", "price", "ticket", "donation", "fee", "how much"],
-        "field": "ticket_type",
-        "template": "{ticket_info}",
-        "applies_to": ["event"]
+    "cost": {
+        "keywords": ["free", "cost", "price", "ticket", "donation", "fee", "pay", "charge"],
+        "fields": ["ticket_type", "ticket_price", "cost", "free_event"]
     },
-    {
-        "keywords": ["contact", "email", "phone", "reach", "call", "get in touch", "message"],
-        "field": "contact",
-        "template": "You can contact us at {contact_email}{phone_info}",
-        "applies_to": ["church", "event", "pastor"]
+    "accessibility": {
+        "keywords": ["disabled", "accessibility", "wheelchair", "accessible", "access"],
+        "fields": ["facilities", "accessibility", "wheelchair_access"]
     },
-    {
-        "keywords": ["about", "tell me", "what is", "overview", "history", "who are you"],
-        "field": "description",
-        "template": "{description_short}",
-        "applies_to": ["church", "event", "pastor"]
+    "contact": {
+        "keywords": ["contact", "email", "phone", "reach", "call", "message", "get in touch"],
+        "fields": ["contact_email", "phone", "website"]
     },
-    {
-        "keywords": ["upcoming events", "what's on", "events", "this week", "this month", "activities"],
-        "field": "events",
-        "template": "{upcoming_events}",
-        "applies_to": ["church"]
+    "about": {
+        "keywords": ["about", "tell me", "what is", "overview", "history", "story", "mission", "vision"],
+        "fields": ["description", "about", "mission", "vision", "history"]
     },
-    {
-        "keywords": ["small groups", "cell groups", "home groups", "bible study", "connect groups"],
-        "field": "small_groups",
-        "template": "{small_groups_info}",
-        "applies_to": ["church"]
+    "events": {
+        "keywords": ["events", "what's on", "upcoming", "next", "this week", "this month", "happening"],
+        "fields": ["events"]
     },
-    {
-        "keywords": ["volunteer", "help out", "serve", "get involved", "join team"],
-        "field": "volunteer_info",
-        "template": "{volunteer_info}",
-        "applies_to": ["church", "event"]
+    "small_groups": {
+        "keywords": ["small group", "cell group", "home group", "bible study", "connect group", "life group"],
+        "fields": ["small_groups", "groups"]
+    },
+    "volunteer": {
+        "keywords": ["volunteer", "help", "serve", "get involved", "join team", "participate"],
+        "fields": ["volunteer_info", "opportunities", "serving"]
     }
-]
+}
 
 SUGGESTED_ACTIONS = {
     "church": ["Service times", "Find us", "Meet the pastor", "Upcoming events", "Contact directly"],
     "event": ["Register now", "What's included", "Location & parking", "Contact organiser"],
-    "pastor": ["Invite to visit", "View sermons", "Contact"]
+    "pastor": ["Invite to visit", "View sermons", "Contact"],
+    "default": ["Learn more", "Get directions", "Contact directly"]
 }
 
-def normalize_message(message: str) -> str:
-    return re.sub(r'[^a-z0-9\s]', '', message.lower().strip())
+def normalize_text(text: str) -> str:
+    return re.sub(r'[^a-z0-9\s]', '', text.lower().strip())
 
-def hash_message(message: str) -> str:
-    return hashlib.md5(normalize_message(message).encode()).hexdigest()
+def hash_question(question: str) -> str:
+    normalized = normalize_text(question)
+    return hashlib.md5(normalized.encode()).hexdigest()
 
-def detect_intent(message: str, listing_type: str):
-    normalized = normalize_message(message)
-    for pattern in INTENT_PATTERNS:
-        if listing_type not in pattern["applies_to"]:
-            continue
-        for keyword in pattern["keywords"]:
-            if keyword in normalized:
-                return pattern
+def detect_intent(message: str) -> Optional[str]:
+    normalized = normalize_text(message)
+    words = normalized.split()
+    
+    scores = {}
+    for intent, config in INTENT_PATTERNS.items():
+        score = sum(1 for keyword in config["keywords"] if keyword in normalized)
+        if score > 0:
+            scores[intent] = score
+    
+    if scores:
+        return max(scores, key=scores.get)
     return None
 
-async def get_cached_response(listing_type: str, slug: str, message_hash: str):
-    cache_collection = db["chat_faq_cache"]
-    cached = await cache_collection.find_one({
+def build_answer_from_data(intent: str, data: Dict[str, Any], listing_type: str) -> Optional[str]:
+    if intent == "service_times":
+        if "service_times" in data and data["service_times"]:
+            times = data["service_times"]
+            if isinstance(times, str):
+                return f"Services are {times}"
+            elif isinstance(times, dict):
+                parts = [f"{day}: {time}" for day, time in times.items()]
+                return f"Services are {', '.join(parts)}"
+        elif "sunday_service" in data:
+            return f"Sunday service is at {data['sunday_service']}"
+        return None
+    
+    elif intent == "location":
+        parts = []
+        if "address" in data:
+            parts.append(f"We're located at {data['address']}")
+        if "city" in data:
+            parts[-1] = parts[-1] + f", {data['city']}"
+        if "postcode" in data:
+            parts[-1] = parts[-1] + f" {data['postcode']}"
+        if "parking" in data and data["parking"]:
+            parts.append(f"Parking: {data['parking']}")
+        return ". ".join(parts) if parts else None
+    
+    elif intent == "pastor":
+        if "pastor_name" in data and data["pastor_name"]:
+            name = data["pastor_name"]
+            if "pastor_id" in data:
+                return f"Our pastor is {name}. Click here to learn more about them."
+            return f"Our pastor is {name}."
+        return None
+    
+    elif intent == "denomination":
+        if "denomination" in data:
+            return f"We are a {data['denomination']} church."
+        return None
+    
+    elif intent == "kids":
+        facilities = data.get("facilities", {})
+        if isinstance(facilities, dict):
+            kids_info = []
+            if facilities.get("kids_program"):
+                kids_info.append("children's programs")
+            if facilities.get("creche"):
+                kids_info.append("creche")
+            if facilities.get("youth_ministry"):
+                kids_info.append("youth ministry")
+            if kids_info:
+                return f"We offer {', '.join(kids_info)} for families."
+        return None
+    
+    elif intent == "registration":
+        if listing_type == "event":
+            if "registration_url" in data:
+                return f"You can register here: {data['registration_url']}"
+        if "contact_email" in data:
+            return f"To register or learn more, contact us at {data['contact_email']}"
+        return None
+    
+    elif intent == "cost":
+        if "ticket_type" in data:
+            if data["ticket_type"] == "free":
+                return "This event is free to attend!"
+            elif "ticket_price" in data:
+                return f"Tickets are {data['ticket_price']}"
+        return None
+    
+    elif intent == "accessibility":
+        facilities = data.get("facilities", {})
+        if isinstance(facilities, dict) and facilities.get("wheelchair_access"):
+            return "We have wheelchair access and accessible facilities."
+        return None
+    
+    elif intent == "contact":
+        parts = []
+        if "contact_email" in data:
+            parts.append(f"Email: {data['contact_email']}")
+        if "phone" in data:
+            parts.append(f"Phone: {data['phone']}")
+        if "website" in data:
+            parts.append(f"Website: {data['website']}")
+        return " | ".join(parts) if parts else None
+    
+    elif intent == "about":
+        if "description" in data and data["description"]:
+            desc = data["description"]
+            if len(desc) > 200:
+                return desc[:200] + "... Read more on our page."
+            return desc
+        return None
+    
+    return None
+
+async def get_cached_answer(listing_type: str, slug: str, question_hash: str) -> Optional[Dict[str, Any]]:
+    cache = await db.chat_faq_cache.find_one({
         "listing_type": listing_type,
         "slug": slug,
-        "question_hash": message_hash,
-        "created_at": {"$gte": datetime.utcnow() - timedelta(days=7)}
+        "question_hash": question_hash,
+        "created_at": {"$gte": datetime.utcnow() - timedelta(days=CACHE_TTL_DAYS)}
     })
-    if cached:
-        await cache_collection.update_one(
-            {"_id": cached["_id"]},
+    
+    if cache:
+        await db.chat_faq_cache.update_one(
+            {"_id": cache["_id"]},
             {"$inc": {"hit_count": 1}}
         )
-        return cached
+        return {
+            "answer": cache["answer"],
+            "source": cache["source"]
+        }
     return None
 
-async def cache_response(listing_type: str, slug: str, message_hash: str, answer: str, source: str):
-    cache_collection = db["chat_faq_cache"]
-    await cache_collection.insert_one({
+async def cache_answer(listing_type: str, slug: str, question_hash: str, answer: str, source: str):
+    await db.chat_faq_cache.insert_one({
         "listing_type": listing_type,
         "slug": slug,
-        "question_hash": message_hash,
+        "question_hash": question_hash,
         "answer": answer,
         "source": source,
         "created_at": datetime.utcnow(),
-        "hit_count": 1
+        "hit_count": 0
     })
 
-async def check_rate_limit() -> bool:
-    rate_limit_collection = db["claude_rate_limit"]
+async def check_claude_rate_limit() -> bool:
     today = datetime.utcnow().date()
-    record = await rate_limit_collection.find_one({"date": today.isoformat()})
-    if record and record.get("count", 0) >= 50:
-        return False
-    return True
+    count_doc = await db.claude_rate_limit.find_one({"date": today})
+    
+    if not count_doc:
+        await db.claude_rate_limit.insert_one({"date": today, "count": 0})
+        return True
+    
+    return count_doc["count"] < MAX_CLAUDE_CALLS_PER_DAY
 
-async def increment_rate_limit():
-    rate_limit_collection = db["claude_rate_limit"]
+async def increment_claude_usage():
     today = datetime.utcnow().date()
-    await rate_limit_collection.update_one(
-        {"date": today.isoformat()},
+    await db.claude_rate_limit.update_one(
+        {"date": today},
         {"$inc": {"count": 1}},
         upsert=True
     )
 
-async def get_listing_data(listing_type: str, slug: str):
-    collection_map = {
-        "church": "churches",
-        "event": "events",
-        "pastor": "pastors"
-    }
-    collection = db[collection_map.get(listing_type)]
-    return await collection.find_one({"slug": slug})
-
-def format_answer(intent: dict, data: dict, listing_type: str) -> str:
-    if intent["field"] == "service_times" and "service_times" in data:
-        return intent["template"].replace("{service_times}", data["service_times"])
-    
-    elif intent["field"] == "address":
-        address_parts = []
-        if "address_line1" in data:
-            address_parts.append(data["address_line1"])
-        if "city" in data:
-            address_parts.append(data["city"])
-        if "postcode" in data:
-            address_parts.append(data["postcode"])
-        address_full = ", ".join(address_parts)
-        parking_info = ""
-        if "facilities" in data and isinstance(data["facilities"], dict):
-            if data["facilities"].get("parking"):
-                parking_info = " Parking is available."
-        return intent["template"].replace("{address_full}", address_full).replace("{parking_info}", parking_info)
-    
-    elif intent["field"] == "facilities" and "parking" in intent["keywords"]:
-        if "facilities" in data and isinstance(data["facilities"], dict):
-            parking = data["facilities"].get("parking", False)
-            disabled = data["facilities"].get("disabled_access", False)
-            info = []
-            if parking:
-                info.append("Parking is available")
-            if disabled:
-                info.append("wheelchair accessible")
-            return ". ".join(info) + "." if info else "Please contact us for parking and accessibility information."
-        return "Please contact us for parking and accessibility information."
-    
-    elif intent["field"] == "pastor_name" and "pastor_name" in data:
-        return intent["template"].replace("{pastor_name}", data["pastor_name"])
-    
-    elif intent["field"] == "denomination" and "denomination" in data:
-        return intent["template"].replace("{denomination}", data["denomination"])
-    
-    elif intent["field"] == "facilities" and "kids" in intent["keywords"]:
-        if "facilities" in data and isinstance(data["facilities"], dict):
-            kids_info = []
-            if data["facilities"].get("kids_program"):
-                kids_info.append("children's program")
-            if data["facilities"].get("creche"):
-                kids_info.append("creche")
-            if data["facilities"].get("youth_group"):
-                kids_info.append("youth group")
-            if kids_info:
-                return f"We offer {', '.join(kids_info)}."
-        return "Please contact us for information about children's programs."
-    
-    elif intent["field"] == "registration_url":
-        if "registration_url" in data and data["registration_url"]:
-            return f"You can register here: {data['registration_url']}"
-        elif "contact_email" in data:
-            return f"Please contact us at {data['contact_email']} to register."
-        return "Please contact the organiser to register."
-    
-    elif intent["field"] == "ticket_type":
-        if listing_type == "event":
-            ticket_type = data.get("ticket_type", "free")
-            if ticket_type == "free":
-                return "This event is free to attend."
-            elif ticket_type == "paid" and "ticket_price" in data:
-                return f"Tickets cost {data['ticket_price']}."
-            elif ticket_type == "donation":
-                return "This event is by donation."
-        return "Please contact us for pricing information."
-    
-    elif intent["field"] == "contact":
-        contact_parts = []
-        if "contact_email" in data:
-            contact_parts.append(data["contact_email"])
-        phone_info = ""
-        if "phone" in data:
-            phone_info = f" or call {data['phone']}"
-        email_info = contact_parts[0] if contact_parts else "the contact form on our website"
-        return intent["template"].replace("{contact_email}", email_info).replace("{phone_info}", phone_info)
-    
-    elif intent["field"] == "description" and "description" in data:
-        desc = data["description"]
-        short_desc = desc[:200] + "..." if len(desc) > 200 else desc
-        return f"{short_desc} Read more on our full profile."
-    
-    elif intent["field"] == "events":
-        return "Check our events page for upcoming activities and gatherings."
-    
-    elif intent["field"] == "small_groups":
-        return "We offer various small groups for connection and growth. Contact us to learn more."
-    
-    elif intent["field"] == "volunteer_info":
-        if listing_type == "event" and "volunteer_roles" in data:
-            return "We're looking for volunteers! Contact us to get involved."
-        return "We'd love to have you serve with us! Please get in touch to learn about opportunities."
-    
-    return "I can help you with that. Please contact us directly for more details."
-
-async def call_claude(message: str, data: dict, listing_type: str) -> str:
-    if not anthropic_client:
-        return None
-    
-    if not await check_rate_limit():
-        return None
+async def call_claude_fallback(message: str, listing_data: Dict[str, Any], listing_name: str) -> str:
+    system_prompt = f"""You are a helpful assistant for {listing_name}. 
+Answer ONLY using this information: {listing_data}.
+If you cannot answer from this data, say so and suggest contacting directly.
+Keep answers under 3 sentences."""
     
     try:
-        name = data.get("name", "this church")
-        data_json = json.dumps({
-            k: v for k, v in data.items() 
-            if k not in ["_id", "created_at", "updated_at"]
-        }, default=str, indent=2)
-        
-        system_prompt = f"You are a helpful assistant for {name}. Answer ONLY using this information: {data_json}. If you cannot answer from this data, say so and suggest contacting them directly. Keep answers under 3 sentences."
-        
         response = anthropic_client.messages.create(
             model="claude-3-5-haiku-20241022",
             max_tokens=150,
             system=system_prompt,
             messages=[{"role": "user", "content": message}]
         )
-        
-        await increment_rate_limit()
         return response.content[0].text
     except Exception as e:
-        print(f"Claude API error: {e}")
-        return None
+        return f"I couldn't process that question. Please contact {listing_name} directly for assistance."
 
-@router.post("/api/chat/{listing_type}/{slug}", response_model=ChatResponse)
-async def chat_endpoint(listing_type: str, slug: str, chat_message: ChatMessage):
+@router.post("/{listing_type}/{slug}", response_model=ChatResponse)
+async def chat_endpoint(listing_type: str, slug: str, message: ChatMessage):
     if listing_type not in ["church", "event", "pastor"]:
         raise HTTPException(status_code=400, detail="Invalid listing type")
     
-    message = chat_message.message.strip()
-    if not message:
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    collection_name = f"{listing_type}es" if listing_type in ["church"] else f"{listing_type}s"
+    listing = await db[collection_name].find_one({"slug": slug})
     
-    message_hash = hash_message(message)
+    if not listing:
+        raise HTTPException(status_code=404, detail=f"{listing_type.capitalize()} not found")
     
-    cached = await get_cached_response(listing_type, slug, message_hash)
+    question_hash = hash_question(message.message)
+    
+    cached = await get_cached_answer(listing_type, slug, question_hash)
     if cached:
         return ChatResponse(
             answer=cached["answer"],
             source=cached["source"],
-            suggested_actions=SUGGESTED_ACTIONS.get(listing_type, ["Contact directly"]),
+            suggested_actions=SUGGESTED_ACTIONS.get(listing_type, SUGGESTED_ACTIONS["default"]),
             contact_prompt=False
         )
     
-    data = await get_listing_data(listing_type, slug)
-    if not data:
-        raise HTTPException(status_code=404, detail="Listing not found")
-    
-    intent = detect_intent(message, listing_type)
+    intent = detect_intent(message.message)
     
     if intent:
-        answer = format_answer(intent, data, listing_type)
-        await cache_response(listing_type, slug, message_hash, answer, "data")
-        return ChatResponse(
-            answer=answer,
-            source="data",
-            suggested_actions=SUGGESTED_ACTIONS.get(listing_type, ["Contact directly"]),
-            contact_prompt=False
-        )
+        answer = build_answer_from_data(intent, listing, listing_type)
+        if answer:
+            await cache_answer(listing_type, slug, question_hash, answer, "data")
+            return ChatResponse(
+                answer=answer,
+                source="data",
+                suggested_actions=SUGGESTED_ACTIONS.get(listing_type, SUGGESTED_ACTIONS["default"]),
+                contact_prompt=False
+            )
     
-    claude_answer = await call_claude(message, data, listing_type)
-    if claude_answer:
-        await cache_response(listing_type, slug, message_hash, claude_answer, "ai")
+    can_use_claude = await check_claude_rate_limit()
+    
+    if can_use_claude:
+        listing_name = listing.get("name", listing.get("title", "this organization"))
+        claude_answer = await call_claude_fallback(message.message, dict(listing), listing_name)
+        
+        await increment_claude_usage()
+        await cache_answer(listing_type, slug, question_hash, claude_answer, "ai")
+        
         return ChatResponse(
             answer=claude_answer,
             source="ai",
-            suggested_actions=SUGGESTED_ACTIONS.get(listing_type, ["Contact directly"]),
+            suggested_actions=SUGGESTED_ACTIONS.get(listing_type, SUGGESTED_ACTIONS["default"]),
             contact_prompt=False
         )
     
-    contact_answer = f"I don't have that specific information, but you can reach {data.get('name', 'us')} directly for details!"
+    contact_answer = f"I don't have that specific information, but you can reach {listing.get('name', 'us')} directly!"
     return ChatResponse(
         answer=contact_answer,
         source="contact",
         suggested_actions=["Contact directly"],
         contact_prompt=True,
-        contact_email=data.get("contact_email"),
-        contact_phone=data.get("phone")
+        contact_email=listing.get("contact_email"),
+        contact_phone=listing.get("phone")
     )
