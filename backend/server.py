@@ -1,29 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from routers import churches, reviews, search
 import os
 
-from routers import churches, events, worship_leaders, media_teams, flyer_generator
-
-app = FastAPI(title="ChurchNavigator API")
+app = FastAPI(title="ChurchNavigator API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://churchnavigator.com"],
+    allow_origins=["https://churchnavigator.com", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(churches.router)
-app.include_router(events.router)
-app.include_router(worship_leaders.router)
-app.include_router(media_teams.router)
-app.include_router(flyer_generator.router)
+app.include_router(churches.router, prefix="/api", tags=["churches"])
+app.include_router(reviews.router, prefix="/api", tags=["reviews"])
+app.include_router(search.router, prefix="/api", tags=["search"])
 
 @app.get("/")
-async def root():
-    return {"message": "ChurchNavigator API", "version": "1.0.0"}
+def read_root():
+    return {"message": "ChurchNavigator API v2.0.0", "status": "active"}
 
 @app.get("/health")
-async def health():
+def health_check():
     return {"status": "healthy"}
