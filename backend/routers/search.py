@@ -1,443 +1,398 @@
 from fastapi import APIRouter, Query, HTTPException, Request
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from datetime import datetime, timedelta
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
 import re
-from pymongo import TEXT, ASCENDING, DESCENDING
-from bson import ObjectId
+from collections import defaultdict
 import hashlib
-
-from ..database import db
-from ..models.search import SearchResponse, SearchResult
+import json
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 UK_CITIES = [
-    "London", "Birmingham", "Manchester", "Leeds", "Liverpool", "Newcastle",
-    "Sheffield", "Bristol", "Glasgow", "Edinburgh", "Cardiff", "Belfast",
-    "Nottingham", "Leicester", "Coventry", "Bradford", "Southampton",
-    "Reading", "Derby", "Plymouth", "Wolverhampton", "Stoke", "Brighton",
-    "Aberdeen", "Dundee", "Swansea", "York", "Cambridge", "Oxford"
+    "london", "birmingham", "manchester", "leeds", "liverpool", "bristol",
+    "sheffield", "edinburgh", "glasgow", "cardiff", "newcastle", "nottingham",
+    "southampton", "leicester", "coventry", "bradford", "belfast", "brighton",
+    "plymouth", "oxford", "cambridge", "portsmouth", "york", "exeter",
+    "reading", "norwich", "luton", "wolverhampton", "aberdeen", "swansea"
 ]
 
 DENOMINATIONS = [
-    "Pentecostal", "Baptist", "Anglican", "Methodist", "Presbyterian",
-    "Catholic", "Evangelical", "Charismatic", "Reformed", "Independent",
-    "Apostolic", "Assemblies of God", "Church of God", "Elim"
+    "pentecostal", "baptist", "anglican", "methodist", "presbyterian",
+    "evangelical", "charismatic", "catholic", "reformed", "independent",
+    "adventist", "apostolic", "brethren", "congregational", "orthodox"
 ]
 
-DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-TIMES = {"morning": "morning", "afternoon": "afternoon", "evening": "evening"}
+DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+TIMES = ["morning", "afternoon", "evening", "night"]
 
-def parse_smart_query(query: str) -> Dict[str, Any]:
+def get_db():
+    mongo_uri = os.getenv("MONGODB_URI", "")
+    if "DEV-ChurchNavigator" in mongo_uri or os.getenv("ENVIRONMENT") == "development":
+        db_name = "DEV-ChurchNavigator"
+    else:
+        db_name = "ChurchNavigator"
+    client = AsyncIOMotorClient(mongo_uri)
+    return client[db_name]
+
+def parse_smart_query(query: str) -> dict:
+    q_lower = query.lower()
     filters = {}
-    query_lower = query.lower()
-    query_words = query.split()
     
     for city in UK_CITIES:
-        if city.lower() in query_lower:
-            filters["city"] = city
+        if city in q_lower:
+            filters["city"] = city.title()
             break
     
     for denom in DENOMINATIONS:
-        if denom.lower() in query_lower:
-            filters["denomination"] = denom
+        if denom in q_lower:
+            filters["denomination"] = denom.title()
             break
     
     for day in DAYS:
-        if day.lower() in query_lower:
-            filters["service_day"] = day
+        if day in q_lower:
+            filters["service_day"] = day.title()
             break
     
-    for time_key, time_val in TIMES.items():
-        if time_key in query_lower:
-            filters["service_time"] = time_val
+    for time in TIMES:
+        if time in q_lower:
+            filters["service_time"] = time
             break
     
-    if "free" in query_lower:
+    if "free" in q_lower:
         filters["is_free"] = True
+    elif "paid" in q_lower:
+        filters["is_free"] = False
     
-    if "verified" in query_lower:
-        filters["is_verified"] = True
-    
-    area_patterns = ["north", "south", "east", "west", "central"]
-    for area in area_patterns:
-        if area in query_lower and "city" in filters:
-            filters["area"] = area.capitalize()
-            break
+    if "near me" in q_lower or "nearby" in q_lower:
+        filters["needs_location"] = True
     
     return filters
 
-def build_search_pipeline(query: str, filters: Dict, listing_type: Optional[str] = None, limit: int = 20, skip: int = 0) -> List[Dict]:
-    pipeline = []
+async def search_collection(db, collection_name: str, query: str, filters: dict, page: int = 1, limit: int = 20):
+    collection = db[collection_name]
+    skip = (page - 1) * limit
     
     match_stage = {"moderation_status": "approved"}
     
-    if listing_type:
-        match_stage["listing_type"] = listing_type
-    
     if filters.get("city"):
         match_stage["city"] = {"$regex": filters["city"], "$options": "i"}
-    
     if filters.get("denomination"):
         match_stage["denomination"] = {"$regex": filters["denomination"], "$options": "i"}
-    
-    if filters.get("is_free") is not None:
+    if "is_free" in filters:
         match_stage["is_free"] = filters["is_free"]
+    if filters.get("service_day"):
+        match_stage["service_times.day"] = filters["service_day"]
     
-    if filters.get("is_verified") is not None:
-        match_stage["is_verified"] = filters["is_verified"]
+    pipeline = []
     
-    if query and query.strip():
-        try:
-            pipeline.append({
-                "$search": {
-                    "index": "default",
-                    "text": {
-                        "query": query,
-                        "path": ["name", "description", "denomination", "city", "tags"],
-                        "fuzzy": {"maxEdits": 1}
-                    }
-                }
-            })
-            pipeline.append({"$addFields": {"search_score": {"$meta": "searchScore"}}})
-        except:
-            match_stage["$text"] = {"$search": query}
-            pipeline.append({"$match": match_stage})
-            pipeline.append({"$addFields": {"search_score": {"$meta": "textScore"}}})
-            match_stage = {}
-    
-    if match_stage:
+    if query:
+        pipeline.append({
+            "$match": {
+                "$text": {"$search": query},
+                **match_stage
+            }
+        })
+        pipeline.append({"$addFields": {"score": {"$meta": "textScore"}}})
+        pipeline.append({"$sort": {"score": -1, "created_at": -1}})
+    else:
         pipeline.append({"$match": match_stage})
+        pipeline.append({"$sort": {"created_at": -1}})
     
     pipeline.extend([
-        {"$sort": {"search_score": -1, "created_at": -1}},
         {"$skip": skip},
         {"$limit": limit},
         {
             "$project": {
-                "_id": 1,
+                "_id": 0,
+                "id": {"$toString": "$_id"},
                 "name": 1,
                 "slug": 1,
                 "city": 1,
                 "listing_type": 1,
                 "denomination": 1,
-                "image": 1,
-                "images": 1,
+                "main_image": 1,
                 "rating": 1,
                 "total_reviews": 1,
                 "is_verified": 1,
-                "description": 1,
-                "search_score": 1,
-                "created_at": 1
+                "description": {"$substr": ["$description", 0, 150]},
+                "score": 1
             }
         }
     ])
     
-    return pipeline
+    results = await collection.aggregate(pipeline).to_list(length=limit)
+    total = await collection.count_documents(match_stage)
+    
+    return results, total
 
-@router.get("", response_model=SearchResponse)
+@router.get("")
 async def universal_search(
-    q: str = Query("", description="Search query"),
-    type: Optional[str] = Query(None, description="church, event, pastor, worship-leader, media-team, bible-college"),
+    q: Optional[str] = Query(None, description="Search query"),
+    type: Optional[str] = Query(None, description="Filter by type: church, event, pastor, worship_leader, media_team, bible_college"),
     city: Optional[str] = Query(None),
     denomination: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100)
 ):
-    try:
-        filters = parse_smart_query(q)
-        
-        if city:
-            filters["city"] = city
-        if denomination:
-            filters["denomination"] = denomination
-        
-        skip = (page - 1) * limit
-        
-        collections = ["churches", "events", "pastors", "worship_leaders", "media_teams", "bible_colleges"]
-        if type:
-            type_map = {
-                "church": "churches",
-                "event": "events",
-                "pastor": "pastors",
-                "worship-leader": "worship_leaders",
-                "media-team": "media_teams",
-                "bible-college": "bible_colleges"
-            }
-            collections = [type_map.get(type, type)]
-        
-        all_results = []
-        total_count = 0
-        
-        for collection_name in collections:
-            collection = db[collection_name]
-            
-            pipeline = build_search_pipeline(q, filters, None, limit, skip)
-            results = list(collection.aggregate(pipeline))
-            
-            for result in results:
-                result["_id"] = str(result["_id"])
-                result["type"] = collection_name.rstrip('s')
-                all_results.append(result)
-            
-            count_pipeline = pipeline[:pipeline.index(next(s for s in pipeline if "$skip" in s))]
-            count_pipeline.append({"$count": "total"})
-            count_result = list(collection.aggregate(count_pipeline))
-            if count_result:
-                total_count += count_result[0]["total"]
-        
-        all_results.sort(key=lambda x: x.get("search_score", 0), reverse=True)
-        all_results = all_results[:limit]
-        
-        return SearchResponse(
-            results=all_results,
-            total=total_count,
-            page=page,
-            limit=limit,
-            query=q
-        )
+    db = get_db()
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+    smart_filters = parse_smart_query(q or "")
+    if city:
+        smart_filters["city"] = city
+    if denomination:
+        smart_filters["denomination"] = denomination
+    
+    collections_to_search = []
+    if type:
+        type_map = {
+            "church": "churches",
+            "event": "events",
+            "pastor": "pastors",
+            "worship_leader": "worship_leaders",
+            "media_team": "media_teams",
+            "bible_college": "bible_colleges"
+        }
+        if type in type_map:
+            collections_to_search = [type_map[type]]
+    else:
+        collections_to_search = ["churches", "events", "pastors", "worship_leaders", "media_teams", "bible_colleges"]
+    
+    all_results = []
+    total_count = 0
+    
+    for coll_name in collections_to_search:
+        try:
+            results, count = await search_collection(db, coll_name, q, smart_filters, page, limit)
+            for r in results:
+                r["listing_type"] = coll_name.rstrip('s')
+            all_results.extend(results)
+            total_count += count
+        except Exception:
+            pass
+    
+    all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+    all_results = all_results[:limit]
+    
+    return {
+        "results": all_results,
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total_count + limit - 1) // limit
+    }
 
-@router.get("/churches", response_model=SearchResponse)
+@router.get("/churches")
 async def search_churches(
-    q: str = Query(""),
-    city: Optional[str] = None,
-    denomination: Optional[str] = None,
-    distance_from: Optional[str] = None,
+    q: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    denomination: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100)
 ):
-    filters = parse_smart_query(q)
+    db = get_db()
+    smart_filters = parse_smart_query(q or "")
     if city:
-        filters["city"] = city
+        smart_filters["city"] = city
     if denomination:
-        filters["denomination"] = denomination
+        smart_filters["denomination"] = denomination
     
-    skip = (page - 1) * limit
-    pipeline = build_search_pipeline(q, filters, None, limit, skip)
+    results, total = await search_collection(db, "churches", q, smart_filters, page, limit)
     
-    results = list(db.churches.aggregate(pipeline))
-    for result in results:
-        result["_id"] = str(result["_id"])
-        result["type"] = "church"
-    
-    count_pipeline = pipeline[:pipeline.index(next(s for s in pipeline if "$skip" in s))]
-    count_pipeline.append({"$count": "total"})
-    count_result = list(db.churches.aggregate(count_pipeline))
-    total = count_result[0]["total"] if count_result else 0
-    
-    return SearchResponse(results=results, total=total, page=page, limit=limit, query=q)
+    return {
+        "results": results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
-@router.get("/events", response_model=SearchResponse)
+@router.get("/events")
 async def search_events(
-    q: str = Query(""),
-    city: Optional[str] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-    is_free: Optional[bool] = None,
+    q: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    is_free: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100)
 ):
-    filters = parse_smart_query(q)
+    db = get_db()
+    smart_filters = parse_smart_query(q or "")
     if city:
-        filters["city"] = city
+        smart_filters["city"] = city
     if is_free is not None:
-        filters["is_free"] = is_free
+        smart_filters["is_free"] = is_free
     
-    skip = (page - 1) * limit
-    pipeline = build_search_pipeline(q, filters, None, limit, skip)
+    results, total = await search_collection(db, "events", q, smart_filters, page, limit)
     
-    if date_from or date_to:
-        date_match = {}
-        if date_from:
-            date_match["$gte"] = datetime.fromisoformat(date_from)
-        if date_to:
-            date_match["$lte"] = datetime.fromisoformat(date_to)
-        pipeline.insert(1, {"$match": {"event_date": date_match}})
-    
-    results = list(db.events.aggregate(pipeline))
-    for result in results:
-        result["_id"] = str(result["_id"])
-        result["type"] = "event"
-    
-    count_pipeline = pipeline[:pipeline.index(next(s for s in pipeline if "$skip" in s))]
-    count_pipeline.append({"$count": "total"})
-    count_result = list(db.events.aggregate(count_pipeline))
-    total = count_result[0]["total"] if count_result else 0
-    
-    return SearchResponse(results=results, total=total, page=page, limit=limit, query=q)
+    return {
+        "results": results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
-@router.get("/pastors", response_model=SearchResponse)
+@router.get("/pastors")
 async def search_pastors(
-    q: str = Query(""),
-    city: Optional[str] = None,
-    denomination: Optional[str] = None,
-    open_to_visits: Optional[bool] = None,
+    q: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    denomination: Optional[str] = Query(None),
+    open_to_visits: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100)
 ):
-    filters = parse_smart_query(q)
+    db = get_db()
+    smart_filters = parse_smart_query(q or "")
     if city:
-        filters["city"] = city
+        smart_filters["city"] = city
     if denomination:
-        filters["denomination"] = denomination
+        smart_filters["denomination"] = denomination
     if open_to_visits is not None:
-        filters["open_to_visits"] = open_to_visits
+        smart_filters["open_to_visits"] = open_to_visits
     
-    skip = (page - 1) * limit
-    pipeline = build_search_pipeline(q, filters, None, limit, skip)
+    results, total = await search_collection(db, "pastors", q, smart_filters, page, limit)
     
-    results = list(db.pastors.aggregate(pipeline))
-    for result in results:
-        result["_id"] = str(result["_id"])
-        result["type"] = "pastor"
-    
-    count_pipeline = pipeline[:pipeline.index(next(s for s in pipeline if "$skip" in s))]
-    count_pipeline.append({"$count": "total"})
-    count_result = list(db.pastors.aggregate(count_pipeline))
-    total = count_result[0]["total"] if count_result else 0
-    
-    return SearchResponse(results=results, total=total, page=page, limit=limit, query=q)
+    return {
+        "results": results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
-@router.get("/worship-leaders", response_model=SearchResponse)
+@router.get("/worship-leaders")
 async def search_worship_leaders(
-    q: str = Query(""),
-    city: Optional[str] = None,
-    genre: Optional[str] = None,
+    q: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    genre: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100)
 ):
-    filters = parse_smart_query(q)
+    db = get_db()
+    smart_filters = parse_smart_query(q or "")
     if city:
-        filters["city"] = city
+        smart_filters["city"] = city
     if genre:
-        filters["genre"] = genre
+        smart_filters["genre"] = genre
     
-    skip = (page - 1) * limit
-    pipeline = build_search_pipeline(q, filters, None, limit, skip)
+    results, total = await search_collection(db, "worship_leaders", q, smart_filters, page, limit)
     
-    results = list(db.worship_leaders.aggregate(pipeline))
-    for result in results:
-        result["_id"] = str(result["_id"])
-        result["type"] = "worship-leader"
-    
-    count_pipeline = pipeline[:pipeline.index(next(s for s in pipeline if "$skip" in s))]
-    count_pipeline.append({"$count": "total"})
-    count_result = list(db.worship_leaders.aggregate(count_pipeline))
-    total = count_result[0]["total"] if count_result else 0
-    
-    return SearchResponse(results=results, total=total, page=page, limit=limit, query=q)
+    return {
+        "results": results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
-@router.get("/media-teams", response_model=SearchResponse)
+@router.get("/media-teams")
 async def search_media_teams(
-    q: str = Query(""),
-    city: Optional[str] = None,
-    service_type: Optional[str] = None,
+    q: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    service_type: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100)
 ):
-    filters = parse_smart_query(q)
+    db = get_db()
+    smart_filters = parse_smart_query(q or "")
     if city:
-        filters["city"] = city
+        smart_filters["city"] = city
     if service_type:
-        filters["service_type"] = service_type
+        smart_filters["service_type"] = service_type
     
-    skip = (page - 1) * limit
-    pipeline = build_search_pipeline(q, filters, None, limit, skip)
+    results, total = await search_collection(db, "media_teams", q, smart_filters, page, limit)
     
-    results = list(db.media_teams.aggregate(pipeline))
-    for result in results:
-        result["_id"] = str(result["_id"])
-        result["type"] = "media-team"
-    
-    count_pipeline = pipeline[:pipeline.index(next(s for s in pipeline if "$skip" in s))]
-    count_pipeline.append({"$count": "total"})
-    count_result = list(db.media_teams.aggregate(count_pipeline))
-    total = count_result[0]["total"] if count_result else 0
-    
-    return SearchResponse(results=results, total=total, page=page, limit=limit, query=q)
+    return {
+        "results": results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
-@router.get("/bible-colleges", response_model=SearchResponse)
+@router.get("/bible-colleges")
 async def search_bible_colleges(
-    q: str = Query(""),
-    city: Optional[str] = None,
-    denomination: Optional[str] = None,
+    q: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    denomination: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100)
 ):
-    filters = parse_smart_query(q)
+    db = get_db()
+    smart_filters = parse_smart_query(q or "")
     if city:
-        filters["city"] = city
+        smart_filters["city"] = city
     if denomination:
-        filters["denomination"] = denomination
+        smart_filters["denomination"] = denomination
     
-    skip = (page - 1) * limit
-    pipeline = build_search_pipeline(q, filters, None, limit, skip)
+    results, total = await search_collection(db, "bible_colleges", q, smart_filters, page, limit)
     
-    results = list(db.bible_colleges.aggregate(pipeline))
-    for result in results:
-        result["_id"] = str(result["_id"])
-        result["type"] = "bible-college"
-    
-    count_pipeline = pipeline[:pipeline.index(next(s for s in pipeline if "$skip" in s))]
-    count_pipeline.append({"$count": "total"})
-    count_result = list(db.bible_colleges.aggregate(count_pipeline))
-    total = count_result[0]["total"] if count_result else 0
-    
-    return SearchResponse(results=results, total=total, page=page, limit=limit, query=q)
+    return {
+        "results": results,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
 @router.get("/conversational")
-async def conversational_search(request: Request, q: str = Query(...)):
-    daily_limit = 20
-    cache_hours = 24
+async def conversational_search(
+    request: Request,
+    q: str = Query(..., min_length=10, description="Complex conversational query")
+):
+    db = get_db()
     
     query_hash = hashlib.md5(q.lower().encode()).hexdigest()
+    cache_key = f"conv_search:{query_hash}"
     
-    cached = db.search_cache.find_one({"query_hash": query_hash})
+    cached = await db.search_cache.find_one({"key": cache_key})
     if cached and cached.get("expires_at") > datetime.utcnow():
-        return {"results": cached["results"], "cached": True}
+        return cached["result"]
     
-    today = datetime.utcnow().date()
-    usage_count = db.search_usage.count_documents({
-        "date": today,
-        "type": "conversational"
-    })
-    
-    if usage_count >= daily_limit:
-        raise HTTPException(status_code=429, detail="Daily conversational search limit reached. Try standard search.")
+    daily_count = await db.conversational_search_counter.find_one({"date": datetime.utcnow().date().isoformat()})
+    if daily_count and daily_count.get("count", 0) >= 20:
+        raise HTTPException(status_code=429, detail="Daily conversational search limit reached. Please try again tomorrow.")
     
     try:
-        import anthropic
-        client = anthropic.Anthropic()
+        from anthropic import Anthropic
+        client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         
-        context = f"Search UK churches database. Query: {q}"
+        churches = await db.churches.find({"moderation_status": "approved"}).limit(100).to_list(100)
+        context = "\n".join([f"{c.get('name')} - {c.get('city')} - {c.get('denomination')} - {c.get('description', '')[:100]}" for c in churches[:50]])
         
         message = client.messages.create(
             model="claude-haiku-4-5",
             max_tokens=500,
-            messages=[{"role": "user", "content": context}]
+            messages=[{
+                "role": "user",
+                "content": f"Based on these UK churches:\n{context}\n\nQuestion: {q}\n\nProvide a helpful answer with specific church recommendations."
+            }]
         )
         
-        result_text = message.content[0].text
+        answer = message.content[0].text
         
-        db.search_cache.insert_one({
-            "query_hash": query_hash,
-            "query": q,
-            "results": result_text,
-            "expires_at": datetime.utcnow() + timedelta(hours=cache_hours),
-            "created_at": datetime.utcnow()
-        })
+        result = {"answer": answer, "query": q, "cached": False}
         
-        db.search_usage.insert_one({
-            "date": today,
-            "type": "conversational",
-            "query": q,
-            "created_at": datetime.utcnow()
-        })
+        await db.search_cache.update_one(
+            {"key": cache_key},
+            {"$set": {
+                "key": cache_key,
+                "result": result,
+                "expires_at": datetime.utcnow() + timedelta(hours=24)
+            }},
+            upsert=True
+        )
         
-        return {"results": result_text, "cached": False}
-    
+        await db.conversational_search_counter.update_one(
+            {"date": datetime.utcnow().date().isoformat()},
+            {"$inc": {"count": 1}},
+            upsert=True
+        )
+        
+        return result
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Conversational search temporarily unavailable. Please use standard search.")
