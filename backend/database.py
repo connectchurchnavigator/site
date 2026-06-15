@@ -1,10 +1,11 @@
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from pymongo import MongoClient
 import os
+from dotenv import load_dotenv
 
-MONGO_URI = os.getenv("MONGO_URI")
-client = AsyncIOMotorClient(MONGO_URI)
-db_name = "DEV-ChurchNavigator" if os.getenv("ENV") == "dev" else "ChurchNavigator"
-database = client.get_database(db_name)
+load_dotenv()
 
-async def get_database() -> AsyncIOMotorDatabase:
-    return database
+MONGODB_URI = os.getenv("MONGODB_URI")
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "DEV-ChurchNavigator")
+
+client = MongoClient(MONGODB_URI)
+db = client[MONGODB_DB_NAME]
