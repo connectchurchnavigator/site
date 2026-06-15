@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict
-from services.ai_automation_service import ai_service
-from dependencies import get_current_user
+from database import get_database
+from services.ai_automation_service import AIAutomationService
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 
@@ -9,13 +10,22 @@ router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 async def get_event_recommendations(
     user_id: str,
     limit: int = 5,
-    current_user: Dict = Depends(get_current_user)
+    db=Depends(get_database),
+    current_user=Depends(get_current_user)
 ):
-    if str(current_user["_id"]) != user_id:
-        raise HTTPException(status_code=403, detail="Unauthorized")
+    if current_user["id"] != user_id and current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
     
-    try:
-        recommendations = await ai_service.get_event_recommendations(user_id, limit)
-        return recommendations
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    ai_service = AIAutomationService(db)
+    recommendations = await ai_service.get_event_recommendations(user_id, limit)
+    return recommendations
+
+@router.get("/events", response_model=List[Dict])
+async def get_my_event_recommendations(
+    limit: int = 5,
+    db=Depends(get_database),
+    current_user=Depends(get_current_user)
+):
+    ai_service = AIAutomationService(db)
+    recommendations = await ai_service.get_event_recommendations(current_user["id"], limit)
+    return recommendations
