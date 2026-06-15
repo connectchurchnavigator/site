@@ -1,17 +1,25 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import HomePage from './pages/HomePage';
-import LoginPage from './pages/LoginPage';
-import './App.css';
+import ChurchDetailPage from './pages/ChurchDetailPage';
+import InstallPrompt from './components/InstallPrompt';
 
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/auth/callback" element={<LoginPage />} />
-      </Routes>
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex-grow">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/church/:slug" element={<ChurchDetailPage />} />
+          </Routes>
+        </main>
+        <Footer />
+        <InstallPrompt />
+      </div>
     </Router>
   );
 }
