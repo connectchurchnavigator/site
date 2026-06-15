@@ -5,29 +5,38 @@
   "theme_color": "#7c3aed",
   "background_color": "#ffffff",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "start_url": "/",
+  "orientation": "portrait",
   "scope": "/",
+  "start_url": "/",
   "icons": [
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
   ],
-  "categories": ["lifestyle", "social"],
-  "screenshots": [
+  "categories": ["lifestyle", "navigation"],
+  "shortcuts": [
     {
-      "src": "/screenshots/home.png",
-      "sizes": "540x720",
-      "type": "image/png"
+      "name": "Find Churches",
+      "short_name": "Churches",
+      "description": "Search for churches near you",
+      "url": "/churches",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Worship Leaders",
+      "short_name": "Leaders",
+      "description": "Find worship leaders",
+      "url": "/worship-leaders",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
     }
   ]
 }
