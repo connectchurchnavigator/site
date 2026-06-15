@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Weekly Update - {{ church_name }}</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #4F46E5; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0;">Weekly Update</h1>
+        <p style="margin: 5px 0 0 0;">{{ church_name }}</p>
+    </div>
+    
+    <div style="background-color: #f9fafb; padding: 20px; border: 1px solid #e5e7eb;">
+        <h2 style="color: #4F46E5; margin-top: 0;">This Week's Summary</h2>
+        <p style="font-size: 16px; line-height: 1.8;">{{ digest }}</p>
+        
+        <div style="background-color: white; padding: 15px; border-radius: 8px; margin-top: 20px;">
+            <h3 style="margin-top: 0; color: #1f2937;">Key Metrics</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">Page Views</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold;">{{ views }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">New Followers</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold;">{{ followers }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">Event Registrations</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold;">{{ registrations }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">New Reviews</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold;">{{ reviews }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0;">Visitor Check-ins</td>
+                    <td style="padding: 8px 0; text-align: right; font-weight: bold;">{{ checkins }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+    <div style="background-color: white; padding: 20px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+        <p style="margin: 0; color: #6b7280; font-size: 14px; text-align: center;">
+            ChurchNavigator | Making churches easier to find and connect with
+        </p>
+    </div>
+</body>
+</html>
