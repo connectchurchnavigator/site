@@ -1,27 +1,35 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import ChurchDetail from './pages/ChurchDetail';
-import WorshipLeaders from './pages/WorshipLeaders';
-import MediaTeam from './pages/MediaTeam';
-import Events from './pages/Events';
-import PatternIntelligence from './pages/PatternIntelligence';
-import ChurnAnalysis from './pages/ChurnAnalysis';
-import Benchmarking from './pages/Benchmarking';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Profile from './pages/Profile';
+import PlannerPricing from './pages/PlannerPricing';
+import PlannerSubscription from './pages/PlannerSubscription';
+import Header from './components/Header';
+import Footer from './components/Footer';
 
-export default function App() {
+function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/church/:slug" element={<ChurchDetail />} />
-        <Route path="/worship-leaders" element={<WorshipLeaders />} />
-        <Route path="/media-team" element={<MediaTeam />} />
-        <Route path="/events" element={<Events />} />
-        <Route path="/tools/pattern-intelligence/:churchSlug" element={<PatternIntelligence />} />
-        <Route path="/tools/visitor-journey/:churchSlug" element={<ChurnAnalysis />} />
-        <Route path="/tools/benchmarking/:churchSlug" element={<Benchmarking />} />
-      </Routes>
-    </BrowserRouter>
+    <Router>
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-grow">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/church/:id" element={<ChurchDetail />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/planner/pricing" element={<PlannerPricing />} />
+            <Route path="/planner/subscription" element={<PlannerSubscription />} />
+          </Routes>
+        </main>
+        <Footer />
+      </div>
+    </Router>
   );
 }
+
+export default App;
