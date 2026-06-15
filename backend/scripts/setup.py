@@ -1,74 +1,55 @@
+#!/usr/bin/env python3
 import os
 import sys
-import asyncio
-from typing import Dict, List, Tuple
+import json
 import stripe
+import argparse
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
+import requests
+from pymongo import MongoClient, ASCENDING, DESCENDING
+from pymongo.errors import ConnectionFailure, OperationFailure
 import anthropic
 import resend
-from pymongo import MongoClient, ASCENDING, DESCENDING
-from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import datetime, timedelta
-import requests
-import argparse
 from colorama import init, Fore, Style
-import json
 
 init(autoreset=True)
 
-class SetupAutomation:
+class SetupScript:
     def __init__(self):
         self.results = []
-        self.env_vars = {}
+        self.errors = []
+        self.warnings = []
         self.stripe_ids = {}
-        self.manual_steps = []
         
-    def log_success(self, msg: str):
+    def log_ok(self, msg: str):
         print(f"{Fore.GREEN}✓ {msg}{Style.RESET_ALL}")
-        self.results.append(("success", msg))
+        self.results.append(("OK", msg))
         
     def log_error(self, msg: str):
         print(f"{Fore.RED}✗ {msg}{Style.RESET_ALL}")
-        self.results.append(("error", msg))
+        self.errors.append(msg)
         
     def log_warning(self, msg: str):
         print(f"{Fore.YELLOW}⚠ {msg}{Style.RESET_ALL}")
-        self.results.append(("warning", msg))
+        self.warnings.append(msg)
         
     def log_info(self, msg: str):
         print(f"{Fore.CYAN}ℹ {msg}{Style.RESET_ALL}")
-        
-    def check_env_vars(self) -> Dict[str, bool]:
-        self.log_info("\n=== CHECKING ENVIRONMENT VARIABLES ===")
+
+    def check_env_vars(self) -> bool:
+        self.log_info("\nChecking environment variables...")
         
         required_vars = {
             "STRIPE_SECRET_KEY": {
                 "how_to_get": "stripe.com -> Developers -> API Keys -> Secret key",
-                "example": "sk_live_... or sk_test_...",
+                "example": "sk_live_...",
                 "critical": True
             },
             "STRIPE_PUBLISHABLE_KEY": {
                 "how_to_get": "stripe.com -> Developers -> API Keys -> Publishable key",
-                "example": "pk_live_... or pk_test_...",
-                "critical": True
-            },
-            "NAMECHEAP_API_KEY": {
-                "how_to_get": "namecheap.com -> Profile -> Tools -> API Access",
-                "example": "abc123def456...",
-                "critical": False
-            },
-            "NAMECHEAP_API_USER": {
-                "how_to_get": "Your Namecheap username",
-                "example": "churchnavigator",
-                "critical": False
-            },
-            "ANTHROPIC_API_KEY": {
-                "how_to_get": "console.anthropic.com -> API Keys",
-                "example": "sk-ant-...",
-                "critical": True
-            },
-            "RESEND_API_KEY": {
-                "how_to_get": "resend.com -> API Keys",
-                "example": "re_...",
+                "example": "pk_live_...",
                 "critical": True
             },
             "MONGO_URL": {
@@ -76,627 +57,681 @@ class SetupAutomation:
                 "example": "mongodb+srv://...",
                 "critical": True
             },
+            "JWT_SECRET": {
+                "how_to_get": "Generate random: openssl rand -hex 32",
+                "example": "a1b2c3d4...",
+                "critical": True
+            },
+            "ANTHROPIC_API_KEY": {
+                "how_to_get": "console.anthropic.com -> API Keys",
+                "example": "sk-ant-...",
+                "critical": False
+            },
+            "RESEND_API_KEY": {
+                "how_to_get": "resend.com -> API Keys",
+                "example": "re_...",
+                "critical": False
+            },
+            "NAMECHEAP_API_KEY": {
+                "how_to_get": "namecheap.com -> Profile -> Tools -> API Access",
+                "example": "abc123...",
+                "critical": False
+            },
+            "NAMECHEAP_API_USER": {
+                "how_to_get": "Your Namecheap username",
+                "example": "churchnavigator",
+                "critical": False
+            },
             "GITHUB_TOKEN": {
-                "how_to_get": "github.com -> Settings -> Developer Settings -> Personal Access Tokens",
+                "how_to_get": "github.com -> Settings -> Developer Settings -> Tokens",
                 "example": "ghp_...",
                 "critical": False
             },
-            "JWT_SECRET": {
-                "how_to_get": "Generate: python -c 'import secrets; print(secrets.token_urlsafe(32))'",
-                "example": "random_string_32_chars_or_more",
-                "critical": True
+            "GOOGLE_CLIENT_ID": {
+                "how_to_get": "console.cloud.google.com -> Credentials -> OAuth 2.0 Client IDs",
+                "example": "123456789.apps.googleusercontent.com",
+                "critical": False
+            },
+            "GOOGLE_CLIENT_SECRET": {
+                "how_to_get": "console.cloud.google.com -> Credentials -> OAuth 2.0 Client IDs",
+                "example": "GOCSPX-...",
+                "critical": False
             },
             "OWNER_EMAIL": {
-                "how_to_get": "Your email for admin notifications",
+                "how_to_get": "Your admin email address",
                 "example": "admin@churchnavigator.com",
                 "critical": True
-            },
-            "RAILWAY_TOKEN": {
-                "how_to_get": "railway.app -> Account Settings -> Tokens",
-                "example": "railway_token_...",
-                "critical": False
             }
         }
         
-        status = {}
+        missing_critical = []
+        missing_optional = []
+        
         for var, info in required_vars.items():
             value = os.environ.get(var)
             if value:
-                self.log_success(f"{var} is set")
-                self.env_vars[var] = value
-                status[var] = True
+                self.log_ok(f"{var} is set")
             else:
                 if info["critical"]:
                     self.log_error(f"{var} is MISSING (CRITICAL)")
+                    missing_critical.append((var, info))
                 else:
-                    self.log_warning(f"{var} is MISSING (optional for now)")
+                    self.log_warning(f"{var} is missing (optional)")
+                    missing_optional.append((var, info))
+        
+        if missing_critical or missing_optional:
+            print(f"\n{Fore.YELLOW}Missing environment variables:{Style.RESET_ALL}")
+            for var, info in missing_critical + missing_optional:
+                print(f"\n{Fore.CYAN}{var}:{Style.RESET_ALL}")
                 print(f"  How to get: {info['how_to_get']}")
                 print(f"  Example: {info['example']}")
-                status[var] = False
-                
-        return status
-    
-    async def create_stripe_products(self) -> bool:
-        self.log_info("\n=== CREATING STRIPE PRODUCTS ===")
         
-        if "STRIPE_SECRET_KEY" not in self.env_vars:
-            self.log_error("Cannot create Stripe products: STRIPE_SECRET_KEY not set")
-            return False
-            
+        return len(missing_critical) == 0
+
+    def create_stripe_products(self) -> bool:
+        self.log_info("\nCreating Stripe products and prices...")
+        
         try:
-            stripe.api_key = self.env_vars["STRIPE_SECRET_KEY"]
+            stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
             
-            # Check if products already exist
-            existing = stripe.Product.list(limit=10)
-            existing_names = {p.name for p in existing.data}
+            # Check existing products first
+            existing = stripe.Product.list(limit=100)
+            existing_names = {p.name: p for p in existing.data}
             
-            # Create Planner Standard
-            if "ChurchNavigator Planner Standard" not in existing_names:
-                self.log_info("Creating Planner Standard...")
+            # Planner Standard
+            if "ChurchNavigator Planner Standard" in existing_names:
+                standard = existing_names["ChurchNavigator Planner Standard"]
+                self.log_warning("Planner Standard product already exists")
+            else:
                 standard = stripe.Product.create(
                     name="ChurchNavigator Planner Standard",
-                    description="Unlimited visits, AI planning, PDF export",
-                    metadata={"type": "planner", "tier": "standard"}
+                    description="Unlimited visits, AI planning, PDF export"
                 )
-                standard_monthly = stripe.Price.create(
+                self.log_ok(f"Created Planner Standard product: {standard.id}")
+            
+            # Get or create prices for Standard
+            prices = stripe.Price.list(product=standard.id, limit=10)
+            monthly_price = None
+            annual_price = None
+            
+            for price in prices.data:
+                if price.recurring and price.recurring.interval == "month":
+                    monthly_price = price
+                elif price.recurring and price.recurring.interval == "year":
+                    annual_price = price
+            
+            if not monthly_price:
+                monthly_price = stripe.Price.create(
                     product=standard.id,
                     unit_amount=900,
                     currency="gbp",
                     recurring={"interval": "month", "trial_period_days": 14}
                 )
-                standard_annual = stripe.Price.create(
+                self.log_ok(f"Created Planner Standard monthly price: {monthly_price.id}")
+            else:
+                self.log_warning("Planner Standard monthly price already exists")
+            
+            if not annual_price:
+                annual_price = stripe.Price.create(
                     product=standard.id,
                     unit_amount=8100,
                     currency="gbp",
                     recurring={"interval": "year"}
                 )
-                self.stripe_ids["STRIPE_PLANNER_STANDARD_PRICE_ID"] = standard_monthly.id
-                self.stripe_ids["STRIPE_PLANNER_STANDARD_ANNUAL_PRICE_ID"] = standard_annual.id
-                self.log_success(f"Created Planner Standard: {standard_monthly.id}")
+                self.log_ok(f"Created Planner Standard annual price: {annual_price.id}")
             else:
-                self.log_warning("Planner Standard already exists")
-                
-            # Create Planner Premium
-            if "ChurchNavigator Planner Premium" not in existing_names:
-                self.log_info("Creating Planner Premium...")
+                self.log_warning("Planner Standard annual price already exists")
+            
+            self.stripe_ids["STRIPE_PLANNER_STANDARD_PRICE_ID"] = monthly_price.id
+            self.stripe_ids["STRIPE_PLANNER_STANDARD_ANNUAL_PRICE_ID"] = annual_price.id
+            
+            # Planner Premium
+            if "ChurchNavigator Planner Premium" in existing_names:
+                premium = existing_names["ChurchNavigator Planner Premium"]
+                self.log_warning("Planner Premium product already exists")
+            else:
                 premium = stripe.Product.create(
                     name="ChurchNavigator Planner Premium",
-                    description="Full AI intelligence, unlimited collaboration",
-                    metadata={"type": "planner", "tier": "premium"}
+                    description="Full AI intelligence, unlimited collaboration"
                 )
-                premium_monthly = stripe.Price.create(
+                self.log_ok(f"Created Planner Premium product: {premium.id}")
+            
+            prices = stripe.Price.list(product=premium.id, limit=10)
+            premium_price = next((p for p in prices.data if p.recurring and p.recurring.interval == "month"), None)
+            
+            if not premium_price:
+                premium_price = stripe.Price.create(
                     product=premium.id,
                     unit_amount=1900,
                     currency="gbp",
                     recurring={"interval": "month", "trial_period_days": 14}
                 )
-                self.stripe_ids["STRIPE_PLANNER_PREMIUM_PRICE_ID"] = premium_monthly.id
-                self.log_success(f"Created Planner Premium: {premium_monthly.id}")
+                self.log_ok(f"Created Planner Premium monthly price: {premium_price.id}")
             else:
-                self.log_warning("Planner Premium already exists")
-                
-            # Create Sites Standard
-            if "ChurchNavigator Sites Standard" not in existing_names:
-                self.log_info("Creating Sites Standard...")
+                self.log_warning("Planner Premium monthly price already exists")
+            
+            self.stripe_ids["STRIPE_PLANNER_PREMIUM_PRICE_ID"] = premium_price.id
+            
+            # Sites Standard
+            if "ChurchNavigator Sites Standard" in existing_names:
+                sites = existing_names["ChurchNavigator Sites Standard"]
+                self.log_warning("Sites Standard product already exists")
+            else:
                 sites = stripe.Product.create(
                     name="ChurchNavigator Sites Standard",
-                    description="Custom domain website, hosted by ChurchNavigator",
-                    metadata={"type": "sites", "tier": "standard"}
+                    description="Custom domain website, hosted by ChurchNavigator"
                 )
-                sites_monthly = stripe.Price.create(
+                self.log_ok(f"Created Sites Standard product: {sites.id}")
+            
+            prices = stripe.Price.list(product=sites.id, limit=10)
+            sites_price = next((p for p in prices.data if p.recurring and p.recurring.interval == "month"), None)
+            
+            if not sites_price:
+                sites_price = stripe.Price.create(
                     product=sites.id,
                     unit_amount=900,
                     currency="gbp",
                     recurring={"interval": "month"}
                 )
-                self.stripe_ids["STRIPE_SITES_PRICE_ID"] = sites_monthly.id
-                self.log_success(f"Created Sites Standard: {sites_monthly.id}")
+                self.log_ok(f"Created Sites Standard monthly price: {sites_price.id}")
             else:
-                self.log_warning("Sites Standard already exists")
-                
-            # Create webhook
-            self.log_info("Creating Stripe webhook...")
-            webhook_url = "https://api.churchnavigator.com/api/stripe/webhook"
-            existing_webhooks = stripe.WebhookEndpoint.list(limit=10)
-            webhook_exists = any(w.url == webhook_url for w in existing_webhooks.data)
+                self.log_warning("Sites Standard monthly price already exists")
             
-            if not webhook_exists:
+            self.stripe_ids["STRIPE_SITES_PRICE_ID"] = sites_price.id
+            
+            # Create or update webhook
+            webhooks = stripe.WebhookEndpoint.list(limit=100)
+            webhook_url = "https://api.churchnavigator.com/api/stripe/webhook"
+            existing_webhook = next((w for w in webhooks.data if w.url == webhook_url), None)
+            
+            events = [
+                "customer.subscription.created",
+                "customer.subscription.updated",
+                "customer.subscription.deleted",
+                "invoice.paid",
+                "invoice.payment_failed",
+                "customer.subscription.trial_will_end"
+            ]
+            
+            if existing_webhook:
+                self.log_warning("Webhook already exists")
+                self.stripe_ids["STRIPE_WEBHOOK_SECRET"] = "<already exists - get from Stripe dashboard>"
+            else:
                 webhook = stripe.WebhookEndpoint.create(
                     url=webhook_url,
-                    enabled_events=[
-                        "customer.subscription.created",
-                        "customer.subscription.updated",
-                        "customer.subscription.deleted",
-                        "invoice.paid",
-                        "invoice.payment_failed",
-                        "customer.subscription.trial_will_end"
-                    ]
+                    enabled_events=events
                 )
+                self.log_ok(f"Created webhook: {webhook.id}")
                 self.stripe_ids["STRIPE_WEBHOOK_SECRET"] = webhook.secret
-                self.log_success(f"Created webhook: {webhook.id}")
-            else:
-                self.log_warning("Webhook already exists")
-                
-            # Save to .env.stripe
-            if self.stripe_ids:
-                with open(".env.stripe", "w") as f:
-                    for key, value in self.stripe_ids.items():
-                        f.write(f"{key}={value}\n")
-                self.log_success("Saved Stripe IDs to .env.stripe")
-                
+            
+            # Save to file
+            env_content = "\n".join([f"{k}={v}" for k, v in self.stripe_ids.items()])
+            with open(".env.stripe", "w") as f:
+                f.write(env_content)
+            
+            self.log_ok("Stripe IDs saved to .env.stripe")
             return True
             
-        except Exception as e:
-            self.log_error(f"Stripe setup failed: {str(e)}")
+        except stripe.error.StripeError as e:
+            self.log_error(f"Stripe error: {e}")
             return False
-    
-    async def test_connections(self) -> Dict[str, bool]:
-        self.log_info("\n=== TESTING CONNECTIONS ===")
+        except Exception as e:
+            self.log_error(f"Unexpected error creating Stripe products: {e}")
+            return False
+
+    def test_connections(self) -> Dict[str, bool]:
+        self.log_info("\nTesting API connections...")
         results = {}
         
-        # Test MongoDB
-        if "MONGO_URL" in self.env_vars:
-            try:
-                client = MongoClient(self.env_vars["MONGO_URL"], serverSelectionTimeoutMS=5000)
-                client.server_info()
-                self.log_success("MongoDB connection OK")
-                results["mongodb"] = True
-            except Exception as e:
-                self.log_error(f"MongoDB connection failed: {str(e)}")
+        # MongoDB
+        try:
+            mongo_url = os.environ.get("MONGO_URL")
+            if not mongo_url:
+                self.log_error("MongoDB: MONGO_URL not set")
                 results["mongodb"] = False
-        else:
+            else:
+                client = MongoClient(mongo_url, serverSelectionTimeoutMS=5000)
+                client.admin.command('ping')
+                self.log_ok("MongoDB connection successful")
+                results["mongodb"] = True
+        except Exception as e:
+            self.log_error(f"MongoDB connection failed: {e}")
             results["mongodb"] = False
-            
-        # Test Stripe
-        if "STRIPE_SECRET_KEY" in self.env_vars:
-            try:
-                stripe.api_key = self.env_vars["STRIPE_SECRET_KEY"]
-                stripe.Product.list(limit=1)
-                self.log_success("Stripe API OK")
-                results["stripe"] = True
-            except Exception as e:
-                self.log_error(f"Stripe API failed: {str(e)}")
+        
+        # Stripe
+        try:
+            stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+            if not stripe.api_key:
+                self.log_error("Stripe: STRIPE_SECRET_KEY not set")
                 results["stripe"] = False
-        else:
+            else:
+                stripe.Product.list(limit=1)
+                self.log_ok("Stripe API connection successful")
+                results["stripe"] = True
+        except Exception as e:
+            self.log_error(f"Stripe API connection failed: {e}")
             results["stripe"] = False
-            
-        # Test Anthropic
-        if "ANTHROPIC_API_KEY" in self.env_vars:
-            try:
-                client = anthropic.Anthropic(api_key=self.env_vars["ANTHROPIC_API_KEY"])
-                response = client.messages.create(
+        
+        # Anthropic
+        try:
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                self.log_warning("Anthropic: ANTHROPIC_API_KEY not set (optional)")
+                results["anthropic"] = False
+            else:
+                client = anthropic.Anthropic(api_key=api_key)
+                message = client.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=10,
-                    messages=[{"role": "user", "content": "test"}]
+                    messages=[{"role": "user", "content": "Hi"}]
                 )
-                self.log_success("Anthropic API OK")
+                self.log_ok("Anthropic API connection successful")
                 results["anthropic"] = True
-            except Exception as e:
-                self.log_error(f"Anthropic API failed: {str(e)}")
-                results["anthropic"] = False
-        else:
+        except Exception as e:
+            self.log_warning(f"Anthropic API connection failed: {e}")
             results["anthropic"] = False
-            
-        # Test Resend
-        if "RESEND_API_KEY" in self.env_vars and "OWNER_EMAIL" in self.env_vars:
-            try:
-                resend.api_key = self.env_vars["RESEND_API_KEY"]
-                email = resend.Emails.send({
-                    "from": "ChurchNavigator <noreply@churchnavigator.com>",
-                    "to": [self.env_vars["OWNER_EMAIL"]],
-                    "subject": "ChurchNavigator Setup Test",
-                    "html": "<p>Your ChurchNavigator setup is working! This is a test email.</p>"
-                })
-                self.log_success(f"Resend API OK (test email sent to {self.env_vars['OWNER_EMAIL']})")
-                results["resend"] = True
-            except Exception as e:
-                self.log_error(f"Resend API failed: {str(e)}")
-                results["resend"] = False
-        else:
-            results["resend"] = False
-            
-        # Test Namecheap (optional)
-        if "NAMECHEAP_API_KEY" in self.env_vars and "NAMECHEAP_API_USER" in self.env_vars:
-            try:
-                url = "https://api.namecheap.com/xml.response"
-                params = {
-                    "ApiUser": self.env_vars["NAMECHEAP_API_USER"],
-                    "ApiKey": self.env_vars["NAMECHEAP_API_KEY"],
-                    "UserName": self.env_vars["NAMECHEAP_API_USER"],
-                    "Command": "namecheap.domains.check",
-                    "ClientIp": "0.0.0.0",
-                    "DomainList": "test123456789.com"
-                }
-                response = requests.get(url, params=params, timeout=10)
-                if "Status=\"OK\"" in response.text:
-                    self.log_success("Namecheap API OK")
-                    results["namecheap"] = True
-                else:
-                    self.log_warning("Namecheap API responded but check logs")
-                    results["namecheap"] = False
-            except Exception as e:
-                self.log_warning(f"Namecheap API failed (optional): {str(e)}")
-                results["namecheap"] = False
-        else:
-            results["namecheap"] = False
-            
-        return results
-    
-    async def setup_database(self) -> bool:
-        self.log_info("\n=== SETTING UP DATABASE ===")
         
-        if "MONGO_URL" not in self.env_vars:
-            self.log_error("Cannot setup database: MONGO_URL not set")
-            return False
-            
+        # Resend
         try:
-            client = AsyncIOMotorClient(self.env_vars["MONGO_URL"])
-            db = client.ChurchNavigator
+            api_key = os.environ.get("RESEND_API_KEY")
+            owner_email = os.environ.get("OWNER_EMAIL")
+            if not api_key:
+                self.log_warning("Resend: RESEND_API_KEY not set (optional)")
+                results["resend"] = False
+            elif not owner_email:
+                self.log_warning("Resend: OWNER_EMAIL not set, skipping test email")
+                results["resend"] = False
+            else:
+                resend.api_key = api_key
+                params = {
+                    "from": "ChurchNavigator <noreply@churchnavigator.com>",
+                    "to": [owner_email],
+                    "subject": "ChurchNavigator Setup Test",
+                    "html": "<p>Setup script test email - everything working!</p>"
+                }
+                resend.Emails.send(params)
+                self.log_ok(f"Resend test email sent to {owner_email}")
+                results["resend"] = True
+        except Exception as e:
+            self.log_warning(f"Resend test failed: {e}")
+            results["resend"] = False
+        
+        # GitHub
+        try:
+            token = os.environ.get("GITHUB_TOKEN")
+            if not token:
+                self.log_warning("GitHub: GITHUB_TOKEN not set (optional)")
+                results["github"] = False
+            else:
+                headers = {"Authorization": f"token {token}"}
+                resp = requests.get("https://api.github.com/user/repos", headers=headers, timeout=5)
+                if resp.status_code == 200:
+                    self.log_ok("GitHub API connection successful")
+                    results["github"] = True
+                else:
+                    self.log_warning(f"GitHub API returned status {resp.status_code}")
+                    results["github"] = False
+        except Exception as e:
+            self.log_warning(f"GitHub API connection failed: {e}")
+            results["github"] = False
+        
+        return results
+
+    def setup_database(self) -> bool:
+        self.log_info("\nSetting up database indexes and seed data...")
+        
+        try:
+            mongo_url = os.environ.get("MONGO_URL")
+            if not mongo_url:
+                self.log_error("MONGO_URL not set")
+                return False
             
-            # Create indexes
-            self.log_info("Creating indexes...")
+            client = MongoClient(mongo_url)
+            db = client.get_database()
             
-            # Churches indexes
-            await db.churches.create_index([("slug", ASCENDING)], unique=True)
-            await db.churches.create_index([("location", "2dsphere")])
-            await db.churches.create_index([("denomination", ASCENDING)])
-            await db.churches.create_index([("is_featured", DESCENDING), ("name", ASCENDING)])
-            self.log_success("Created churches indexes")
+            # Churches collection indexes
+            churches = db["churches"]
+            churches.create_index([("slug", ASCENDING)], unique=True)
+            churches.create_index([("location", "2dsphere")])
+            churches.create_index([("denomination", ASCENDING)])
+            churches.create_index([("verified", ASCENDING)])
+            churches.create_index([("featured", ASCENDING)])
+            self.log_ok("Created churches collection indexes")
             
-            # Users indexes
-            await db.users.create_index([("email", ASCENDING)], unique=True)
-            await db.users.create_index([("google_id", ASCENDING)], sparse=True)
-            await db.users.create_index([("facebook_id", ASCENDING)], sparse=True)
-            self.log_success("Created users indexes")
+            # Users collection indexes
+            users = db["users"]
+            users.create_index([("email", ASCENDING)], unique=True)
+            users.create_index([("google_id", ASCENDING)], sparse=True)
+            users.create_index([("facebook_id", ASCENDING)], sparse=True)
+            self.log_ok("Created users collection indexes")
             
-            # Subscriptions indexes
-            await db.subscriptions.create_index([("user_id", ASCENDING)])
-            await db.subscriptions.create_index([("stripe_subscription_id", ASCENDING)])
-            await db.subscriptions.create_index([("church_id", ASCENDING)])
-            self.log_success("Created subscriptions indexes")
+            # Subscriptions collection indexes
+            subscriptions = db["subscriptions"]
+            subscriptions.create_index([("user_id", ASCENDING)])
+            subscriptions.create_index([("stripe_customer_id", ASCENDING)])
+            subscriptions.create_index([("stripe_subscription_id", ASCENDING)])
+            subscriptions.create_index([("status", ASCENDING)])
+            self.log_ok("Created subscriptions collection indexes")
             
             # Homepage activity TTL index (30 days)
-            await db.homepage_activity.create_index(
+            homepage_activity = db["homepage_activity"]
+            homepage_activity.create_index(
                 [("timestamp", ASCENDING)],
                 expireAfterSeconds=2592000
             )
-            self.log_success("Created homepage_activity TTL index (30 days)")
+            self.log_ok("Created homepage_activity TTL index (30 days)")
             
             # Visitor tracking TTL index (90 days)
-            await db.visitor_tracking.create_index(
+            visitors = db["visitors"]
+            visitors.create_index(
                 [("timestamp", ASCENDING)],
                 expireAfterSeconds=7776000
             )
-            self.log_success("Created visitor_tracking TTL index (90 days)")
+            visitors.create_index([("church_id", ASCENDING)])
+            visitors.create_index([("qr_code", ASCENDING)])
+            self.log_ok("Created visitors TTL index (90 days)")
             
-            # Seed featured churches if none exist
-            count = await db.churches.count_documents({"is_featured": True})
-            if count == 0:
-                self.log_info("Seeding featured churches...")
-                featured = [
-                    {
-                        "name": "St Mary's Church",
-                        "slug": "st-marys-church-london",
-                        "denomination": "Church of England",
-                        "address": "High Street, London",
-                        "postcode": "SW1A 1AA",
-                        "location": {"type": "Point", "coordinates": [-0.127758, 51.507351]},
-                        "phone": "020 1234 5678",
-                        "email": "info@stmarys.org.uk",
-                        "website": "https://stmarys.org.uk",
-                        "description": "Historic church in the heart of London",
-                        "service_times": [{"day": "Sunday", "time": "10:00 AM", "type": "Main Service"}],
-                        "is_featured": True,
-                        "created_at": datetime.utcnow()
-                    }
-                ]
-                await db.churches.insert_many(featured)
-                self.log_success(f"Seeded {len(featured)} featured churches")
-            else:
-                self.log_info(f"Featured churches already exist ({count})")
-                
+            # Payment failures tracking
+            payment_failures = db["payment_failures"]
+            payment_failures.create_index([("subscription_id", ASCENDING)])
+            payment_failures.create_index([("failure_date", ASCENDING)])
+            self.log_ok("Created payment_failures indexes")
+            
+            # Church websites hosting
+            church_websites = db["church_websites"]
+            church_websites.create_index([("church_id", ASCENDING)], unique=True)
+            church_websites.create_index([("domain", ASCENDING)], unique=True)
+            church_websites.create_index([("hosting_status", ASCENDING)])
+            self.log_ok("Created church_websites indexes")
+            
+            self.log_ok("Database setup complete")
             return True
             
         except Exception as e:
-            self.log_error(f"Database setup failed: {str(e)}")
+            self.log_error(f"Database setup failed: {e}")
             return False
-    
-    def update_railway_env(self) -> bool:
-        self.log_info("\n=== UPDATING RAILWAY ENVIRONMENT ===")
-        
-        if "RAILWAY_TOKEN" not in self.env_vars:
-            self.log_warning("RAILWAY_TOKEN not set - skipping automatic Railway update")
-            self.log_info("Manually add .env.stripe variables to Railway dashboard")
-            return False
-            
-        if not self.stripe_ids:
-            self.log_warning("No Stripe IDs to upload")
-            return False
-            
-        try:
-            # Railway API would go here - currently Railway doesn't have public API
-            # for env var updates, so this is a placeholder
-            self.log_warning("Railway API integration pending - add vars manually")
-            self.log_info("Copy .env.stripe contents to Railway dashboard:")
-            self.log_info("railway.app -> your project -> Variables")
-            return False
-            
-        except Exception as e:
-            self.log_error(f"Railway update failed: {str(e)}")
-            return False
-    
+
     def generate_reports(self):
-        self.log_info("\n=== GENERATING REPORTS ===")
+        self.log_info("\nGenerating setup reports...")
         
-        # Generate SETUP_REPORT.md
-        report = "# ChurchNavigator Setup Report\n\n"
-        report += f"Generated: {datetime.utcnow().isoformat()}\n\n"
-        report += "## Automated Setup Results\n\n"
-        
+        # Setup Report
+        report = f"""# ChurchNavigator Setup Report
+
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Summary
+
+✅ Successful: {len([r for r in self.results if r[0] == 'OK'])}
+⚠️  Warnings: {len(self.warnings)}
+❌ Errors: {len(self.errors)}
+
+## Completed Tasks
+
+"""
         for status, msg in self.results:
-            icon = "✓" if status == "success" else "✗" if status == "error" else "⚠"
-            report += f"{icon} {msg}\n"
-            
+            report += f"- {msg}\n"
+        
+        if self.warnings:
+            report += "\n## Warnings\n\n"
+            for warning in self.warnings:
+                report += f"- {warning}\n"
+        
+        if self.errors:
+            report += "\n## Errors\n\n"
+            for error in self.errors:
+                report += f"- {error}\n"
+        
         if self.stripe_ids:
             report += "\n## Stripe Product IDs\n\n"
+            report += "Add these to Railway environment variables:\n\n"
             for key, value in self.stripe_ids.items():
-                report += f"- {key}: `{value}`\n"
-                
+                report += f"```\n{key}={value}\n```\n\n"
+        
         report += "\n## Next Steps\n\n"
-        report += "1. Add environment variables from .env.stripe to Railway\n"
-        report += "2. Follow STEP_BY_STEP_GUIDE.md for manual setup tasks\n"
-        report += "3. Test the application locally before deploying\n"
+        report += "1. Review STEP_BY_STEP_GUIDE.md for manual tasks\n"
+        report += "2. Add Stripe IDs from .env.stripe to Railway\n"
+        report += "3. Test the application end-to-end\n"
+        report += "4. Monitor logs for any issues\n"
         
         with open("SETUP_REPORT.md", "w") as f:
             f.write(report)
-        self.log_success("Created SETUP_REPORT.md")
         
-        # Generate STEP_BY_STEP_GUIDE.md
-        guide = self.generate_manual_guide()
-        with open("STEP_BY_STEP_GUIDE.md", "w") as f:
-            f.write(guide)
-        self.log_success("Created STEP_BY_STEP_GUIDE.md")
-    
-    def generate_manual_guide(self) -> str:
-        return """# ChurchNavigator Manual Setup Guide
+        self.log_ok("Generated SETUP_REPORT.md")
+        
+        # Step-by-step guide
+        guide = """# ChurchNavigator Manual Setup Guide
 
-This guide covers setup tasks that require human verification.
+These tasks require human verification and cannot be automated.
 
-## 1. Stripe Account Setup (1-2 days)
+## 1. Namecheap Reseller Account (30 mins, one-time)
 
-**Time Required:** 30 minutes + 1-2 days approval
-**Status:** Required for payment processing
+**Why needed:** To automatically register and manage church domains
 
-### Steps:
-1. Go to https://stripe.com and create account
-2. Complete business verification:
-   - Business name: ChurchNavigator
-   - Business address: [Your address]
-   - Bank account details for payouts
-3. Wait for Stripe approval (usually same day)
-4. Once approved, go to Dashboard -> Developers -> API Keys
-5. Copy Secret Key and Publishable Key
-6. Add to Railway environment:
+**Steps:**
+1. Go to https://www.namecheap.com/reseller/
+2. Click "Sign Up" and create reseller account
+3. Complete identity verification form
+4. Wait 1-2 business days for approval email
+5. Once approved, go to Profile → Tools → API Access
+6. Enable API access and generate API key
+7. Get your Railway service IP:
+   - Railway → Your service → Settings → Networking → Outbound IP
+8. Add Railway IP to Namecheap API whitelist
+9. Add to Railway environment:
+   - NAMECHEAP_API_USER=your_username
+   - NAMECHEAP_API_KEY=your_api_key
+
+**Why can't automate:** Requires identity and business verification by Namecheap
+
+---
+
+## 2. Stripe Account Verification (1-2 days, one-time)
+
+**Why needed:** To process subscription payments
+
+**Steps:**
+1. Create account at https://stripe.com
+2. Go to Account Settings → Business settings
+3. Complete business verification:
+   - Business name and address
+   - Tax ID/VAT number
+   - Bank account details
+4. Wait for Stripe approval (usually same day)
+5. Once approved, go to Developers → API Keys
+6. Copy Secret Key and Publishable Key
+7. Add to Railway environment:
    - STRIPE_SECRET_KEY=sk_live_...
    - STRIPE_PUBLISHABLE_KEY=pk_live_...
 
-**Why Manual:** Requires identity and banking verification
+**Why can't automate:** Requires banking and identity verification
 
 ---
 
-## 2. Namecheap Reseller Account (2-3 days)
+## 3. Google OAuth App (30 mins, one-time)
 
-**Time Required:** 30 minutes + 2-3 days approval
-**Status:** Required for custom domain management
+**Why needed:** For "Sign in with Google" functionality
 
-### Steps:
-1. Go to https://namecheap.com/reseller
-2. Sign up for reseller account
-3. Complete identity verification (driver's license, etc)
-4. Wait for Namecheap approval (1-3 business days)
-5. Once approved:
-   - Go to Profile -> Tools -> API Access
-   - Enable API access
-   - Get your API key
-   - Whitelist Railway's outbound IP (see Railway dashboard -> Settings)
-6. Add to Railway environment:
-   - NAMECHEAP_API_USER=[your username]
-   - NAMECHEAP_API_KEY=[your api key]
-
-**Why Manual:** Requires identity verification by Namecheap
-
----
-
-## 3. Google OAuth Setup (30 minutes)
-
-**Time Required:** 30 minutes
-**Status:** Required for "Sign in with Google"
-
-### Steps:
+**Steps:**
 1. Go to https://console.cloud.google.com
-2. Create new project "ChurchNavigator"
-3. Enable Google+ API
-4. Go to Credentials -> Create Credentials -> OAuth 2.0 Client ID
-5. Application type: Web application
-6. Authorized JavaScript origins:
-   - https://churchnavigator.com
-   - http://localhost:3000 (for dev)
-7. Authorized redirect URIs:
-   - https://churchnavigator.com/auth/google/callback
-   - http://localhost:3000/auth/google/callback
-8. Copy Client ID and Client Secret
-9. Add to Railway environment:
-   - GOOGLE_CLIENT_ID=[your client id]
-   - GOOGLE_CLIENT_SECRET=[your client secret]
+2. Create new project: "ChurchNavigator"
+3. Enable APIs:
+   - Go to APIs & Services → Library
+   - Search and enable "Google+ API"
+4. Create OAuth credentials:
+   - Go to APIs & Services → Credentials
+   - Create OAuth 2.0 Client ID
+   - Application type: Web application
+   - Authorized redirect URIs:
+     - https://churchnavigator.com/auth/google/callback
+     - https://api.churchnavigator.com/api/auth/google/callback
+5. Copy Client ID and Client Secret
+6. Add to Railway environment:
+   - GOOGLE_CLIENT_ID=...
+   - GOOGLE_CLIENT_SECRET=...
 
-**Why Manual:** Requires Google account and domain verification
+**Why can't automate:** Requires Google account and domain verification
 
 ---
 
-## 4. Facebook OAuth Setup (1-2 weeks)
+## 4. Facebook OAuth App (1-2 weeks for review)
 
-**Time Required:** 30 minutes + 1-2 weeks review
-**Status:** Optional (can launch without it)
+**Why needed:** For "Sign in with Facebook" functionality
 
-### Steps:
+**Steps:**
 1. Go to https://developers.facebook.com
-2. Create new app
+2. Create new app: "ChurchNavigator"
 3. Add Facebook Login product
-4. Configure:
-   - Valid OAuth Redirect URIs: https://churchnavigator.com/auth/facebook/callback
-   - App Domains: churchnavigator.com
-5. Submit app for review (required for production)
-6. Wait for Meta approval (1-2 weeks)
+4. Configure OAuth redirect URIs:
+   - https://churchnavigator.com/auth/facebook/callback
+   - https://api.churchnavigator.com/api/auth/facebook/callback
+5. Submit app for review (required for production use)
+6. Wait 1-2 weeks for Meta approval
 7. Once approved, copy App ID and App Secret
 8. Add to Railway environment:
-   - FACEBOOK_APP_ID=[your app id]
-   - FACEBOOK_APP_SECRET=[your app secret]
+   - FACEBOOK_APP_ID=...
+   - FACEBOOK_APP_SECRET=...
 
-**Why Manual:** Requires Meta app review process
-
-**Note:** You can launch without Facebook login initially
+**Why can't automate:** Requires Meta app review process
 
 ---
 
-## 5. Railway Configuration
+## 5. Railway IP Whitelisting
 
-**Time Required:** 10 minutes
-**Status:** Required
+**Why needed:** External APIs require IP whitelisting
 
-### Steps:
-1. Go to https://railway.app
-2. Find your backend service
-3. Go to Settings -> get Networking -> Outbound IP
-4. Copy this IP address
-5. Add this IP to:
-   - MongoDB Atlas IP whitelist
-   - Namecheap API whitelist (Profile -> Tools -> API Access)
-6. Add all environment variables from .env.stripe to Railway:
-   - Go to your service -> Variables
-   - Paste each variable
-7. Trigger redeploy
+**Steps:**
+1. Get Railway outbound IP:
+   - Railway → Your service → Settings → Networking
+   - Copy the Outbound IP address
+2. Add to Namecheap API whitelist:
+   - Namecheap → Profile → Tools → API Access → IP Whitelist
+3. Add to MongoDB Atlas:
+   - MongoDB Atlas → Network Access → Add IP Address
+   - Enter Railway IP
+4. Add to any other services that require whitelisting
 
-**Why Manual:** Railway IP must be manually copied and whitelisted
+**Why can't automate:** Railway IP must be manually retrieved
 
 ---
 
-## 6. MongoDB Atlas Configuration
+## 6. Resend Email Setup (15 mins)
 
-**Time Required:** 5 minutes
-**Status:** Should already be done
+**Why needed:** For sending transactional emails
 
-### Verify:
-1. Go to MongoDB Atlas dashboard
-2. Check Network Access -> IP Access List
-3. Ensure Railway IP is whitelisted (or 0.0.0.0/0 for dev)
-4. Check Database Access -> ensure user has readWrite permissions
-
----
-
-## 7. Domain DNS Configuration
-
-**Time Required:** 5 minutes (+ propagation time)
-**Status:** Already done if site is live
-
-### Verify:
-1. churchnavigator.com -> CNAME to Railway frontend
-2. api.churchnavigator.com -> CNAME to Railway backend
-3. Propagation takes 5-60 minutes
+**Steps:**
+1. Go to https://resend.com and create account
+2. Verify your domain:
+   - Add DNS records provided by Resend
+   - Wait for verification (usually 5-10 minutes)
+3. Create API key
+4. Add to Railway environment:
+   - RESEND_API_KEY=re_...
+5. Set sender email:
+   - OWNER_EMAIL=admin@churchnavigator.com
 
 ---
 
-## Setup Checklist
+## 7. Anthropic API Key (5 mins)
 
-- [ ] Stripe account verified
-- [ ] Stripe products created (automated)
-- [ ] Namecheap reseller approved
-- [ ] Google OAuth configured
-- [ ] Facebook OAuth configured (optional)
-- [ ] Railway IP whitelisted in MongoDB
-- [ ] Railway IP whitelisted in Namecheap
-- [ ] All env vars added to Railway
-- [ ] Database indexes created (automated)
-- [ ] Test email received from Resend
-- [ ] Deploy to Railway and test
+**Why needed:** For AI church visit planning
+
+**Steps:**
+1. Go to https://console.anthropic.com
+2. Create account and add payment method
+3. Generate API key
+4. Add to Railway environment:
+   - ANTHROPIC_API_KEY=sk-ant-...
 
 ---
 
-## Testing After Setup
+## Estimated Total Time
 
-1. Visit https://churchnavigator.com
-2. Test search functionality
-3. Test user signup
-4. Test Google login
-5. Test subscription flow (use test mode)
-6. Check email delivery
-7. Test custom domain flow (if Namecheap ready)
+- If all accounts already exist: ~1 hour
+- If starting from scratch: 2-3 weeks (due to verification delays)
 
----
+## Priority Order
 
-## Support
+1. **Critical (app won't work without):**
+   - Stripe (payments)
+   - MongoDB (already set up)
+   - JWT Secret (generate: `openssl rand -hex 32`)
 
-If you encounter issues:
-1. Check SETUP_REPORT.md for error details
-2. Review Railway logs
-3. Check MongoDB Atlas metrics
-4. Test API endpoints manually
+2. **Important (core features):**
+   - Google OAuth (user login)
+   - Resend (emails)
+   - Anthropic (AI features)
 
+3. **Can add later:**
+   - Facebook OAuth (alternative login)
+   - Namecheap (custom domains)
+   - GitHub (deployment automation)
 """
+        
+        with open("STEP_BY_STEP_GUIDE.md", "w") as f:
+            f.write(guide)
+        
+        self.log_ok("Generated STEP_BY_STEP_GUIDE.md")
 
-async def main():
-    parser = argparse.ArgumentParser(description="ChurchNavigator Auto-Setup")
-    parser.add_argument("--check-only", action="store_true", help="Only check env vars")
-    parser.add_argument("--stripe-only", action="store_true", help="Only setup Stripe")
-    parser.add_argument("--db-only", action="store_true", help="Only setup database")
-    parser.add_argument("--guide", action="store_true", help="Generate guide only")
-    parser.add_argument("--full", action="store_true", help="Full setup (default)")
+def main():
+    parser = argparse.ArgumentParser(description="ChurchNavigator Setup Script")
+    parser.add_argument("--check-only", action="store_true", help="Only check environment variables")
+    parser.add_argument("--stripe-only", action="store_true", help="Only create Stripe products")
+    parser.add_argument("--db-only", action="store_true", help="Only set up database")
+    parser.add_argument("--guide", action="store_true", help="Generate guides only")
+    parser.add_argument("--full", action="store_true", help="Run full setup (default)")
+    
     args = parser.parse_args()
     
+    # Default to full if no flags
     if not any([args.check_only, args.stripe_only, args.db_only, args.guide]):
         args.full = True
     
-    setup = SetupAutomation()
+    setup = SetupScript()
     
-    print(f"{Fore.MAGENTA}{'='*60}")
-    print(f"  ChurchNavigator Auto-Setup")
+    print(f"{Fore.CYAN}{'='*60}")
+    print(f"ChurchNavigator Setup Script")
     print(f"{'='*60}{Style.RESET_ALL}\n")
-    
-    # Always check env vars first
-    env_status = setup.check_env_vars()
-    
-    if args.check_only:
-        print("\n✓ Environment check complete")
-        return
     
     if args.guide:
         setup.generate_reports()
-        print("\n✓ Guide generated")
         return
     
-    # Stripe setup
-    if args.full or args.stripe_only:
-        await setup.create_stripe_products()
+    # Always check environment variables first
+    env_ok = setup.check_env_vars()
     
-    # Database setup
-    if args.full or args.db_only:
-        await setup.setup_database()
+    if args.check_only:
+        return
     
-    # Test connections
+    if not env_ok:
+        setup.log_error("\nCritical environment variables missing. Fix these before continuing.")
+        return
+    
+    if args.stripe_only or args.full:
+        setup.create_stripe_products()
+    
+    if args.db_only or args.full:
+        setup.setup_database()
+    
     if args.full:
-        await setup.test_connections()
-        setup.update_railway_env()
+        setup.test_connections()
     
-    # Generate reports
+    # Always generate reports at the end
     setup.generate_reports()
     
-    print(f"\n{Fore.MAGENTA}{'='*60}")
-    print(f"  Setup Complete!")
+    print(f"\n{Fore.CYAN}{'='*60}")
+    print(f"Setup Complete!")
     print(f"{'='*60}{Style.RESET_ALL}\n")
-    print("Next steps:")
-    print("1. Review SETUP_REPORT.md")
-    print("2. Add .env.stripe variables to Railway")
+    
+    if setup.errors:
+        print(f"{Fore.RED}⚠️  {len(setup.errors)} error(s) occurred. Review SETUP_REPORT.md{Style.RESET_ALL}")
+    else:
+        print(f"{Fore.GREEN}✓ All automated tasks completed successfully!{Style.RESET_ALL}")
+    
+    print(f"\n{Fore.CYAN}Next steps:{Style.RESET_ALL}")
+    print("1. Review SETUP_REPORT.md for details")
+    print("2. Add Stripe IDs from .env.stripe to Railway")
     print("3. Follow STEP_BY_STEP_GUIDE.md for manual tasks")
-    print("4. Deploy to Railway\n")
+    print("4. Run: railway up (to deploy)\n")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
