@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { Search, Filter, MapPin, Calendar, DollarSign, Loader2, Sparkles } from 'lucide-react';
 import axios from 'axios';
-import { Search, MapPin, Filter, Sparkles, X } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://api.churchnavigator.com';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://api.churchnavigator.com';
+
+const LISTING_TYPES = [
+  { id: 'all', label: 'All' },
+  { id: 'church', label: 'Churches' },
+  { id: 'event', label: 'Events' },
+  { id: 'pastor', label: 'Pastors' },
+  { id: 'worship_leader', label: 'Worship Leaders' },
+  { id: 'media_team', label: 'Media Teams' },
+  { id: 'bible_college', label: 'Bible Colleges' }
+];
 
 const SearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -12,37 +22,20 @@ const SearchPage = () => {
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [activeType, setActiveType] = useState(searchParams.get('type') || '');
-  const [showFilters, setShowFilters] = useState(false);
-  const [showAI, setShowAI] = useState(false);
-  const [aiResponse, setAiResponse] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  
+  const [activeType, setActiveType] = useState(searchParams.get('type') || 'all');
   const [filters, setFilters] = useState({
     city: searchParams.get('city') || '',
     denomination: searchParams.get('denomination') || ''
   });
-
-  const types = [
-    { key: '', label: 'All' },
-    { key: 'church', label: 'Churches' },
-    { key: 'event', label: 'Events' },
-    { key: 'pastor', label: 'Pastors' },
-    { key: 'worship-leader', label: 'Worship Leaders' },
-    { key: 'media-team', label: 'Media Teams' },
-    { key: 'bible-college', label: 'Bible Colleges' }
-  ];
-
-  const denominations = [
-    'Pentecostal', 'Baptist', 'Anglican', 'Methodist', 'Presbyterian',
-    'Catholic', 'Evangelical', 'Charismatic', 'Reformed', 'Independent'
-  ];
+  const [showAI, setShowAI] = useState(false);
+  const [aiAnswer, setAiAnswer] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
-    if (query) {
+    if (query || Object.values(filters).some(v => v)) {
       performSearch();
     }
-  }, [page, activeType, filters]);
+  }, [page, activeType]);
 
   const performSearch = async () => {
     setLoading(true);
@@ -52,16 +45,18 @@ const SearchPage = () => {
         page: page.toString(),
         limit: '20'
       });
-      
-      if (activeType) params.append('type', activeType);
+
+      if (activeType !== 'all') params.append('type', activeType);
       if (filters.city) params.append('city', filters.city);
       if (filters.denomination) params.append('denomination', filters.denomination);
 
-      const response = await axios.get(`${API_BASE}/api/search?${params.toString()}`);
+      const endpoint = activeType === 'all' ? '/api/search' : `/api/search/${activeType}s`;
+      const response = await axios.get(`${API_BASE}${endpoint}?${params}`);
+
       setResults(response.data.results || []);
       setTotal(response.data.total || 0);
     } catch (error) {
-      console.error('Search failed:', error);
+      console.error('Search error:', error);
       setResults([]);
     } finally {
       setLoading(false);
@@ -71,115 +66,84 @@ const SearchPage = () => {
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(1);
-    performSearch();
-    
     const params = new URLSearchParams({ q: query });
-    if (activeType) params.append('type', activeType);
+    if (activeType !== 'all') params.append('type', activeType);
     if (filters.city) params.append('city', filters.city);
     if (filters.denomination) params.append('denomination', filters.denomination);
     setSearchParams(params);
+    performSearch();
   };
 
   const handleAISearch = async () => {
-    if (!query) return;
+    if (!query || query.length < 10) {
+      alert('Please enter a more detailed question for AI search (minimum 10 characters)');
+      return;
+    }
+
     setAiLoading(true);
-    setShowAI(true);
     try {
       const response = await axios.get(`${API_BASE}/api/search/conversational?q=${encodeURIComponent(query)}`);
-      setAiResponse(response.data.results);
+      setAiAnswer(response.data.answer);
+      setShowAI(true);
     } catch (error) {
       if (error.response?.status === 429) {
-        setAiResponse('Daily AI search limit reached. Please try standard search.');
+        alert('Daily AI search limit reached. Please try again tomorrow or use standard search.');
       } else {
-        setAiResponse('AI search unavailable. Please use standard search.');
+        alert('AI search unavailable. Using standard search instead.');
       }
     } finally {
       setAiLoading(false);
     }
   };
 
-  const getImageUrl = (result) => {
-    if (result.image) return result.image;
-    if (result.images && result.images.length > 0) return result.images[0];
-    return '/placeholder-church.jpg';
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search churches, events, pastors..."
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <button
-              type="submit"
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-            >
-              Search
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              <Filter size={20} />
-            </button>
-            <button
-              type="button"
-              onClick={handleAISearch}
-              className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
-              title="Ask AI (limited availability)"
-            >
-              <Sparkles size={20} />
-              <span className="hidden sm:inline">Ask AI</span>
-            </button>
-          </form>
-
-          {showFilters && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Search ChurchNavigator</h1>
+          
+          <form onSubmit={handleSearch} className="mb-4">
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                 <input
                   type="text"
-                  value={filters.city}
-                  onChange={(e) => setFilters({ ...filters, city: e.target.value })}
-                  placeholder="e.g. London"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search churches, events, pastors, worship leaders..."
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Denomination</label>
-                <select
-                  value={filters.denomination}
-                  onChange={(e) => setFilters({ ...filters, denomination: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Denominations</option>
-                  {denominations.map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-            {types.map(type => (
               <button
-                key={type.key}
-                onClick={() => { setActiveType(type.key); setPage(1); }}
-                className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-                  activeType === type.key
+                type="submit"
+                disabled={loading}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                Search
+              </button>
+              <button
+                type="button"
+                onClick={handleAISearch}
+                disabled={aiLoading || !query}
+                className="px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                title="Ask AI for personalized recommendations"
+              >
+                {aiLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
+                Ask AI
+              </button>
+            </div>
+          </form>
+
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {LISTING_TYPES.map(type => (
+              <button
+                key={type.id}
+                onClick={() => { setActiveType(type.id); setPage(1); }}
+                className={`px-4 py-2 rounded-full whitespace-nowrap transition-colors ${
+                  activeType === type.id
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-300 hover:bg-gray-50'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 {type.label}
@@ -187,120 +151,157 @@ const SearchPage = () => {
             ))}
           </div>
         </div>
-      </div>
 
-      {showAI && (
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 relative">
-            <button
-              onClick={() => setShowAI(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-            >
-              <X size={20} />
-            </button>
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="text-purple-600" size={24} />
-              <h3 className="text-lg font-semibold text-purple-900">AI Assistant</h3>
-            </div>
-            {aiLoading ? (
-              <p className="text-gray-600">Thinking...</p>
-            ) : (
-              <p className="text-gray-800 whitespace-pre-wrap">{aiResponse}</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-600">Searching...</p>
-          </div>
-        ) : results.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600">No results found. Try a different search.</p>
-          </div>
-        ) : (
-          <>
-            <p className="text-gray-600 mb-4">
-              Found {total} result{total !== 1 ? 's' : ''} for "{query}"
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {results.map((result) => (
-                <Link
-                  key={result._id}
-                  to={`/${result.type}/${result.slug}`}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-                >
-                  <img
-                    src={getImageUrl(result)}
-                    alt={result.name}
-                    className="w-full h-48 object-cover"
-                    onError={(e) => { e.target.src = '/placeholder-church.jpg'; }}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Filters
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <MapPin className="inline h-4 w-4 mr-1" />
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={filters.city}
+                    onChange={(e) => setFilters({...filters, city: e.target.value})}
+                    placeholder="London, Manchester..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
-                  <div className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-blue-600 uppercase">
-                        {result.type.replace('-', ' ')}
-                      </span>
-                      {result.is_verified && (
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                          Verified
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      {result.name}
-                    </h3>
-                    <div className="flex items-center text-sm text-gray-600 mb-2">
-                      <MapPin size={14} className="mr-1" />
-                      {result.city}
-                    </div>
-                    {result.denomination && (
-                      <p className="text-sm text-gray-500 mb-2">{result.denomination}</p>
-                    )}
-                    {result.description && (
-                      <p className="text-sm text-gray-600 line-clamp-2">
-                        {result.description}
-                      </p>
-                    )}
-                    {result.rating && (
-                      <div className="flex items-center mt-2">
-                        <span className="text-yellow-500">★</span>
-                        <span className="text-sm text-gray-700 ml-1">
-                          {result.rating.toFixed(1)} ({result.total_reviews || 0} reviews)
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
+                </div>
 
-            {total > 20 && (
-              <div className="flex justify-center gap-2 mt-8">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Denomination
+                  </label>
+                  <input
+                    type="text"
+                    value={filters.denomination}
+                    onChange={(e) => setFilters({...filters, denomination: e.target.value})}
+                    placeholder="Pentecostal, Baptist..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
                 <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => { setPage(1); performSearch(); }}
+                  className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
                 >
-                  Previous
-                </button>
-                <span className="px-4 py-2 text-gray-700">
-                  Page {page} of {Math.ceil(total / 20)}
-                </span>
-                <button
-                  onClick={() => setPage(p => p + 1)}
-                  disabled={page >= Math.ceil(total / 20)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
+                  Apply Filters
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-3">
+            {showAI && aiAnswer && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 mb-6">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="h-6 w-6 text-purple-600 flex-shrink-0 mt-1" />
+                  <div>
+                    <h3 className="font-semibold text-purple-900 mb-2">AI Recommendation</h3>
+                    <p className="text-gray-700 whitespace-pre-line">{aiAnswer}</p>
+                    <button
+                      onClick={() => setShowAI(false)}
+                      className="mt-3 text-sm text-purple-600 hover:text-purple-800"
+                    >
+                      Show standard results instead
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
-          </>
-        )}
+
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>
+            ) : results.length > 0 ? (
+              <>
+                <div className="mb-4 text-gray-600">
+                  Found {total.toLocaleString()} results
+                </div>
+                <div className="space-y-4">
+                  {results.map((item, idx) => (
+                    <div key={idx} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6">
+                      <div className="flex gap-4">
+                        {item.main_image && (
+                          <img
+                            src={item.main_image}
+                            alt={item.name}
+                            className="w-24 h-24 object-cover rounded-lg"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="text-xl font-semibold text-gray-900 mb-1">
+                                {item.name}
+                                {item.is_verified && (
+                                  <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Verified</span>
+                                )}
+                              </h3>
+                              <div className="text-sm text-gray-600 space-y-1">
+                                {item.city && <div><MapPin className="inline h-4 w-4 mr-1" />{item.city}</div>}
+                                {item.denomination && <div>{item.denomination}</div>}
+                              </div>
+                            </div>
+                            {item.rating > 0 && (
+                              <div className="text-right">
+                                <div className="text-lg font-semibold text-yellow-600">★ {item.rating.toFixed(1)}</div>
+                                <div className="text-xs text-gray-500">{item.total_reviews || 0} reviews</div>
+                              </div>
+                            )}
+                          </div>
+                          {item.description && (
+                            <p className="mt-2 text-gray-600 text-sm line-clamp-2">{item.description}</p>
+                          )}
+                          <div className="mt-3">
+                            <a
+                              href={`/${item.listing_type}/${item.slug || item.id}`}
+                              className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                            >
+                              View Details →
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {total > 20 && (
+                  <div className="mt-6 flex justify-center gap-2">
+                    <button
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-4 py-2 text-gray-700">Page {page} of {Math.ceil(total / 20)}</span>
+                    <button
+                      onClick={() => setPage(p => p + 1)}
+                      disabled={page >= Math.ceil(total / 20)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : query ? (
+              <div className="text-center py-12 text-gray-500">
+                No results found for "{query}". Try different keywords or filters.
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );
