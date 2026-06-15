@@ -1,28 +1,22 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-import ChurchesPage from './pages/ChurchesPage';
-import ChurchDetailPage from './pages/ChurchDetailPage';
-import EventsPage from './pages/EventsPage';
-import PastorsPage from './pages/PastorsPage';
-import Header from './components/Header';
+import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import HomePage from './pages/HomePage';
+import ChurchDetailPage from './pages/ChurchDetailPage';
+import InstallPrompt from './components/InstallPrompt';
 
 function App() {
   return (
     <Router>
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/churches" element={<ChurchesPage />} />
-            <Route path="/churches/:id" element={<ChurchDetailPage />} />
-            <Route path="/events" element={<EventsPage />} />
-            <Route path="/pastors" element={<PastorsPage />} />
-          </Routes>
-        </main>
+      <div className="App">
+        <Navbar />
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/church/:id" element={<ChurchDetailPage />} />
+        </Routes>
         <Footer />
+        <InstallPrompt />
       </div>
     </Router>
   );
