@@ -12,13 +12,13 @@ root.render(
 );
 
 serviceWorkerRegistration.register({
-  onSuccess: () => console.log('Content cached for offline use'),
   onUpdate: (registration) => {
-    if (window.confirm('New version available! Reload to update?')) {
-      if (registration.waiting) {
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-      }
+    if (registration && registration.waiting) {
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       window.location.reload();
     }
+  },
+  onSuccess: () => {
+    console.log('ChurchNavigator is ready for offline use.');
   }
 });
