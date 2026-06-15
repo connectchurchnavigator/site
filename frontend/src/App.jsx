@@ -1,18 +1,17 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-import SearchPage from './pages/SearchPage';
-import ChurchDetailPage from './pages/ChurchDetailPage';
-import TemplateLibrary from './components/planner/TemplateLibrary';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import AuthCallbackPage from './pages/AuthCallbackPage';
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/church/:id" element={<ChurchDetailPage />} />
-        <Route path="/planner/templates" element={<TemplateLibrary />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Route path="/" element={<div className="p-8"><h1 className="text-2xl font-bold">ChurchNavigator Home</h1></div>} />
       </Routes>
     </Router>
   );
