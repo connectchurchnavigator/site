@@ -1,78 +1,59 @@
 const CACHE_NAME = 'churchnavigator-v1';
-const RUNTIME_CACHE = 'runtime-cache-v1';
-
-const STATIC_ASSETS = [
+const urlsToCache = [
   '/',
-  '/index.html',
   '/offline.html',
-  '/icon-192x192.png',
-  '/icon-512x512.png',
-  '/manifest.json'
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
+      .then((cache) => cache.addAll(urlsToCache))
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME && name !== RUNTIME_CACHE)
-          .map((name) => caches.delete(name))
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
       );
-    }).then(() => self.clients.claim())
+    })
   );
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  if (request.method !== 'GET') return;
-
-  if (url.origin === location.origin) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        const fetched = fetch(request).then((response) => {
-          if (response.ok && (request.destination === 'style' || request.destination === 'script' || request.destination === 'image')) {
-            const responseClone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => {
-              cache.put(request, responseClone);
-            });
-          }
+  if (event.request.method !== 'GET') return;
+  
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => {
+        if (response) {
           return response;
-        }).catch(() => {
-          return caches.match('/offline.html');
-        });
-
-        return cached || fetched;
-      })
-    );
-  } else if (url.hostname.includes('api.churchnavigator.com') || url.hostname.includes('ik.imagekit.io')) {
-    event.respondWith(
-      fetch(request).then((response) => {
-        if (response.ok) {
-          const responseClone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, responseClone);
-          });
         }
-        return response;
-      }).catch(() => {
-        return caches.match(request);
+        return fetch(event.request).then((response) => {
+          if (!response || response.status !== 200 || response.type !== 'basic') {
+            return response;
+          }
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          return response;
+        });
       })
-    );
-  }
-});
-
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+      .catch(() => {
+        if (event.request.mode === 'navigate') {
+          return caches.match('/offline.html');
+        }
+      })
+  );
 });
