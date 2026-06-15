@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
+import React, { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { MapPin, Phone, Mail, Globe, Clock, Share2, Instagram } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
+import { MapPin, Phone, Globe, Mail, Clock, Users, Calendar, Briefcase, Video } from 'lucide-react';
+import EventsTab from '../components/EventsTab';
+import SmallGroupsTab from '../components/SmallGroupsTab';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.churchnavigator.com';
 
@@ -10,36 +12,27 @@ const ChurchDetailPage = () => {
   const { slug } = useParams();
   const [church, setChurch] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('about');
-  const [socialPosts, setSocialPosts] = useState({ instagram: [], facebook: [] });
+  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
-    const fetchChurch = async () => {
-      try {
-        const response = await axios.get(`${API_URL}/api/churches/${slug}`);
-        setChurch(response.data);
-        
-        const hasSocial = response.data.social_connections?.instagram?.connected || 
-                         response.data.social_connections?.facebook?.connected;
-        
-        if (hasSocial) {
-          const socialResponse = await axios.get(`${API_URL}/api/social/posts/${slug}`);
-          setSocialPosts(socialResponse.data);
-        }
-      } catch (error) {
-        console.error('Error fetching church:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchChurch();
   }, [slug]);
+
+  const fetchChurch = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/churches/${slug}`);
+      setChurch(response.data);
+    } catch (error) {
+      console.error('Error fetching church:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600"></div>
       </div>
     );
   }
@@ -47,221 +40,174 @@ const ChurchDetailPage = () => {
   if (!church) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Church not found</div>
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Church Not Found</h1>
+          <Link to="/" className="text-purple-600 hover:text-purple-700 font-medium">Return to Home</Link>
+        </div>
       </div>
     );
   }
 
-  const hasInstagram = church.social_connections?.instagram?.connected && socialPosts.instagram.length > 0;
-  const hasFacebook = church.social_connections?.facebook?.connected && socialPosts.facebook.length > 0;
-  const hasSocial = hasInstagram || hasFacebook;
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Church',
+    name: church.name,
+    description: church.description,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: church.address,
+      addressLocality: church.city,
+      postalCode: church.postcode,
+      addressCountry: 'GB'
+    },
+    telephone: church.phone,
+    url: church.website,
+    email: church.email
+  };
 
   const tabs = [
-    { id: 'about', label: 'About' },
-    { id: 'services', label: 'Service Times' },
+    { id: 'overview', label: 'Overview', icon: null },
+    { id: 'events', label: 'Events', icon: Calendar },
+    { id: 'small-groups', label: 'Small Groups', icon: Users },
+    { id: 'worship', label: 'Worship Team', icon: Briefcase },
+    { id: 'media', label: 'Media Team', icon: Video }
   ];
-  
-  if (hasSocial) {
-    tabs.push({ id: 'social', label: 'Social' });
-  }
 
   return (
     <>
       <Helmet>
-        <title>{church.name} - Church Navigator</title>
-        <meta name="description" content={church.description || `Find service times and information for ${church.name} in ${church.city}`} />
-        <meta property="og:title" content={`${church.name} - Church Navigator`} />
-        <meta property="og:description" content={church.description || `Find service times and information for ${church.name}`} />
-        {church.image_url && <meta property="og:image" content={church.image_url} />}
+        <title>{church.name} - ChurchNavigator</title>
+        <meta name="description" content={church.description || `Find service times, contact info, and events for ${church.name} in ${church.city}`} />
+        <meta property="og:title" content={`${church.name} - ChurchNavigator`} />
+        <meta property="og:description" content={church.description || `Find service times, contact info, and events for ${church.name}`} />
+        <meta property="og:type" content="website" />
+        <link rel="canonical" href={`https://churchnavigator.com/churches/${slug}`} />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
       <div className="min-h-screen bg-gray-50">
-        {church.image_url && (
-          <div className="w-full h-64 md:h-96 bg-gray-200">
-            <img src={church.image_url} alt={church.name} className="w-full h-full object-cover" />
-          </div>
-        )}
-
-        <div className="max-w-6xl mx-auto px-4 py-8">
-          <div className="bg-white rounded-lg shadow-lg p-6 md:p-8 -mt-16 relative z-10">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{church.name}</h1>
-                {church.denomination && (
-                  <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                    {church.denomination}
-                  </span>
-                )}
+        <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white py-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {church.image_url && (
+              <div className="mb-6">
+                <img src={church.image_url} alt={church.name} className="w-full h-64 object-cover rounded-lg shadow-lg" />
               </div>
-              <button className="p-2 hover:bg-gray-100 rounded-full transition">
-                <Share2 className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-
-            <div className="border-b border-gray-200 mb-6">
-              <div className="flex space-x-8">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`pb-4 px-1 border-b-2 transition ${
-                      activeTab === tab.id
-                        ? 'border-blue-600 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+            )}
+            <h1 className="text-4xl font-bold mb-4">{church.name}</h1>
+            <div className="flex flex-wrap items-center gap-4 text-purple-100">
+              <div className="flex items-center">
+                <MapPin className="w-5 h-5 mr-2" />
+                <span>{church.city}, {church.postcode}</span>
               </div>
-            </div>
-
-            {activeTab === 'about' && (
-              <div className="space-y-6">
-                {church.description && (
-                  <div>
-                    <h2 className="text-xl font-semibold mb-3">About</h2>
-                    <p className="text-gray-700 leading-relaxed">{church.description}</p>
-                  </div>
-                )}
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  {church.address && (
-                    <div className="flex items-start space-x-3">
-                      <MapPin className="w-5 h-5 text-gray-400 mt-1" />
-                      <div>
-                        <div className="font-medium text-gray-900">Address</div>
-                        <div className="text-gray-600">
-                          {church.address}<br />
-                          {church.city} {church.postcode}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {church.phone && (
-                    <div className="flex items-start space-x-3">
-                      <Phone className="w-5 h-5 text-gray-400 mt-1" />
-                      <div>
-                        <div className="font-medium text-gray-900">Phone</div>
-                        <a href={`tel:${church.phone}`} className="text-blue-600 hover:underline">
-                          {church.phone}
-                        </a>
-                      </div>
-                    </div>
-                  )}
-
-                  {church.email && (
-                    <div className="flex items-start space-x-3">
-                      <Mail className="w-5 h-5 text-gray-400 mt-1" />
-                      <div>
-                        <div className="font-medium text-gray-900">Email</div>
-                        <a href={`mailto:${church.email}`} className="text-blue-600 hover:underline">
-                          {church.email}
-                        </a>
-                      </div>
-                    </div>
-                  )}
-
-                  {church.website && (
-                    <div className="flex items-start space-x-3">
-                      <Globe className="w-5 h-5 text-gray-400 mt-1" />
-                      <div>
-                        <div className="font-medium text-gray-900">Website</div>
-                        <a href={church.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                          Visit Website
-                        </a>
-                      </div>
-                    </div>
-                  )}
+              {church.denomination && (
+                <div className="flex items-center">
+                  <Users className="w-5 h-5 mr-2" />
+                  <span>{church.denomination}</span>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+        </div>
 
-            {activeTab === 'services' && (
-              <div>
-                <h2 className="text-xl font-semibold mb-4">Service Times</h2>
-                {church.service_times && church.service_times.length > 0 ? (
-                  <div className="space-y-2">
-                    {church.service_times.map((time, index) => (
-                      <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                        <Clock className="w-5 h-5 text-gray-400" />
-                        <span className="text-gray-700">{time}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-600">Service times not available</p>
-                )}
-              </div>
-            )}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-lg shadow-md mb-6">
+            <div className="border-b border-gray-200">
+              <nav className="flex space-x-8 px-6" aria-label="Tabs">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
+                        activeTab === tab.id
+                          ? 'border-purple-600 text-purple-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {Icon && <Icon className="w-4 h-4" />}
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
 
-            {activeTab === 'social' && (
-              <div className="space-y-8">
-                {hasInstagram && (
+            <div className="p-6">
+              {activeTab === 'overview' && (
+                <div className="space-y-6">
+                  {church.description && (
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-4">About</h2>
+                      <p className="text-gray-700 leading-relaxed">{church.description}</p>
+                    </div>
+                  )}
+
                   <div>
-                    <div className="flex items-center space-x-2 mb-4">
-                      <Instagram className="w-6 h-6 text-pink-600" />
-                      <h2 className="text-xl font-semibold">Instagram</h2>
-                      {church.social_connections.instagram.username && (
-                        <a
-                          href={`https://instagram.com/${church.social_connections.instagram.username}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:underline"
-                        >
-                          @{church.social_connections.instagram.username}
-                        </a>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Service Times</h2>
+                    {church.service_times && church.service_times.length > 0 ? (
+                      <div className="space-y-3">
+                        {church.service_times.map((service, idx) => (
+                          <div key={idx} className="flex items-start bg-purple-50 p-4 rounded-lg">
+                            <Clock className="w-5 h-5 text-purple-600 mr-3 mt-0.5" />
+                            <div>
+                              <p className="font-semibold text-gray-900">{service.day}</p>
+                              <p className="text-gray-700">{service.time}</p>
+                              {service.description && <p className="text-sm text-gray-600 mt-1">{service.description}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500">No service times listed</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Contact Information</h2>
+                    <div className="space-y-3">
+                      <div className="flex items-center text-gray-700">
+                        <MapPin className="w-5 h-5 text-purple-600 mr-3" />
+                        <span>{church.address}, {church.city}, {church.postcode}</span>
+                      </div>
+                      {church.phone && (
+                        <div className="flex items-center text-gray-700">
+                          <Phone className="w-5 h-5 text-purple-600 mr-3" />
+                          <a href={`tel:${church.phone}`} className="hover:text-purple-600">{church.phone}</a>
+                        </div>
+                      )}
+                      {church.email && (
+                        <div className="flex items-center text-gray-700">
+                          <Mail className="w-5 h-5 text-purple-600 mr-3" />
+                          <a href={`mailto:${church.email}`} className="hover:text-purple-600">{church.email}</a>
+                        </div>
+                      )}
+                      {church.website && (
+                        <div className="flex items-center text-gray-700">
+                          <Globe className="w-5 h-5 text-purple-600 mr-3" />
+                          <a href={church.website} target="_blank" rel="noopener noreferrer" className="hover:text-purple-600">{church.website}</a>
+                        </div>
                       )}
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {socialPosts.instagram.map((post) => (
-                        <a
-                          key={post.post_id}
-                          href={post.permalink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="aspect-square bg-gray-200 rounded-lg overflow-hidden hover:opacity-90 transition"
-                        >
-                          <img src={post.image_url} alt={post.caption || 'Instagram post'} className="w-full h-full object-cover" />
-                        </a>
-                      ))}
-                    </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {hasFacebook && (
-                  <div>
-                    <h2 className="text-xl font-semibold mb-4">Facebook</h2>
-                    <div className="space-y-4">
-                      {socialPosts.facebook.map((post) => (
-                        <a
-                          key={post.post_id}
-                          href={post.permalink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition"
-                        >
-                          {post.image_url && (
-                            <img src={post.image_url} alt="Facebook post" className="w-full h-48 object-cover rounded-lg mb-3" />
-                          )}
-                          {post.message && (
-                            <p className="text-gray-700 line-clamp-3">{post.message}</p>
-                          )}
-                          <div className="text-xs text-gray-500 mt-2">
-                            {new Date(post.posted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {!hasInstagram && !hasFacebook && (
-                  <p className="text-gray-600 text-center py-8">No recent posts</p>
-                )}
-              </div>
-            )}
+              {activeTab === 'events' && <EventsTab churchSlug={slug} />}
+              {activeTab === 'small-groups' && <SmallGroupsTab churchSlug={slug} />}
+              {activeTab === 'worship' && (
+                <div className="text-center py-12 text-gray-500">
+                  <Briefcase className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p>Worship team listings coming soon</p>
+                </div>
+              )}
+              {activeTab === 'media' && (
+                <div className="text-center py-12 text-gray-500">
+                  <Video className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p>Media team listings coming soon</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
