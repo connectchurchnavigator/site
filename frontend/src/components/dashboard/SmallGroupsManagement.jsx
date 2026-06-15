@@ -1,20 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Users, Calendar, MapPin } from 'lucide-react';
 import axios from 'axios';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
+  CircularProgress,
+  Alert,
+  Stack,
+  Switch,
+  FormControlLabel,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  People as PeopleIcon,
+} from '@mui/icons-material';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.churchnavigator.com';
 
-const SmallGroupsManagement = ({ churchSlug }) => {
+const SmallGroupsManagement = ({ churchSlug, churchId }) => {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [groupToDelete, setGroupToDelete] = useState(null);
   const [formData, setFormData] = useState({
-    name: '', description: '', leader_name: '', leader_contact: '',
-    meeting_day: 'Monday', meeting_time: '19:00', frequency: 'weekly',
-    location_type: 'in-person', address_or_link: '', capacity: 12,
-    current_members: 0, age_group: '', topics: [], is_open_to_join: true
+    name: '',
+    description: '',
+    leader_name: '',
+    leader_contact: '',
+    meeting_day: '',
+    meeting_time: '',
+    frequency: '',
+    location_type: 'in-person',
+    address_or_link: '',
+    capacity: '',
+    current_members: 0,
+    age_group: '',
+    topics: [],
+    is_open_to_join: true,
   });
+  const [topicInput, setTopicInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchGroups();
@@ -22,198 +71,389 @@ const SmallGroupsManagement = ({ churchSlug }) => {
 
   const fetchGroups = async () => {
     try {
+      setLoading(true);
       const response = await axios.get(`${API_URL}/api/churches/${churchSlug}/small-groups`);
       setGroups(response.data);
-    } catch (error) {
-      console.error('Error fetching groups:', error);
+    } catch (err) {
+      console.error('Failed to fetch groups:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const payload = { ...formData, topics: formData.topics.filter(t => t.trim()) };
-      if (editingGroup) {
-        await axios.put(`${API_URL}/api/small-groups/${editingGroup.id}`, payload);
-      } else {
-        await axios.post(`${API_URL}/api/churches/${churchSlug}/small-groups`, { ...payload, church_id: churchSlug });
-      }
-      setShowForm(false);
-      setEditingGroup(null);
-      resetForm();
-      fetchGroups();
-    } catch (error) {
-      alert(error.response?.data?.detail || 'Failed to save group');
-    }
-  };
-
-  const handleDelete = async (groupId) => {
-    if (!window.confirm('Are you sure you want to delete this group?')) return;
-    try {
-      await axios.delete(`${API_URL}/api/small-groups/${groupId}`);
-      fetchGroups();
-    } catch (error) {
-      alert('Failed to delete group');
-    }
-  };
-
-  const handleEdit = (group) => {
-    setEditingGroup(group);
-    setFormData({
-      name: group.name, description: group.description,
-      leader_name: group.leader_name, leader_contact: group.leader_contact,
-      meeting_day: group.meeting_day, meeting_time: group.meeting_time,
-      frequency: group.frequency, location_type: group.location_type,
-      address_or_link: group.address_or_link, capacity: group.capacity,
-      current_members: group.current_members, age_group: group.age_group || '',
-      topics: group.topics || [], is_open_to_join: group.is_open_to_join
-    });
-    setShowForm(true);
-  };
-
   const resetForm = () => {
     setFormData({
-      name: '', description: '', leader_name: '', leader_contact: '',
-      meeting_day: 'Monday', meeting_time: '19:00', frequency: 'weekly',
-      location_type: 'in-person', address_or_link: '', capacity: 12,
-      current_members: 0, age_group: '', topics: [], is_open_to_join: true
+      name: '',
+      description: '',
+      leader_name: '',
+      leader_contact: '',
+      meeting_day: '',
+      meeting_time: '',
+      frequency: '',
+      location_type: 'in-person',
+      address_or_link: '',
+      capacity: '',
+      current_members: 0,
+      age_group: '',
+      topics: [],
+      is_open_to_join: true,
     });
+    setTopicInput('');
+    setEditingGroup(null);
   };
 
-  if (loading) return <div className="text-center py-8">Loading...</div>;
+  const handleOpenDialog = (group = null) => {
+    if (group) {
+      setEditingGroup(group);
+      setFormData({
+        name: group.name,
+        description: group.description,
+        leader_name: group.leader_name,
+        leader_contact: group.leader_contact,
+        meeting_day: group.meeting_day,
+        meeting_time: group.meeting_time,
+        frequency: group.frequency,
+        location_type: group.location_type,
+        address_or_link: group.address_or_link,
+        capacity: group.capacity || '',
+        current_members: group.current_members || 0,
+        age_group: group.age_group || '',
+        topics: group.topics || [],
+        is_open_to_join: group.is_open_to_join !== false,
+      });
+    } else {
+      resetForm();
+    }
+    setDialogOpen(true);
+    setError(null);
+  };
+
+  const handleSubmit = async () => {
+    try {
+      setSubmitting(true);
+      setError(null);
+      const submitData = {
+        ...formData,
+        church_id: churchId,
+        capacity: formData.capacity ? parseInt(formData.capacity) : null,
+      };
+      if (editingGroup) {
+        await axios.put(`${API_URL}/api/small-groups/${editingGroup._id}`, submitData);
+      } else {
+        await axios.post(`${API_URL}/api/churches/${churchSlug}/small-groups`, submitData);
+      }
+      await fetchGroups();
+      setDialogOpen(false);
+      resetForm();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to save group');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await axios.delete(`${API_URL}/api/small-groups/${groupToDelete._id}`);
+      await fetchGroups();
+      setDeleteDialogOpen(false);
+      setGroupToDelete(null);
+    } catch (err) {
+      console.error('Failed to delete group:', err);
+    }
+  };
+
+  const addTopic = () => {
+    if (topicInput.trim() && !formData.topics.includes(topicInput.trim())) {
+      setFormData({ ...formData, topics: [...formData.topics, topicInput.trim()] });
+      setTopicInput('');
+    }
+  };
+
+  const removeTopic = (topic) => {
+    setFormData({ ...formData, topics: formData.topics.filter((t) => t !== topic) });
+  };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" p={4}>
+        <CircularProgress sx={{ color: '#8B7FBF' }} />
+      </Box>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Small Groups Management</h2>
-        <button
-          onClick={() => { setShowForm(true); setEditingGroup(null); resetForm(); }}
-          className="flex items-center gap-2 bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700"
+    <Box>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h5" sx={{ color: '#8B7FBF', fontWeight: 600 }}>
+          Small Groups Management
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog()}
+          sx={{
+            backgroundColor: '#8B7FBF',
+            '&:hover': { backgroundColor: '#7A6FAF' },
+            textTransform: 'none',
+          }}
         >
-          <Plus className="w-4 h-4" /> Add Group
-        </button>
-      </div>
+          Add New Group
+        </Button>
+      </Box>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {groups.map((group) => (
-          <div key={group.id} className="bg-white border rounded-lg p-4 space-y-3">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="font-bold text-lg text-gray-900">{group.name}</h3>
-                <p className="text-sm text-gray-500">Led by {group.leader_name}</p>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => handleEdit(group)} className="text-blue-600 hover:text-blue-800">
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button onClick={() => handleDelete(group.id)} className="text-red-600 hover:text-red-800">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <div className="text-sm space-y-1">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Calendar className="w-4 h-4" />
-                <span>{group.meeting_day}s at {group.meeting_time}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-600">
-                <MapPin className="w-4 h-4" />
-                <span className="capitalize">{group.location_type}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-600">
-                <Users className="w-4 h-4" />
-                <span>{group.current_members}/{group.capacity} members</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center pt-2 border-t">
-              <span className={`text-xs px-2 py-1 rounded-full ${group.is_open_to_join ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                {group.is_open_to_join ? 'Open' : 'Closed'}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 my-8">
-            <h3 className="text-xl font-bold mb-4">{editingGroup ? 'Edit Group' : 'Create New Group'}</h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-1">Group Name *</label>
-                  <input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-1">Description *</label>
-                  <textarea required value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} rows={3} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Leader Name *</label>
-                  <input type="text" required value={formData.leader_name} onChange={(e) => setFormData({...formData, leader_name: e.target.value})} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Leader Email *</label>
-                  <input type="email" required value={formData.leader_contact} onChange={(e) => setFormData({...formData, leader_contact: e.target.value})} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Meeting Day *</label>
-                  <select required value={formData.meeting_day} onChange={(e) => setFormData({...formData, meeting_day: e.target.value})} className="w-full px-3 py-2 border rounded-lg">
-                    {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Meeting Time *</label>
-                  <input type="time" required value={formData.meeting_time} onChange={(e) => setFormData({...formData, meeting_time: e.target.value})} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Frequency *</label>
-                  <select required value={formData.frequency} onChange={(e) => setFormData({...formData, frequency: e.target.value})} className="w-full px-3 py-2 border rounded-lg">
-                    <option value="weekly">Weekly</option>
-                    <option value="biweekly">Biweekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Location Type *</label>
-                  <select required value={formData.location_type} onChange={(e) => setFormData({...formData, location_type: e.target.value})} className="w-full px-3 py-2 border rounded-lg">
-                    <option value="in-person">In-Person</option>
-                    <option value="online">Online</option>
-                    <option value="hybrid">Hybrid</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-1">{formData.location_type === 'online' ? 'Meeting Link' : 'Address'} *</label>
-                  <input type="text" required value={formData.address_or_link} onChange={(e) => setFormData({...formData, address_or_link: e.target.value})} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Capacity *</label>
-                  <input type="number" required min="2" max="100" value={formData.capacity} onChange={(e) => setFormData({...formData, capacity: parseInt(e.target.value)})} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Current Members</label>
-                  <input type="number" min="0" value={formData.current_members} onChange={(e) => setFormData({...formData, current_members: parseInt(e.target.value)})} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Age Group</label>
-                  <input type="text" value={formData.age_group} onChange={(e) => setFormData({...formData, age_group: e.target.value})} placeholder="e.g., 18-35, Young Adults" className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Open to Join?</label>
-                  <input type="checkbox" checked={formData.is_open_to_join} onChange={(e) => setFormData({...formData, is_open_to_join: e.target.checked})} className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => { setShowForm(false); setEditingGroup(null); }} className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
-                <button type="submit" className="flex-1 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700">Save Group</button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {groups.length === 0 ? (
+        <Card>
+          <CardContent>
+            <Typography variant="body1" color="text.secondary" align="center">
+              No small groups yet. Create your first one!
+            </Typography>
+          </CardContent>
+        </Card>
+      ) : (
+        <TableContainer component={Card}>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ backgroundColor: '#F3F0FF' }}>
+                <TableCell sx={{ fontWeight: 600 }}>Group Name</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Leader</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Meeting</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Members</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {groups.map((group) => (
+                <TableRow key={group._id}>
+                  <TableCell>{group.name}</TableCell>
+                  <TableCell>{group.leader_name}</TableCell>
+                  <TableCell>
+                    {group.meeting_day} {group.meeting_time}
+                  </TableCell>
+                  <TableCell>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <PeopleIcon sx={{ fontSize: 18, color: '#8B7FBF' }} />
+                      {group.current_members}
+                      {group.capacity && `/${group.capacity}`}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={group.is_open_to_join ? 'Open' : 'Closed'}
+                      size="small"
+                      color={group.is_open_to_join ? 'success' : 'default'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <IconButton
+                      onClick={() => handleOpenDialog(group)}
+                      sx={{ color: '#8B7FBF' }}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      onClick={() => {
+                        setGroupToDelete(group);
+                        setDeleteDialogOpen(true);
+                      }}
+                      sx={{ color: '#D32F2F' }}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
-    </div>
+
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ color: '#8B7FBF', fontWeight: 600 }}>
+          {editingGroup ? 'Edit Small Group' : 'Create New Small Group'}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            {error && <Alert severity="error">{error}</Alert>}
+            <TextField
+              label="Group Name"
+              fullWidth
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
+            <TextField
+              label="Description"
+              fullWidth
+              required
+              multiline
+              rows={3}
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            />
+            <TextField
+              label="Leader Name"
+              fullWidth
+              required
+              value={formData.leader_name}
+              onChange={(e) => setFormData({ ...formData, leader_name: e.target.value })}
+            />
+            <TextField
+              label="Leader Email"
+              type="email"
+              fullWidth
+              required
+              value={formData.leader_contact}
+              onChange={(e) => setFormData({ ...formData, leader_contact: e.target.value })}
+            />
+            <Box display="flex" gap={2}>
+              <TextField
+                label="Meeting Day"
+                fullWidth
+                required
+                value={formData.meeting_day}
+                onChange={(e) => setFormData({ ...formData, meeting_day: e.target.value })}
+                placeholder="e.g., Wednesday"
+              />
+              <TextField
+                label="Meeting Time"
+                fullWidth
+                required
+                value={formData.meeting_time}
+                onChange={(e) => setFormData({ ...formData, meeting_time: e.target.value })}
+                placeholder="e.g., 7:00 PM"
+              />
+            </Box>
+            <TextField
+              label="Frequency"
+              fullWidth
+              required
+              value={formData.frequency}
+              onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
+              placeholder="e.g., Weekly, Bi-weekly"
+            />
+            <FormControl fullWidth required>
+              <InputLabel>Location Type</InputLabel>
+              <Select
+                value={formData.location_type}
+                label="Location Type"
+                onChange={(e) => setFormData({ ...formData, location_type: e.target.value })}
+              >
+                <MenuItem value="in-person">In-Person</MenuItem>
+                <MenuItem value="online">Online</MenuItem>
+                <MenuItem value="hybrid">Hybrid</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label={formData.location_type === 'online' ? 'Meeting Link' : 'Address'}
+              fullWidth
+              required
+              value={formData.address_or_link}
+              onChange={(e) => setFormData({ ...formData, address_or_link: e.target.value })}
+            />
+            <Box display="flex" gap={2}>
+              <TextField
+                label="Capacity (optional)"
+                type="number"
+                fullWidth
+                value={formData.capacity}
+                onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+              />
+              <TextField
+                label="Current Members"
+                type="number"
+                fullWidth
+                value={formData.current_members}
+                onChange={(e) => setFormData({ ...formData, current_members: parseInt(e.target.value) || 0 })}
+              />
+            </Box>
+            <TextField
+              label="Age Group (optional)"
+              fullWidth
+              value={formData.age_group}
+              onChange={(e) => setFormData({ ...formData, age_group: e.target.value })}
+              placeholder="e.g., Young Adults, Seniors"
+            />
+            <Box>
+              <Box display="flex" gap={1} mb={1}>
+                <TextField
+                  label="Add Topics"
+                  fullWidth
+                  value={topicInput}
+                  onChange={(e) => setTopicInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && addTopic()}
+                  placeholder="e.g., Bible Study, Prayer"
+                />
+                <Button
+                  variant="outlined"
+                  onClick={addTopic}
+                  sx={{ borderColor: '#8B7FBF', color: '#8B7FBF' }}
+                >
+                  Add
+                </Button>
+              </Box>
+              <Box display="flex" flexWrap="wrap" gap={1}>
+                {formData.topics.map((topic, idx) => (
+                  <Chip
+                    key={idx}
+                    label={topic}
+                    onDelete={() => removeTopic(topic)}
+                    sx={{ backgroundColor: '#F3F0FF', color: '#8B7FBF' }}
+                  />
+                ))}
+              </Box>
+            </Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.is_open_to_join}
+                  onChange={(e) => setFormData({ ...formData, is_open_to_join: e.target.checked })}
+                  sx={{
+                    '& .MuiSwitch-switchBase.Mui-checked': { color: '#8B7FBF' },
+                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#8B7FBF' },
+                  }}
+                />
+              }
+              label="Open to New Members"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)} sx={{ color: '#8B7FBF' }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={submitting}
+            sx={{
+              backgroundColor: '#8B7FBF',
+              '&:hover': { backgroundColor: '#7A6FAF' },
+            }}
+          >
+            {submitting ? <CircularProgress size={24} /> : editingGroup ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Delete Small Group</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete "{groupToDelete?.name}"? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} sx={{ color: '#8B7FBF' }}>
+            Cancel
+          </Button>
+          <Button onClick={handleDelete} variant="contained" color="error">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
 
