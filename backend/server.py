@@ -1,42 +1,56 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
-from contextlib import asynccontextmanager
-from starlette.middleware.sessions import SessionMiddleware
 
 load_dotenv()
 
-from routes import auth
+from database import init_db, close_db
+from routers import churches, auth, worship_leaders, media_teams, events, small_groups
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.mongodb_client = AsyncIOMotorClient(os.getenv("MONGODB_URI"))
-    app.mongodb = app.mongodb_client[os.getenv("MONGODB_DB_NAME", "DEV-ChurchNavigator")]
+    await init_db()
     yield
-    app.mongodb_client.close()
+    await close_db()
 
-app = FastAPI(title="ChurchNavigator API", lifespan=lifespan)
+app = FastAPI(title="ChurchNavigator API", version="1.0.0", lifespan=lifespan)
 
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=os.getenv("JWT_SECRET_KEY", "dev-secret-key-min-32-characters")
-)
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://churchnavigator.com",
+    "https://www.churchnavigator.com",
+    "https://dev.churchnavigator.com",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(auth.router)
+app.include_router(churches.router, prefix="/api", tags=["churches"])
+app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(worship_leaders.router, prefix="/api", tags=["worship_leaders"])
+app.include_router(media_teams.router, prefix="/api", tags=["media_teams"])
+app.include_router(events.router, prefix="/api", tags=["events"])
+app.include_router(small_groups.router, prefix="/api", tags=["small_groups"])
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred", "error": str(exc)},
+    )
 
 @app.get("/")
 async def root():
-    return {"message": "ChurchNavigator API", "status": "online"}
+    return {"message": "ChurchNavigator API", "version": "1.0.0", "status": "running"}
 
 @app.get("/health")
 async def health_check():
