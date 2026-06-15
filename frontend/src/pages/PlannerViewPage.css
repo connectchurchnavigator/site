@@ -1,0 +1,246 @@
+.planner-view-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.planner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.planner-title-section h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 0.5rem;
+}
+
+.planner-visitor {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+.planner-dates {
+  font-size: 0.95rem;
+  color: #718096;
+}
+
+.planner-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn-edit, .btn-delete {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit {
+  background: #3182ce;
+  color: white;
+}
+
+.btn-edit:hover {
+  background: #2c5aa0;
+}
+
+.btn-delete {
+  background: #e53e3e;
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #c53030;
+}
+
+.planner-export-section {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: #f7fafc;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.export-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pdf-btn {
+  background: #e53e3e;
+  color: white;
+}
+
+.pdf-btn:hover {
+  background: #c53030;
+}
+
+.calendar-btn {
+  background: #38b2ac;
+  color: white;
+}
+
+.calendar-btn:hover {
+  background: #2c7a7b;
+}
+
+.whatsapp-btn {
+  background: #25d366;
+  color: white;
+}
+
+.whatsapp-btn:hover {
+  background: #1ebe57;
+}
+
+.link-btn {
+  background: #805ad5;
+  color: white;
+}
+
+.link-btn:hover {
+  background: #6b46c1;
+}
+
+.planner-overview {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.planner-overview h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 1rem;
+}
+
+.planner-overview p {
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+.planner-schedule {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.planner-schedule h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 1.5rem;
+}
+
+.schedule-date {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.schedule-item {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f7fafc;
+  border-radius: 6px;
+}
+
+.schedule-time {
+  font-weight: 700;
+  color: #3182ce;
+  min-width: 80px;
+  font-size: 0.95rem;
+}
+
+.schedule-details h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1a202c;
+  margin-bottom: 0.5rem;
+}
+
+.church-name {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+.location, .pastor, .description {
+  font-size: 0.9rem;
+  color: #718096;
+  margin-bottom: 0.25rem;
+}
+
+.no-items {
+  color: #a0aec0;
+  text-align: center;
+  padding: 2rem;
+}
+
+.planner-loading, .planner-error {
+  max-width: 1200px;
+  margin: 4rem auto;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #4a5568;
+}
+
+.planner-error {
+  color: #e53e3e;
+}
+
+@media (max-width: 768px) {
+  .planner-view-page {
+    padding: 1rem;
+  }
+
+  .planner-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .planner-export-section {
+    flex-direction: column;
+  }
+
+  .export-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .schedule-item {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

@@ -1,0 +1,246 @@
+.city-page {
+  min-height: 100vh;
+}
+
+.city-page.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #2563eb;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.city-page.error {
+  text-align: center;
+  padding: 4rem 1rem;
+}
+
+.city-hero {
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  color: white;
+  padding: 4rem 1rem;
+  text-align: center;
+}
+
+.city-hero h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  font-weight: 700;
+}
+
+.city-count {
+  font-size: 1.125rem;
+  opacity: 0.9;
+}
+
+.city-stats {
+  padding: 3rem 1rem;
+  background: #f9fafb;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.stat-card {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.stat-card h3 {
+  font-size: 2.5rem;
+  color: #2563eb;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card p {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.featured-churches,
+.denominations,
+.events,
+.pastors,
+.nearby-cities,
+.all-churches {
+  padding: 3rem 1rem;
+}
+
+.featured-churches h2,
+.denominations h2,
+.events h2,
+.pastors h2,
+.nearby-cities h2,
+.all-churches h2 {
+  font-size: 2rem;
+  margin-bottom: 2rem;
+  text-align: center;
+  color: #111827;
+}
+
+.church-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.denomination-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.denomination-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.denomination-card h4 {
+  font-size: 1.125rem;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.denomination-card p {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.events-list {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.event-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border-left: 4px solid #2563eb;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.event-card h4 {
+  font-size: 1.25rem;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.event-date {
+  color: #2563eb;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.pastors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pastor-card {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+.pastor-card img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+
+.pastor-card h4 {
+  padding: 1rem 1rem 0.5rem;
+  font-size: 1.125rem;
+  color: #111827;
+}
+
+.pastor-card p {
+  padding: 0 1rem 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.nearby-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.nearby-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  text-decoration: none;
+  text-align: center;
+  transition: all 0.3s;
+}
+
+.nearby-card:hover {
+  border-color: #2563eb;
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.1);
+}
+
+.nearby-card h4 {
+  font-size: 1.125rem;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.nearby-card p {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+  .city-hero h1 {
+    font-size: 1.75rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .church-grid,
+  .denomination-grid,
+  .pastors-grid,
+  .nearby-grid {
+    grid-template-columns: 1fr;
+  }
+}

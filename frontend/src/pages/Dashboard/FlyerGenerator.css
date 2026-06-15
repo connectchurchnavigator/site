@@ -1,0 +1,412 @@
+.flyer-generator {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.flyer-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.flyer-header h1 {
+  font-size: 2.5rem;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.flyer-header p {
+  color: #7f8c8d;
+  font-size: 1.1rem;
+}
+
+.flyer-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.flyer-controls {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+.control-section {
+  margin-bottom: 2rem;
+}
+
+.control-section h3 {
+  font-size: 1.2rem;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.type-card {
+  background: #f8f9fa;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 1.5rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.type-card:hover {
+  background: #e9ecef;
+  transform: translateY(-2px);
+}
+
+.type-card.active {
+  background: #ebf5ff;
+  border-color: #3498db;
+}
+
+.type-icon {
+  font-size: 2rem;
+}
+
+.type-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
+
+.type-desc {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+  text-align: center;
+}
+
+.event-select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e1e8ed;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.event-select:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.size-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8rem;
+}
+
+.size-card {
+  background: #f8f9fa;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 1rem 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.size-card:hover {
+  background: #e9ecef;
+}
+
+.size-card.active {
+  background: #ebf5ff;
+  border-color: #3498db;
+}
+
+.size-icon {
+  font-size: 1.5rem;
+}
+
+.size-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.85rem;
+}
+
+.size-dim {
+  font-size: 0.7rem;
+  color: #7f8c8d;
+}
+
+.customize-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: white;
+  border: 2px solid #3498db;
+  color: #3498db;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.customize-btn:hover {
+  background: #3498db;
+  color: white;
+}
+
+.text-editor {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.editor-input, .editor-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e1e8ed;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.editor-input:focus, .editor-textarea:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.generate-btn {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  margin-top: 1rem;
+}
+
+.generate-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.generate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.flyer-preview {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.preview-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  overflow: hidden;
+  width: 100%;
+  max-width: 500px;
+}
+
+.preview-image {
+  width: 100%;
+  display: block;
+}
+
+.preview-actions {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.action-btn {
+  width: 100%;
+  padding: 0.9rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn.primary {
+  background: #3498db;
+  color: white;
+}
+
+.action-btn.primary:hover {
+  background: #2980b9;
+  transform: translateY(-2px);
+}
+
+.action-btn.success {
+  background: #25D366;
+  color: white;
+}
+
+.action-btn.success:hover {
+  background: #128C7E;
+  transform: translateY(-2px);
+}
+
+.action-btn.secondary {
+  background: #95a5a6;
+  color: white;
+}
+
+.action-btn.secondary:hover {
+  background: #7f8c8d;
+  transform: translateY(-2px);
+}
+
+.preview-placeholder {
+  padding: 4rem 2rem;
+  text-align: center;
+  color: #95a5a6;
+}
+
+.placeholder-icon {
+  font-size: 4rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.placeholder-hint {
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.flyer-history {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+.flyer-history h3 {
+  font-size: 1.4rem;
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.history-card {
+  background: #f8f9fa;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.history-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+}
+
+.history-card img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.history-info {
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.history-type {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.history-size {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+}
+
+.history-download {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.history-download:hover {
+  background: white;
+  transform: scale(1.1);
+}
+
+@media (max-width: 1024px) {
+  .flyer-layout {
+    grid-template-columns: 1fr;
+  }
+  
+  .type-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .size-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .flyer-generator {
+    padding: 1rem;
+  }
+  
+  .flyer-header h1 {
+    font-size: 2rem;
+  }
+  
+  .type-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .size-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .history-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

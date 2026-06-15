@@ -1,0 +1,385 @@
+.planner-discover-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.discover-header {
+  margin-bottom: 30px;
+}
+
+.discover-header .back-btn {
+  background: none;
+  border: none;
+  color: #007bff;
+  cursor: pointer;
+  font-size: 16px;
+  margin-bottom: 10px;
+  padding: 5px 0;
+}
+
+.discover-header .back-btn:hover {
+  text-decoration: underline;
+}
+
+.discover-header h1 {
+  margin: 0 0 5px 0;
+  font-size: 32px;
+}
+
+.discover-subtitle {
+  color: #666;
+  margin: 0;
+}
+
+.discover-controls {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 15px;
+  align-items: flex-end;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-group label {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 5px;
+  color: #333;
+}
+
+.filter-group input,
+.filter-group select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  min-width: 150px;
+}
+
+.filter-group.checkbox-group {
+  flex-direction: row;
+  align-items: center;
+}
+
+.filter-group.checkbox-group label {
+  margin: 0 0 0 5px;
+}
+
+.filter-group.checkbox-group input {
+  min-width: auto;
+  width: auto;
+  margin: 0;
+}
+
+.reset-filters-btn {
+  padding: 8px 20px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.reset-filters-btn:hover {
+  background: #c82333;
+}
+
+.sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sort-bar label {
+  font-weight: 500;
+}
+
+.sort-bar select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.churches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.church-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.church-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.church-card-header {
+  position: relative;
+  height: 180px;
+  background: #f0f0f0;
+}
+
+.church-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.church-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(255,255,255,0.95);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.church-card-body {
+  padding: 20px;
+}
+
+.church-card-body h3 {
+  margin: 0 0 5px 0;
+  font-size: 20px;
+  color: #333;
+}
+
+.church-denomination {
+  color: #666;
+  margin: 0 0 5px 0;
+  font-size: 14px;
+}
+
+.church-location {
+  color: #888;
+  margin: 0 0 15px 0;
+  font-size: 13px;
+}
+
+.score-section {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.overall-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+}
+
+.score-number {
+  font-size: 36px;
+  font-weight: bold;
+  color: #28a745;
+  line-height: 1;
+}
+
+.score-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.score-details {
+  flex: 1;
+}
+
+.score-detail {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.score-detail span:first-child {
+  color: #666;
+}
+
+.score-detail span:last-child {
+  font-weight: 600;
+  color: #333;
+}
+
+.score-bars {
+  margin-bottom: 15px;
+}
+
+.score-bar-item {
+  margin-bottom: 10px;
+}
+
+.score-bar-item label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.score-bar {
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.score-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.score-bar-fill.impact {
+  background: linear-gradient(90deg, #28a745, #20c997);
+}
+
+.score-bar-fill.cost {
+  background: linear-gradient(90deg, #ffc107, #ff9800);
+}
+
+.score-bar-fill.value {
+  background: linear-gradient(90deg, #007bff, #0056b3);
+}
+
+.score-bar-item span {
+  font-size: 12px;
+  color: #333;
+  font-weight: 500;
+}
+
+.why-recommended {
+  margin-bottom: 15px;
+}
+
+.why-recommended h4 {
+  font-size: 14px;
+  margin: 0 0 8px 0;
+  color: #333;
+}
+
+.why-recommended ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.why-recommended li {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.add-to-trip-btn {
+  width: 100%;
+  padding: 12px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-to-trip-btn:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.add-to-trip-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.empty-state p {
+  font-size: 18px;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.reset-btn {
+  padding: 10px 24px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.reset-btn:hover {
+  background: #0056b3;
+}
+
+.error-message {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .churches-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filter-group input,
+  .filter-group select {
+    min-width: 100%;
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "name": "ChurchNavigator",
+  "short_name": "ChurchNav",
+  "description": "UK's leading church directory - Find churches, worship leaders, media teams, and events",
+  "theme_color": "#7c3aed",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/logo192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "navigation"],
+  "shortcuts": [
+    {
+      "name": "Search Churches",
+      "short_name": "Search",
+      "description": "Find churches near you",
+      "url": "/",
+      "icons": [{ "src": "/logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Worship Leaders",
+      "short_name": "Worship",
+      "description": "Browse worship leaders",
+      "url": "/worship-leaders",
+      "icons": [{ "src": "/logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Events",
+      "short_name": "Events",
+      "description": "View upcoming events",
+      "url": "/events",
+      "icons": [{ "src": "/logo192.png", "sizes": "192x192" }]
+    }
+  ]
+}

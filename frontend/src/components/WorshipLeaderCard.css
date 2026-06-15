@@ -1,0 +1,10 @@
+.wlc-card { display: block; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.3s; text-decoration: none; color: inherit; }
+.wlc-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.15); }
+
+.wlc-image { position: relative; height: 240px; background-size: cover; background-position: center; }
+.wlc-availability { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+
+.wlc-content { padding: 16px; }
+.wlc-name { font-size: 18px; font-weight: 700; color: #1f2937; margin: 0 0 8px; }
+.wlc-instruments { font-size: 14px; color: #6b7280; margin: 0 0 6px; }
+.wlc-city { font-size: 13px; color: #9ca3af; margin: 0; }
