@@ -1,166 +1,210 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
+from datetime import datetime, timedelta
 import stripe
 import os
-from datetime import datetime
-from ..database import db
-from ..email_service import send_email
+import resend
+from motor.motor_asyncio import AsyncIOMotorClient
 
-router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
+router = APIRouter(prefix="/api/stripe", tags=["stripe"])
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-STRIPE_PLANNER_STANDARD_PRICE_ID = os.getenv("STRIPE_PLANNER_STANDARD_PRICE_ID")
-STRIPE_PLANNER_PREMIUM_PRICE_ID = os.getenv("STRIPE_PLANNER_PREMIUM_PRICE_ID")
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+resend.api_key = os.environ.get("RESEND_API_KEY")
+mongo_client = AsyncIOMotorClient(os.environ.get("MONGO_URL"))
+db = mongo_client.ChurchNavigator
 
-@router.post("/stripe")
-async def stripe_webhook(request: Request):
-    payload = await request.body()
-    sig_header = request.headers.get("stripe-signature")
+GRACE_PERIOD_DAYS = {
+    "first_warning": 0,
+    "second_warning": 3,
+    "suspension": 7,
+    "final_warning": 30,
+    "cancellation": 37
+}
+
+async def send_email(to: str, template: str, data: dict):
+    templates = {
+        "payment_failed": {
+            "subject": "Payment Failed - Update Your Card",
+            "html": f"""
+            <h2>Payment Failed</h2>
+            <p>Hi {data.get('church_name', 'there')},</p>
+            <p>Your recent payment for ChurchNavigator Sites failed.</p>
+            <p>Please update your payment method to keep your website live:</p>
+            <p><a href="https://churchnavigator.com/dashboard/billing">Update Payment Method</a></p>
+            <p>Your website will remain live for 7 days while you update your payment.</p>
+            """
+        },
+        "payment_reminder": {
+            "subject": "Reminder: Update Your Payment - 4 Days Until Suspension",
+            "html": f"""
+            <h2>Payment Reminder</h2>
+            <p>Hi {data.get('church_name', 'there')},</p>
+            <p>Your payment is still outstanding. Your website will be suspended in 4 days if payment is not received.</p>
+            <p><a href="https://churchnavigator.com/dashboard/billing">Update Payment Now</a></p>
+            """
+        },
+        "site_suspended": {
+            "subject": "Website Suspended - Payment Required",
+            "html": f"""
+            <h2>Website Suspended</h2>
+            <p>Hi {data.get('church_name', 'there')},</p>
+            <p>Your church website has been temporarily suspended due to non-payment.</p>
+            <p>Update your payment to restore your website immediately:</p>
+            <p><a href="https://churchnavigator.com/dashboard/billing">Restore Website</a></p>
+            <p>Your domain is safe for 30 more days.</p>
+            """
+        },
+        "final_warning": {
+            "subject": "Final Warning - Domain Will Be Released in 7 Days",
+            "html": f"""
+            <h2>Final Warning</h2>
+            <p>Hi {data.get('church_name', 'there')},</p>
+            <p>This is your final warning. Your domain will be released in 7 days if payment is not received.</p>
+            <p><a href="https://churchnavigator.com/dashboard/billing">Restore Now</a></p>
+            """
+        },
+        "site_cancelled": {
+            "subject": "Website Closed",
+            "html": f"""
+            <h2>Website Closed</h2>
+            <p>Hi {data.get('church_name', 'there')},</p>
+            <p>Your church website has been closed and your domain released.</p>
+            <p>You can create a new website anytime at ChurchNavigator.com</p>
+            """
+        },
+        "site_restored": {
+            "subject": "Welcome Back! Your Website Is Live",
+            "html": f"""
+            <h2>Welcome Back!</h2>
+            <p>Hi {data.get('church_name', 'there')},</p>
+            <p>Your payment has been received and your website is live again.</p>
+            <p><a href="https://{data.get('domain', 'churchnavigator.com')}">View Your Website</a></p>
+            """
+        }
+    }
+    
+    template_data = templates.get(template)
+    if not template_data:
+        return
     
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        resend.Emails.send({
+            "from": "ChurchNavigator <noreply@churchnavigator.com>",
+            "to": [to],
+            "subject": template_data["subject"],
+            "html": template_data["html"]
+        })
+    except Exception as e:
+        print(f"Email send error: {str(e)}")
+
+async def handle_payment_failed(subscription_id: str, invoice_id: str):
+    sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id})
+    if not sub or sub.get("product_type") != "sites":
+        return
+    
+    church = await db.churches.find_one({"_id": sub["church_id"]})
+    if not church:
+        return
+    
+    user = await db.users.find_one({"_id": sub["user_id"]})
+    if not user:
+        return
+    
+    failed_at = datetime.utcnow()
+    await db.subscriptions.update_one(
+        {"_id": sub["_id"]},
+        {"$set": {
+            "payment_failed_at": failed_at,
+            "grace_period_status": "first_warning"
+        }}
+    )
+    
+    await send_email(
+        user["email"],
+        "payment_failed",
+        {"church_name": church["name"]}
+    )
+
+async def handle_payment_restored(subscription_id: str):
+    sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id})
+    if not sub or sub.get("product_type") != "sites":
+        return
+    
+    church = await db.churches.find_one({"_id": sub["church_id"]})
+    if not church:
+        return
+    
+    user = await db.users.find_one({"_id": sub["user_id"]})
+    if not user:
+        return
+    
+    await db.subscriptions.update_one(
+        {"_id": sub["_id"]},
+        {"$unset": {"payment_failed_at": "", "grace_period_status": ""}}
+    )
+    
+    await db.churches.update_one(
+        {"_id": church["_id"]},
+        {"$set": {"hosting_status": "active"}}
+    )
+    
+    await send_email(
+        user["email"],
+        "site_restored",
+        {"church_name": church["name"], "domain": church.get("custom_domain", "")}
+    )
+
+async def handle_subscription_deleted(subscription_id: str):
+    sub = await db.subscriptions.find_one({"stripe_subscription_id": subscription_id})
+    if not sub:
+        return
+    
+    await db.subscriptions.update_one(
+        {"_id": sub["_id"]},
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": datetime.utcnow()
+        }}
+    )
+    
+    if sub.get("product_type") == "sites":
+        church = await db.churches.find_one({"_id": sub["church_id"]})
+        user = await db.users.find_one({"_id": sub["user_id"]})
+        
+        if church and user:
+            await db.churches.update_one(
+                {"_id": church["_id"]},
+                {"$set": {"hosting_status": "pending_cancellation"}}
+            )
+
+@router.post("/webhook")
+async def stripe_webhook(request: Request, background_tasks: BackgroundTasks):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
+    
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, webhook_secret
+        )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid payload")
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
     
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        if session.get("metadata", {}).get("type") == "church_boost":
-            await handle_church_boost_payment(session)
-        elif session.get("mode") == "subscription":
-            await handle_subscription_created(session)
+    event_type = event["type"]
+    data = event["data"]["object"]
     
-    elif event["type"] == "customer.subscription.created":
-        subscription = event["data"]["object"]
-        await handle_planner_subscription_created(subscription)
-    
-    elif event["type"] == "customer.subscription.deleted":
-        subscription = event["data"]["object"]
-        await handle_subscription_deleted(subscription)
-    
-    elif event["type"] == "invoice.payment_failed":
-        invoice = event["data"]["object"]
-        await handle_payment_failed(invoice)
-    
-    elif event["type"] == "invoice.paid":
-        invoice = event["data"]["object"]
-        await handle_invoice_paid(invoice)
+    if event_type == "invoice.payment_failed":
+        subscription_id = data.get("subscription")
+        invoice_id = data.get("id")
+        background_tasks.add_task(handle_payment_failed, subscription_id, invoice_id)
+        
+    elif event_type == "invoice.paid":
+        subscription_id = data.get("subscription")
+        background_tasks.add_task(handle_payment_restored, subscription_id)
+        
+    elif event_type == "customer.subscription.deleted":
+        subscription_id = data.get("id")
+        background_tasks.add_task(handle_subscription_deleted, subscription_id)
     
     return {"status": "success"}
-
-async def handle_church_boost_payment(session):
-    church_id = session["metadata"].get("church_id")
-    boost_type = session["metadata"].get("boost_type")
-    duration = int(session["metadata"].get("duration_months", 1))
-    
-    if boost_type == "featured":
-        expiry = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
-        for _ in range(duration):
-            expiry = expiry.replace(day=28) + timedelta(days=4)
-            expiry = expiry.replace(day=1)
-        
-        db.churches.update_one(
-            {"_id": church_id},
-            {"$set": {"featured": True, "featured_until": expiry}}
-        )
-    
-    elif boost_type == "verified":
-        db.churches.update_one(
-            {"_id": church_id},
-            {"$set": {"verified": True, "verified_date": datetime.utcnow()}}
-        )
-
-async def handle_subscription_created(session):
-    user_id = session["metadata"].get("user_id")
-    plan = session["metadata"].get("plan")
-    
-    if not user_id or not plan:
-        return
-    
-    subscription_id = session.get("subscription")
-    customer_id = session.get("customer")
-    
-    db.users.update_one(
-        {"_id": user_id},
-        {"$set": {
-            "planner_subscription.tier": plan,
-            "planner_subscription.stripe_subscription_id": subscription_id,
-            "planner_subscription.stripe_customer_id": customer_id,
-            "planner_subscription.cancel_at_period_end": False
-        }}
-    )
-
-async def handle_planner_subscription_created(subscription):
-    customer_id = subscription["customer"]
-    subscription_id = subscription["id"]
-    price_id = subscription["items"]["data"][0]["price"]["id"]
-    current_period_end = datetime.fromtimestamp(subscription["current_period_end"])
-    
-    tier = "standard" if price_id == STRIPE_PLANNER_STANDARD_PRICE_ID else "premium"
-    
-    user = db.users.find_one({"planner_subscription.stripe_customer_id": customer_id})
-    if not user:
-        return
-    
-    db.users.update_one(
-        {"_id": user["_id"]},
-        {"$set": {
-            "planner_subscription.tier": tier,
-            "planner_subscription.stripe_subscription_id": subscription_id,
-            "planner_subscription.current_period_end": current_period_end,
-            "planner_subscription.cancel_at_period_end": False
-        }}
-    )
-    
-    template = "planner_welcome_standard" if tier == "standard" else "planner_welcome_premium"
-    await send_email(
-        to_email=user["email"],
-        template_id=template,
-        data={"name": user.get("name", "Minister"), "tier": tier.title()}
-    )
-
-async def handle_subscription_deleted(subscription):
-    customer_id = subscription["customer"]
-    
-    user = db.users.find_one({"planner_subscription.stripe_customer_id": customer_id})
-    if not user:
-        return
-    
-    db.users.update_one(
-        {"_id": user["_id"]},
-        {"$set": {
-            "planner_subscription.tier": "free",
-            "planner_subscription.stripe_subscription_id": None,
-            "planner_subscription.current_period_end": None,
-            "planner_subscription.visit_requests_this_month": 0
-        }}
-    )
-    
-    await send_email(
-        to_email=user["email"],
-        template_id="planner_cancellation",
-        data={"name": user.get("name", "Minister")}
-    )
-
-async def handle_payment_failed(invoice):
-    customer_id = invoice["customer"]
-    
-    user = db.users.find_one({"planner_subscription.stripe_customer_id": customer_id})
-    if not user:
-        return
-    
-    await send_email(
-        to_email=user["email"],
-        template_id="payment_failed",
-        data={"name": user.get("name", "Minister"), "amount": invoice["amount_due"] / 100}
-    )
-
-async def handle_invoice_paid(invoice):
-    customer_id = invoice["customer"]
-    db.payment_logs.insert_one({
-        "customer_id": customer_id,
-        "invoice_id": invoice["id"],
-        "amount": invoice["amount_paid"],
-        "paid_at": datetime.utcnow()
-    })
