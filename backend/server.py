@@ -1,36 +1,37 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import churches, events, pastors, search
-from .database import db
+import os
+from dotenv import load_dotenv
 
-app = FastAPI(title="ChurchNavigator API")
+load_dotenv()
+
+app = FastAPI(title="ChurchNavigator API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://churchnavigator.com", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://churchnavigator.com",
+        "https://www.churchnavigator.com",
+        "https://dev.churchnavigator.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+from routers import churches, events, pastors, search, chat
+
 app.include_router(churches.router)
 app.include_router(events.router)
 app.include_router(pastors.router)
 app.include_router(search.router)
-
-@app.on_event("startup")
-async def startup_event():
-    try:
-        db.churches.create_index([("name", "text"), ("description", "text"), ("city", "text"), ("denomination", "text")])
-        db.events.create_index([("name", "text"), ("description", "text"), ("city", "text")])
-        db.pastors.create_index([("name", "text"), ("bio", "text"), ("city", "text"), ("denomination", "text")])
-        db.worship_leaders.create_index([("name", "text"), ("bio", "text"), ("city", "text")])
-        db.media_teams.create_index([("name", "text"), ("description", "text"), ("city", "text")])
-        db.bible_colleges.create_index([("name", "text"), ("description", "text"), ("city", "text"), ("denomination", "text")])
-        print("MongoDB text indexes created successfully")
-    except Exception as e:
-        print(f"Index creation error (may already exist): {e}")
+app.include_router(chat.router)
 
 @app.get("/")
 async def root():
-    return {"message": "ChurchNavigator API", "status": "online"}
+    return {"message": "ChurchNavigator API", "version": "1.0.0"}
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
