@@ -1,132 +1,30 @@
 import React, { useState } from 'react';
+import { ArrowLeft, Instagram, Facebook, Youtube, TrendingUp, Calendar, Users, CheckCircle, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import {
-  Container,
-  Box,
-  Typography,
-  Button,
-  Paper,
-  Grid,
-  TextField,
-  FormControlLabel,
-  Checkbox,
-  Card,
-  CardContent,
-  LinearProgress,
-  Alert,
-  CircularProgress,
-  Chip
-} from '@mui/material';
-import {
-  Instagram,
-  Facebook,
-  YouTube,
-  ArrowBack,
-  CheckCircle,
-  TrendingUp,
-  Schedule,
-  VerifiedUser
-} from '@mui/icons-material';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://api.churchnavigator.com';
+const API_URL = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
 
-const platformConfig = {
-  instagram: { name: 'Instagram', icon: Instagram, color: '#E4405F' },
-  facebook: { name: 'Facebook', icon: Facebook, color: '#1877F2' },
-  youtube: { name: 'YouTube', icon: YouTube, color: '#FF0000' },
-  tiktok: { name: 'TikTok', icon: null, color: '#000000' }
+const platformIcons = {
+  instagram: Instagram,
+  facebook: Facebook,
+  youtube: Youtube,
+  tiktok: TrendingUp
 };
 
-const ScoreGauge = ({ score, label }) => {
-  const getColor = (score) => {
-    if (score >= 80) return '#4caf50';
-    if (score >= 60) return '#ff9800';
-    return '#f44336';
-  };
-
-  return (
-    <Box sx={{ textAlign: 'center', mb: 3 }}>
-      <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-        <CircularProgress
-          variant="determinate"
-          value={score}
-          size={180}
-          thickness={6}
-          sx={{ color: getColor(score) }}
-        />
-        <Box
-          sx={{
-            top: 0,
-            left: 0,
-            bottom: 0,
-            right: 0,
-            position: 'absolute',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'column'
-          }}
-        >
-          <Typography variant="h2" component="div" sx={{ fontWeight: 700, color: getColor(score) }}>
-            {Math.round(score)}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {label}
-          </Typography>
-        </Box>
-      </Box>
-    </Box>
-  );
+const platformColors = {
+  instagram: 'from-pink-500 to-purple-500',
+  facebook: 'from-blue-600 to-blue-700',
+  youtube: 'from-red-600 to-red-700',
+  tiktok: 'from-black to-gray-800'
 };
 
-const MetricCard = ({ title, score, icon: Icon, benchmark }) => {
-  const getColor = (score) => {
-    if (score >= 80) return '#4caf50';
-    if (score >= 60) return '#ff9800';
-    return '#f44336';
-  };
-
-  return (
-    <Card sx={{ height: '100%', bgcolor: '#f9f7ff' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Icon sx={{ mr: 1, color: '#7c3aed' }} />
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            {title}
-          </Typography>
-        </Box>
-        <Typography variant="h3" sx={{ color: getColor(score), fontWeight: 700, mb: 1 }}>
-          {Math.round(score)}
-        </Typography>
-        <LinearProgress
-          variant="determinate"
-          value={score}
-          sx={{
-            height: 8,
-            borderRadius: 4,
-            bgcolor: '#e0e0e0',
-            '& .MuiLinearProgress-bar': { bgcolor: getColor(score) }
-          }}
-        />
-        {benchmark && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-            {benchmark}
-          </Typography>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
-
-export default function SocialHealthPage() {
+const SocialHealthPage = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [platform, setPlatform] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [results, setResults] = useState(null);
-
   const [formData, setFormData] = useState({
     follower_count: '',
     posts_per_week: '',
@@ -145,55 +43,61 @@ export default function SocialHealthPage() {
     setStep(2);
   };
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
-  const handleAnalyse = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
-    setError('');
 
     try {
-      const churchId = localStorage.getItem('church_id');
-      const token = localStorage.getItem('token');
-
-      if (!churchId || !token) {
-        setError('Please log in to use this tool');
-        setLoading(false);
-        return;
-      }
-
-      const response = await axios.post(
-        `${API_URL}/tools/social-health/analyse`,
-        {
-          church_id: churchId,
-          platform,
-          follower_count: parseInt(formData.follower_count) || 0,
-          posts_per_week: parseFloat(formData.posts_per_week) || 0,
-          avg_likes: parseFloat(formData.avg_likes) || 0,
-          avg_comments: parseFloat(formData.avg_comments) || 0,
-          avg_shares: parseFloat(formData.avg_shares) || 0,
-          last_post_days_ago: parseInt(formData.last_post_days_ago) || 0,
-          has_stories: formData.has_stories,
-          has_reels: formData.has_reels,
-          profile_complete: formData.profile_complete,
-          link_in_bio: formData.link_in_bio
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const churchId = localStorage.getItem('church_id') || 'demo-church-id';
+      const response = await axios.post(`${API_URL}/tools/social-health/analyse`, {
+        church_id: churchId,
+        platform,
+        follower_count: parseInt(formData.follower_count),
+        posts_per_week: parseFloat(formData.posts_per_week),
+        avg_likes: parseFloat(formData.avg_likes),
+        avg_comments: parseFloat(formData.avg_comments),
+        avg_shares: parseFloat(formData.avg_shares || 0),
+        last_post_days_ago: parseInt(formData.last_post_days_ago),
+        has_stories: formData.has_stories,
+        has_reels: formData.has_reels,
+        profile_complete: formData.profile_complete,
+        link_in_bio: formData.link_in_bio
+      });
 
       setResults(response.data);
       setStep(3);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Analysis failed. Please try again.');
+    } catch (error) {
+      console.error('Error analyzing social health:', error);
+      alert('Failed to analyze social media health. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  const getScoreColor = (score) => {
+    if (score >= 80) return 'text-green-600';
+    if (score >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getScoreBg = (score) => {
+    if (score >= 80) return 'bg-green-100';
+    if (score >= 60) return 'bg-yellow-100';
+    return 'bg-red-100';
+  };
+
   const resetForm = () => {
     setStep(1);
     setPlatform('');
+    setResults(null);
     setFormData({
       follower_count: '',
       posts_per_week: '',
@@ -206,315 +110,349 @@ export default function SocialHealthPage() {
       profile_complete: false,
       link_in_bio: false
     });
-    setResults(null);
-    setError('');
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Button
-        startIcon={<ArrowBack />}
-        onClick={() => navigate('/dashboard/tools')}
-        sx={{ mb: 3, color: '#7c3aed' }}
-      >
-        Back to Tools
-      </Button>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-lavender-50">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <button
+          onClick={() => navigate('/tools')}
+          className="flex items-center text-purple-600 hover:text-purple-700 mb-6 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5 mr-2" />
+          Back to Tools
+        </button>
 
-      <Paper elevation={3} sx={{ p: 4, bgcolor: '#ffffff', borderRadius: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, color: '#7c3aed', mb: 1 }}>
-          Social Media Health Check
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          Get AI-powered insights and recommendations for your church's social media presence
-        </Typography>
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          <div className="bg-gradient-to-r from-purple-600 to-lavender-600 text-white p-8">
+            <h1 className="text-3xl font-bold mb-2">Social Media Health Check</h1>
+            <p className="text-purple-100">Analyze your church's social media performance and get AI-powered recommendations</p>
+          </div>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
-            {error}
-          </Alert>
-        )}
-
-        {step === 1 && (
-          <Box>
-            <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-              Select a platform to analyse:
-            </Typography>
-            <Grid container spacing={2}>
-              {Object.entries(platformConfig).map(([key, config]) => {
-                const Icon = config.icon;
-                return (
-                  <Grid item xs={12} sm={6} md={3} key={key}>
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      onClick={() => handlePlatformSelect(key)}
-                      sx={{
-                        height: 120,
-                        flexDirection: 'column',
-                        gap: 1,
-                        borderColor: config.color,
-                        color: config.color,
-                        '&:hover': {
-                          borderColor: config.color,
-                          bgcolor: `${config.color}15`
-                        }
-                      }}
-                    >
-                      {Icon && <Icon sx={{ fontSize: 48 }} />}
-                      <Typography variant="h6">{config.name}</Typography>
-                    </Button>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </Box>
-        )}
-
-        {step === 2 && (
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-              <Chip
-                label={platformConfig[platform].name}
-                sx={{ bgcolor: platformConfig[platform].color, color: 'white', mr: 2 }}
-              />
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Enter your stats
-              </Typography>
-            </Box>
-
-            <Grid container spacing={3}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Follower Count"
-                  type="number"
-                  value={formData.follower_count}
-                  onChange={(e) => handleInputChange('follower_count', e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Posts per Week"
-                  type="number"
-                  value={formData.posts_per_week}
-                  onChange={(e) => handleInputChange('posts_per_week', e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Average Likes per Post"
-                  type="number"
-                  value={formData.avg_likes}
-                  onChange={(e) => handleInputChange('avg_likes', e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Average Comments per Post"
-                  type="number"
-                  value={formData.avg_comments}
-                  onChange={(e) => handleInputChange('avg_comments', e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Average Shares per Post"
-                  type="number"
-                  value={formData.avg_shares}
-                  onChange={(e) => handleInputChange('avg_shares', e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Days Since Last Post"
-                  type="number"
-                  value={formData.last_post_days_ago}
-                  onChange={(e) => handleInputChange('last_post_days_ago', e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                  Profile Features:
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={formData.has_stories}
-                          onChange={(e) => handleInputChange('has_stories', e.target.checked)}
-                        />
-                      }
-                      label="Has Stories"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={formData.has_reels}
-                          onChange={(e) => handleInputChange('has_reels', e.target.checked)}
-                        />
-                      }
-                      label="Has Reels/Videos"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={formData.profile_complete}
-                          onChange={(e) => handleInputChange('profile_complete', e.target.checked)}
-                        />
-                      }
-                      label="Profile Complete"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={formData.link_in_bio}
-                          onChange={(e) => handleInputChange('link_in_bio', e.target.checked)}
-                        />
-                      }
-                      label="Link in Bio"
-                    />
-                  </Grid>
-                </Grid>
-              </Grid>
-            </Grid>
-
-            <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
-              <Button onClick={() => setStep(1)} variant="outlined">
-                Back
-              </Button>
-              <Button
-                onClick={handleAnalyse}
-                variant="contained"
-                disabled={loading || !formData.follower_count || !formData.posts_per_week}
-                sx={{ bgcolor: '#7c3aed', '&:hover': { bgcolor: '#6d28d9' } }}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Analyse'}
-              </Button>
-            </Box>
-          </Box>
-        )}
-
-        {step === 3 && results && (
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
-              <Chip
-                label={platformConfig[platform].name}
-                sx={{ bgcolor: platformConfig[platform].color, color: 'white', mr: 2 }}
-              />
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Analysis Results
-              </Typography>
-            </Box>
-
-            <ScoreGauge score={results.overall_score} label="Overall Health Score" />
-
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-              <Grid item xs={12} sm={6} md={3}>
-                <MetricCard
-                  title="Engagement"
-                  score={results.engagement_score}
-                  icon={TrendingUp}
-                  benchmark={`${results.engagement_rate}% engagement rate`}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <MetricCard
-                  title="Posting"
-                  score={results.posting_score}
-                  icon={Schedule}
-                  benchmark="Consistency matters"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <MetricCard
-                  title="Recency"
-                  score={results.recency_score}
-                  icon={CheckCircle}
-                  benchmark="Stay active"
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <MetricCard
-                  title="Profile"
-                  score={results.profile_score}
-                  icon={VerifiedUser}
-                  benchmark="Completeness"
-                />
-              </Grid>
-            </Grid>
-
-            {results.benchmarks && results.benchmarks.sample_size > 0 && (
-              <Paper sx={{ p: 3, mb: 4, bgcolor: '#f9f7ff' }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                  Benchmark Comparison
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Compared to {results.benchmarks.sample_size} similar {results.benchmarks.denomination} churches
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      Your Engagement: <strong>{results.engagement_rate}%</strong>
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Average: {results.benchmarks.avg_engagement_rate}%
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      Your Posts/Week: <strong>{formData.posts_per_week}</strong>
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Average: {results.benchmarks.avg_posts_per_week}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Paper>
+          <div className="p-8">
+            {step === 1 && (
+              <div>
+                <h2 className="text-2xl font-semibold mb-6 text-gray-800">Select Platform</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {Object.keys(platformIcons).map((p) => {
+                    const Icon = platformIcons[p];
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => handlePlatformSelect(p)}
+                        className={`p-6 rounded-xl border-2 border-gray-200 hover:border-purple-400 transition-all hover:shadow-lg group`}
+                      >
+                        <div className={`w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br ${platformColors[p]} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                          <Icon className="w-8 h-8 text-white" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700 capitalize">{p}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
-            <Paper sx={{ p: 3, bgcolor: '#f0fdf4', border: '1px solid #86efac' }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#166534' }}>
-                AI Recommendations
-              </Typography>
-              {results.recommendations.map((rec, index) => (
-                <Box key={index} sx={{ display: 'flex', mb: 2 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 600, mr: 1, color: '#166534' }}>
-                    {index + 1}.
-                  </Typography>
-                  <Typography variant="body1">{rec}</Typography>
-                </Box>
-              ))}
-            </Paper>
+            {step === 2 && (
+              <form onSubmit={handleSubmit}>
+                <div className="flex items-center mb-6">
+                  <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${platformColors[platform]} flex items-center justify-center mr-3`}>
+                    {React.createElement(platformIcons[platform], { className: 'w-6 h-6 text-white' })}
+                  </div>
+                  <h2 className="text-2xl font-semibold text-gray-800 capitalize">{platform} Stats</h2>
+                </div>
 
-            <Box sx={{ mt: 4 }}>
-              <Button
-                onClick={resetForm}
-                variant="contained"
-                sx={{ bgcolor: '#7c3aed', '&:hover': { bgcolor: '#6d28d9' } }}
-              >
-                Check Another Platform
-              </Button>
-            </Box>
-          </Box>
-        )}
-      </Paper>
-    </Container>
+                <div className="space-y-6">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Follower Count</label>
+                      <input
+                        type="number"
+                        name="follower_count"
+                        value={formData.follower_count}
+                        onChange={handleInputChange}
+                        required
+                        min="0"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="e.g., 1250"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Posts Per Week</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        name="posts_per_week"
+                        value={formData.posts_per_week}
+                        onChange={handleInputChange}
+                        required
+                        min="0"
+                        max="50"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="e.g., 3.5"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Avg Likes Per Post</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        name="avg_likes"
+                        value={formData.avg_likes}
+                        onChange={handleInputChange}
+                        required
+                        min="0"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="e.g., 45"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Avg Comments</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        name="avg_comments"
+                        value={formData.avg_comments}
+                        onChange={handleInputChange}
+                        required
+                        min="0"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="e.g., 8"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Avg Shares</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        name="avg_shares"
+                        value={formData.avg_shares}
+                        onChange={handleInputChange}
+                        min="0"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="e.g., 2"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Days Since Last Post</label>
+                    <input
+                      type="number"
+                      name="last_post_days_ago"
+                      value={formData.last_post_days_ago}
+                      onChange={handleInputChange}
+                      required
+                      min="0"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="e.g., 2"
+                    />
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-medium text-gray-700 mb-3">Profile Features</p>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      <label className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="has_stories"
+                          checked={formData.has_stories}
+                          onChange={handleInputChange}
+                          className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">Has Stories/Status</span>
+                      </label>
+                      <label className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="has_reels"
+                          checked={formData.has_reels}
+                          onChange={handleInputChange}
+                          className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">Has Reels/Short Videos</span>
+                      </label>
+                      <label className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="profile_complete"
+                          checked={formData.profile_complete}
+                          onChange={handleInputChange}
+                          className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">Profile Complete (bio, photo)</span>
+                      </label>
+                      <label className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="link_in_bio"
+                          checked={formData.link_in_bio}
+                          onChange={handleInputChange}
+                          className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-gray-700">Link in Bio/Description</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex space-x-4 mt-8">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-lavender-600 text-white rounded-lg hover:from-purple-700 hover:to-lavender-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    {loading ? 'Analyzing...' : 'Analyze'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {step === 3 && results && (
+              <div className="space-y-6">
+                <div className="text-center py-8 border-b">
+                  <div className={`w-32 h-32 mx-auto rounded-full ${getScoreBg(results.overall_score)} flex items-center justify-center mb-4`}>
+                    <span className={`text-4xl font-bold ${getScoreColor(results.overall_score)}`}>
+                      {Math.round(results.overall_score)}
+                    </span>
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Overall Health Score</h2>
+                  <p className="text-gray-600">
+                    {results.overall_score >= 80 ? 'Excellent' : results.overall_score >= 60 ? 'Good' : 'Needs Improvement'}
+                  </p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Engagement</span>
+                      <span className={`text-lg font-bold ${getScoreColor(results.engagement_score)}`}>
+                        {Math.round(results.engagement_score)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-purple-600 to-lavender-600 h-2 rounded-full"
+                        style={{ width: `${results.engagement_score}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">{results.engagement_rate}% engagement rate</p>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Posting Consistency</span>
+                      <span className={`text-lg font-bold ${getScoreColor(results.posting_score)}`}>
+                        {Math.round(results.posting_score)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-blue-600 to-blue-400 h-2 rounded-full"
+                        style={{ width: `${results.posting_score}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Recency</span>
+                      <span className={`text-lg font-bold ${getScoreColor(results.recency_score)}`}>
+                        {Math.round(results.recency_score)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-green-600 to-green-400 h-2 rounded-full"
+                        style={{ width: `${results.recency_score}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-yellow-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Profile Completeness</span>
+                      <span className={`text-lg font-bold ${getScoreColor(results.profile_score)}`}>
+                        {Math.round(results.profile_score)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-yellow-600 to-yellow-400 h-2 rounded-full"
+                        style={{ width: `${results.profile_score}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {(results.benchmark_engagement || results.benchmark_posting) && (
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Benchmark Comparison</h3>
+                    <div className="space-y-3">
+                      {results.benchmark_engagement && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">Your engagement rate</span>
+                          <span className="text-sm font-medium">{results.engagement_rate}%</span>
+                        </div>
+                      )}
+                      {results.benchmark_engagement && (
+                        <div className="flex items-center justify-between text-purple-600">
+                          <span className="text-sm">Similar churches average</span>
+                          <span className="text-sm font-medium">{results.benchmark_engagement}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-gradient-to-br from-purple-50 to-lavender-50 rounded-lg p-6">
+                  <div className="flex items-center mb-4">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-lavender-600 rounded-full flex items-center justify-center mr-3">
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-800">AI Recommendations</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {results.recommendations.map((rec, index) => (
+                      <div key={index} className="flex items-start space-x-3 bg-white rounded-lg p-4">
+                        <span className="flex-shrink-0 w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                          {index + 1}
+                        </span>
+                        <p className="text-sm text-gray-700 leading-relaxed">{rec}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {results.cached && (
+                    <p className="text-xs text-gray-500 mt-3 flex items-center">
+                      <AlertCircle className="w-3 h-3 mr-1" />
+                      Recommendations cached for 7 days
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  onClick={resetForm}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-lavender-600 text-white rounded-lg hover:from-purple-700 hover:to-lavender-700 transition-all font-medium"
+                >
+                  Check Another Platform
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
-}
+};
+
+export default SocialHealthPage;
