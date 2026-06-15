@@ -1,38 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Brain, TrendingUp, AlertCircle, RefreshCw, Share2, Lock } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
+const API_URL = process.env.REACT_APP_API_URL || 'https://api.churchnavigator.com';
 
-export default function PatternIntelligence() {
-  const { churchSlug } = useParams();
+const PatternIntelligence = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [analysis, setAnalysis] = useState(null);
+  const [patterns, setPatterns] = useState([]);
   const [error, setError] = useState(null);
-  const [requiresUpgrade, setRequiresUpgrade] = useState(false);
 
-  useEffect(() => {
-    loadAnalysis();
-  }, [churchSlug]);
-
-  const loadAnalysis = async (forceRefresh = false) => {
+  const fetchPatterns = async (refresh = false) => {
+    if (!user?.church_slug) return;
+    
     try {
-      setLoading(true);
-      setError(null);
+      if (refresh) setRefreshing(true);
+      else setLoading(true);
+      
       const response = await axios.post(
-        `${API_BASE}/api/tools/pattern-intelligence/${churchSlug}`,
-        { force_refresh: forceRefresh },
-        { withCredentials: true }
+        `${API_URL}/api/tools/pattern-intelligence/${user.church_slug}`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          params: refresh ? { bust_cache: true } : {}
+        }
       );
-      setAnalysis(response.data);
+      
+      setPatterns(response.data.patterns || []);
+      setError(null);
     } catch (err) {
       if (err.response?.status === 402) {
-        setRequiresUpgrade(true);
+        setError('Premium subscription required');
       } else {
-        setError(err.response?.data?.detail || 'Failed to load analysis');
+        setError(err.response?.data?.detail || 'Failed to load pattern intelligence');
       }
     } finally {
       setLoading(false);
@@ -40,48 +43,16 @@ export default function PatternIntelligence() {
     }
   };
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadAnalysis(true);
-  };
-
-  const handleShare = () => {
-    const text = `AI Pattern Intelligence for ${analysis?.data_summary?.church_name}\n\n${analysis?.patterns?.map((p, i) => `${i + 1}. ${p.title}\n${p.pattern}`).join('\n\n')}`;
-    if (navigator.share) {
-      navigator.share({ title: 'Church Pattern Intelligence', text });
-    } else {
-      navigator.clipboard.writeText(text);
-      alert('Analysis copied to clipboard');
-    }
-  };
-
-  if (requiresUpgrade) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md text-center">
-          <Lock className="w-16 h-16 text-indigo-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Premium Feature</h2>
-          <p className="text-gray-600 mb-6">
-            AI Pattern Intelligence is available on our Premium plan (£19/month).
-            Unlock deep insights about your church's growth patterns.
-          </p>
-          <button
-            onClick={() => navigate('/pricing')}
-            className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700"
-          >
-            View Pricing
-          </button>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    fetchPatterns();
+  }, [user]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Brain className="w-16 h-16 text-indigo-600 animate-pulse mx-auto mb-4" />
-          <p className="text-gray-600">AI is analyzing your church data...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Analyzing your church data...</p>
         </div>
       </div>
     );
@@ -89,125 +60,102 @@ export default function PatternIntelligence() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <AlertCircle className="w-8 h-8 text-red-600 mb-2" />
-          <p className="text-red-800">{error}</p>
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+            <h3 className="text-lg font-medium text-red-800 mb-2">Access Restricted</h3>
+            <p className="text-red-600 mb-4">{error}</p>
+            {error.includes('Premium') && (
+              <button
+                onClick={() => navigate('/pricing')}
+                className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
+              >
+                Upgrade to Premium
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  const getConfidenceBadge = (confidence) => {
-    const colors = {
-      high: 'bg-green-100 text-green-800',
-      medium: 'bg-yellow-100 text-yellow-800',
-      low: 'bg-gray-100 text-gray-800'
-    };
-    return colors[confidence] || colors.medium;
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Brain className="w-8 h-8 text-indigo-600" />
-              <div>
-                <h1 className="text-2xl font-bold">AI Pattern Intelligence</h1>
-                <p className="text-gray-600">{analysis?.data_summary?.church_name}</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                <Share2 className="w-4 h-4" />
-                Share
-              </button>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">AI Pattern Intelligence</h1>
+            <p className="text-gray-600 mt-2">Non-obvious insights from your church data</p>
           </div>
-          <div className="text-sm text-gray-500">
-            Analysis period: {analysis?.data_period} • Generated {new Date(analysis?.generated_at).toLocaleDateString()}
-          </div>
+          <button
+            onClick={() => fetchPatterns(true)}
+            disabled={refreshing}
+            className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            {refreshing ? (
+              <><span className="animate-spin">↻</span> Refreshing...</>
+            ) : (
+              <>↻ Refresh Analysis</>
+            )}
+          </button>
         </div>
 
-        <div className="grid md:grid-cols-1 gap-6 mb-6">
-          {analysis?.patterns?.map((pattern, index) => (
-            <div key={index} className="bg-white rounded-lg shadow-lg p-6">
+        <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1">
+          {patterns.map((pattern, index) => (
+            <div key={index} className="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-600">
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold">
-                    {index + 1}
-                  </div>
-                  <h2 className="text-xl font-bold">{pattern.title}</h2>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getConfidenceBadge(pattern.confidence)}`}>
-                  {pattern.confidence} confidence
+                <h3 className="text-xl font-bold text-gray-900">{pattern.title}</h3>
+                <span className="bg-indigo-100 text-indigo-800 text-xs font-semibold px-3 py-1 rounded-full">
+                  Pattern {index + 1}
                 </span>
               </div>
-
+              
               <div className="space-y-4">
                 <div>
-                  <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4" />
-                    Pattern Observed
-                  </h3>
-                  <p className="text-gray-600">{pattern.pattern}</p>
+                  <h4 className="text-sm font-semibold text-gray-700 uppercase mb-2">What We See</h4>
+                  <p className="text-gray-800">{pattern.pattern}</p>
+                  {pattern.data_points && pattern.data_points.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {pattern.data_points.map((point, i) => (
+                        <span key={i} className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full">
+                          {point}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">Why This Matters</h3>
-                  <p className="text-gray-600">{pattern.why_it_matters}</p>
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <h4 className="text-sm font-semibold text-yellow-900 uppercase mb-2">Why It Matters</h4>
+                  <p className="text-yellow-900">{pattern.why_matters}</p>
                 </div>
 
-                <div className="bg-indigo-50 border-l-4 border-indigo-600 p-4">
-                  <h3 className="font-semibold text-indigo-900 mb-2">Action to Take</h3>
-                  <p className="text-indigo-800">{pattern.action}</p>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="text-sm font-semibold text-green-900 uppercase mb-2">Action to Take</h4>
+                  <p className="text-green-900 font-medium">{pattern.action}</p>
                 </div>
+              </div>
 
-                {pattern.data_points && pattern.data_points.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {pattern.data_points.map((dp, i) => (
-                      <span key={i} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
-                        {dp}
-                      </span>
-                    ))}
-                  </div>
-                )}
+              <div className="mt-4 pt-4 border-t flex gap-3">
+                <button className="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                  Share with team
+                </button>
+                <button className="text-gray-600 hover:text-gray-800 text-sm font-medium">
+                  Add to task list
+                </button>
               </div>
             </div>
           ))}
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h3 className="font-bold mb-4">Data Summary (Last 90 Days)</h3>
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-indigo-600">{analysis?.data_summary?.visitor_count_90d}</div>
-              <div className="text-sm text-gray-600">Total Visitors</div>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-indigo-600">{analysis?.data_summary?.events_by_type?.length || 0}</div>
-              <div className="text-sm text-gray-600">Event Types</div>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-indigo-600">{analysis?.data_summary?.profile_views_90d}</div>
-              <div className="text-sm text-gray-600">Profile Views</div>
-            </div>
+        {patterns.length === 0 && !loading && (
+          <div className="bg-white rounded-lg shadow-md p-12 text-center">
+            <p className="text-gray-600">No patterns detected yet. Check back after more data is collected.</p>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
-}
+};
+
+export default PatternIntelligence;
