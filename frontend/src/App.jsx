@@ -1,37 +1,29 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Header from './components/Header';
-import Footer from './components/Footer';
-import Home from './pages/Home';
-import ChurchDetail from './pages/ChurchDetail';
-import Search from './pages/Search';
-import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import PatternIntelligence from './pages/tools/PatternIntelligence';
-import VisitorJourney from './pages/tools/VisitorJourney';
-import Benchmarking from './pages/tools/Benchmarking';
+import HomePage from './pages/HomePage';
+import ChurchDetailPage from './pages/ChurchDetailPage';
+import EventsPage from './pages/EventsPage';
+import EventDetailPage from './pages/EventDetailPage';
+import WorshipLeadersPage from './pages/WorshipLeadersPage';
+import MediaTeamPage from './pages/MediaTeamPage';
+import FlyerGeneratorPage from './pages/tools/FlyerGeneratorPage';
+import PublicFlyerPage from './pages/PublicFlyerPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
   return (
     <Router>
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/church/:slug" element={<ChurchDetail />} />
-            <Route path="/search" element={<Search />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/tools/pattern-intelligence/:churchSlug" element={<PatternIntelligence />} />
-            <Route path="/tools/visitor-journey/:churchSlug" element={<VisitorJourney />} />
-            <Route path="/tools/benchmarking/:churchSlug" element={<Benchmarking />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/churches/:slug" element={<ChurchDetailPage />} />
+        <Route path="/events" element={<EventsPage />} />
+        <Route path="/events/:slug" element={<EventDetailPage />} />
+        <Route path="/events/:eventSlug/flyer" element={<FlyerGeneratorPage />} />
+        <Route path="/flyers/:eventSlug" element={<PublicFlyerPage />} />
+        <Route path="/worship-leaders" element={<WorshipLeadersPage />} />
+        <Route path="/media-team" element={<MediaTeamPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
     </Router>
   );
 }
