@@ -17,7 +17,6 @@ class PyObjectId(ObjectId):
         field_schema.update(type="string")
 
 class SmallGroupBase(BaseModel):
-    church_id: str
     name: str
     description: str
     leader_name: str
@@ -34,7 +33,7 @@ class SmallGroupBase(BaseModel):
     is_open_to_join: bool = True
 
 class SmallGroupCreate(SmallGroupBase):
-    pass
+    church_id: str
 
 class SmallGroupUpdate(BaseModel):
     name: Optional[str] = None
@@ -54,11 +53,11 @@ class SmallGroupUpdate(BaseModel):
 
 class SmallGroup(SmallGroupBase):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    church_id: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str, datetime: lambda v: v.isoformat()}
+        json_encoders = {ObjectId: str}
+        populate_by_name = True
 
 class JoinRequest(BaseModel):
     name: str
