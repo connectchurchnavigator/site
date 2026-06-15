@@ -1,155 +1,170 @@
-import os
 import anthropic
+import os
 from typing import Dict, List
-from datetime import datetime
+import json
 
 class SiteGenerator:
-    def __init__(self, db):
-        self.db = db
+    def __init__(self):
         self.client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
     
-    async def generate_site(self, church_slug: str, church_data: Dict = None):
-        if not church_data:
-            church_data = await self.db.churches.find_one({'slug': church_slug})
-        
-        if not church_data:
-            return {'success': False, 'error': 'Church not found'}
-        
-        site = await self.db.church_sites.find_one({'church_slug': church_slug})
-        template = site.get('template', 'modern') if site else 'modern'
-        domain = site.get('domain', f"{church_slug}.churchnavigator.com") if site else f"{church_slug}.churchnavigator.com"
-        
+    async def generate_site(self, church_data: Dict, template: str = 'modern') -> Dict:
         pages = {}
-        page_names = ['home', 'about', 'team', 'events', 'sermons', 'contact']
         
-        for page_name in page_names:
-            await self.db.church_sites.update_one(
-                {'church_slug': church_slug},
-                {'$set': {f'generation_status.{page_name}': 'generating'}},
-                upsert=True
-            )
-            
-            html = await self._generate_page(page_name, church_data, template, domain)
+        prompts = {
+            'home': self._build_home_prompt(church_data, template),
+            'about': self._build_about_prompt(church_data, template),
+            'team': self._build_team_prompt(church_data, template),
+            'events': self._build_events_prompt(church_data, template),
+            'sermons': self._build_sermons_prompt(church_data, template),
+            'contact': self._build_contact_prompt(church_data, template)
+        }
+        
+        for page_name, prompt in prompts.items():
+            html = await self._generate_page(prompt, church_data, template)
             pages[page_name] = html
-            
-            await self.db.church_sites.update_one(
-                {'church_slug': church_slug},
-                {'$set': {f'pages.{page_name}': html, f'generation_status.{page_name}': 'complete'}}
-            )
         
-        await self.db.church_sites.update_one(
-            {'church_slug': church_slug},
-            {'$set': {
-                'pages': pages,
-                'generated_at': datetime.now(),
-                'hosting_status': 'ready'
-            }}
+        return pages
+    
+    async def _generate_page(self, prompt: str, church_data: Dict, template: str) -> str:
+        message = self.client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=8000,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
         )
         
-        return {'success': True, 'pages': list(pages.keys())}
+        html = message.content[0].text
+        html = self._inject_base_styles(html, template)
+        return html
     
-    async def _generate_page(self, page_name: str, church: Dict, template: str, domain: str) -> str:
-        prompt = self._build_prompt(page_name, church, template, domain)
-        
-        try:
-            message = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=4000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            
-            html = message.content[0].text
-            return html
-            
-        except Exception as e:
-            return self._fallback_page(page_name, church, domain)
+    def _build_home_prompt(self, church: Dict, template: str) -> str:
+        return f"""Generate a complete HTML page for a church home page.
+
+Church: {church.get('name')}
+Tagline: {church.get('tagline', 'Welcome to our church community')}
+Description: {church.get('description', '')}
+Next Service: {church.get('service_times', [{}])[0] if church.get('service_times') else 'Sunday 10:00 AM'}
+Address: {church.get('address', {})}
+
+Template style: {template}
+
+Include:
+1. Hero section with church name and tagline
+2. Next service countdown
+3. 3 value cards (Welcome, Community, Faith)
+4. Upcoming events section
+5. Photo gallery strip
+6. Map embed using lat/lng
+7. Footer with contact
+
+Return ONLY the complete HTML with inline CSS. Use modern responsive design."""
     
-    def _build_prompt(self, page_name: str, church: Dict, template: str, domain: str) -> str:
-        name = church.get('name', 'Church')
-        description = church.get('description', '')
-        denomination = church.get('denomination', '')
-        worship_style = church.get('worship_style', '')
+    def _build_about_prompt(self, church: Dict, template: str) -> str:
+        return f"""Generate a complete HTML about page.
+
+Church: {church.get('name')}
+Description: {church.get('description', '')}
+Denomination: {church.get('denomination', '')}
+Year Established: {church.get('year_established', '')}
+Ministries: {', '.join(church.get('ministries', []))}
+
+Template style: {template}
+
+Include:
+1. Church story section
+2. Vision & values
+3. Photo gallery (masonry grid)
+4. History timeline if year_established exists
+5. Denomination info
+
+Return ONLY complete HTML with inline CSS."""
+    
+    def _build_team_prompt(self, church: Dict, template: str) -> str:
+        pastor = church.get('pastor_name', 'Our Pastor')
+        return f"""Generate a complete HTML team page.
+
+Church: {church.get('name')}
+Senior Pastor: {pastor}
+Pastor Bio: {church.get('pastor_bio', '')}
+
+Template style: {template}
+
+Include:
+1. Senior pastor card with photo placeholder
+2. Leadership team section
+3. Ministry team
+4. Contact form
+
+Return ONLY complete HTML with inline CSS."""
+    
+    def _build_events_prompt(self, church: Dict, template: str) -> str:
+        return f"""Generate a complete HTML events page.
+
+Church: {church.get('name')}
+
+Template style: {template}
+
+Include:
+1. Events will be loaded dynamically from ChurchNavigator API
+2. Filter tabs: Upcoming / Past
+3. Event card grid
+4. Register buttons linking to ChurchNavigator
+5. Empty state message
+
+Return ONLY complete HTML with inline CSS and JavaScript for API calls."""
+    
+    def _build_sermons_prompt(self, church: Dict, template: str) -> str:
+        return f"""Generate a complete HTML sermons page.
+
+Church: {church.get('name')}
+YouTube: {church.get('youtube_url', '')}
+
+Template style: {template}
+
+Include:
+1. Latest sermon videos (YouTube embeds)
+2. Series grouping
+3. Subscribe CTA
+4. Link to ChurchNavigator for more
+
+Return ONLY complete HTML with inline CSS."""
+    
+    def _build_contact_prompt(self, church: Dict, template: str) -> str:
         address = church.get('address', {})
-        contact = church.get('contact', {})
-        
-        base_prompt = f"""Generate a complete, production-ready HTML page for {name}.
+        return f"""Generate a complete HTML contact page.
 
-Church Info:
-- Name: {name}
-- Description: {description}
-- Denomination: {denomination}
-- Worship Style: {worship_style}
-- Address: {address.get('street', '')}, {address.get('city', '')}, {address.get('postcode', '')}
-- Phone: {contact.get('phone', '')}
-- Email: {contact.get('email', '')}
+Church: {church.get('name')}
+Address: {address.get('street', '')}, {address.get('city', '')}, {address.get('postcode', '')}
+Phone: {church.get('phone', '')}
+Email: {church.get('email', '')}
+Service Times: {church.get('service_times', [])}
 
-Template: {template} (modern and clean design)
-Domain: {domain}
+Template style: {template}
 
-Requirements:
-- Complete HTML with inline CSS and JavaScript
-- Mobile responsive
-- Modern UI with gradients and shadows
-- Include navigation menu linking to other pages
-- Lavender/purple color scheme (#7c3aed primary)
-- Professional typography
-- All images use placeholder.com
-- NO external CSS/JS files -- everything inline
-"""
-        
-        if page_name == 'home':
-            return base_prompt + """\n\nPage: HOME\n- Hero section with church name and tagline\n- Next service countdown\n- 3 value cards (Welcome/Community/Faith)\n- Upcoming events section\n- Photo gallery\n- Contact info footer\n- Navigation: Home | About | Team | Events | Sermons | Contact"""
-        elif page_name == 'about':
-            return base_prompt + """\n\nPage: ABOUT\n- Church story section\n- Vision and values\n- History timeline\n- Denomination info\n- Photo gallery\n- Navigation: Home | About | Team | Events | Sermons | Contact"""
-        elif page_name == 'team':
-            pastor = church.get('pastor_name', 'Our Pastor')
-            return base_prompt + f"""\n\nPage: TEAM\n- Leadership team section\n- Pastor card: {pastor}\n- Ministry team grid\n- Contact the team form\n- Navigation: Home | About | Team | Events | Sermons | Contact"""
-        elif page_name == 'events':
-            return base_prompt + """\n\nPage: EVENTS\n- Upcoming events grid\n- Event cards with date, time, location\n- Filter: Upcoming / Past\n- Register buttons\n- Navigation: Home | About | Team | Events | Sermons | Contact"""
-        elif page_name == 'sermons':
-            return base_prompt + """\n\nPage: SERMONS\n- Recent sermons grid\n- YouTube video embeds (use placeholder)\n- Series grouping\n- Subscribe on YouTube CTA\n- Navigation: Home | About | Team | Events | Sermons | Contact"""
-        elif page_name == 'contact':
-            return base_prompt + f"""\n\nPage: CONTACT\n- Contact form (name, email, subject, message)\n- Full address with map embed\n- Service times table\n- Phone: {contact.get('phone', '')}\n- Email: {contact.get('email', '')}\n- Social media links\n- Navigation: Home | About | Team | Events | Sermons | Contact"""
-        
-        return base_prompt
+Include:
+1. Contact form (name, email, subject, message)
+2. Full address with map embed
+3. Service times table
+4. Phone, email, social links
+5. Directions CTA
+
+Return ONLY complete HTML with inline CSS and form handling JavaScript."""
     
-    def _fallback_page(self, page_name: str, church: Dict, domain: str) -> str:
-        name = church.get('name', 'Church')
-        return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{page_name.title()} - {name}</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #1a1a1a; }}
-        nav {{ background: linear-gradient(135deg, #7c3aed, #a78bfa); padding: 1rem 2rem; }}
-        nav a {{ color: white; text-decoration: none; margin: 0 1rem; }}
-        .container {{ max-width: 1200px; margin: 0 auto; padding: 2rem; }}
-        h1 {{ font-size: 2.5rem; margin-bottom: 1rem; color: #7c3aed; }}
-    </style>
-</head>
-<body>
-    <nav>
-        <a href="/">Home</a>
-        <a href="/about">About</a>
-        <a href="/team">Team</a>
-        <a href="/events">Events</a>
-        <a href="/sermons">Sermons</a>
-        <a href="/contact">Contact</a>
-    </nav>
-    <div class="container">
-        <h1>{page_name.title()}</h1>
-        <p>Welcome to {name}. This page is currently being generated.</p>
-    </div>
-</body>
-</html>"""
+    def _inject_base_styles(self, html: str, template: str) -> str:
+        base_css = """
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+a { text-decoration: none; color: inherit; }
+img { max-width: 100%; height: auto; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+@media (max-width: 768px) { .container { padding: 0 15px; } }
+</style>
+"""
+        if '<head>' in html:
+            html = html.replace('</head>', base_css + '</head>', 1)
+        return html
 
-site_generator = None
-
-def get_site_generator(db):
-    global site_generator
-    if site_generator is None:
-        site_generator = SiteGenerator(db)
-    return site_generator
+site_generator = SiteGenerator()
