@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 from bson import ObjectId
@@ -13,10 +13,7 @@ class SocialPost(BaseModel):
     likes_count: int = 0
     comments_count: int = 0
     posted_at: datetime
-    synced_at: datetime = Field(default_factory=datetime.utcnow)
+    synced_at: datetime
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            ObjectId: str
-        }
+        json_encoders = {ObjectId: str}
