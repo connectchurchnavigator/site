@@ -1,188 +1,290 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel, Field
+from typing import Optional, Literal
 from datetime import datetime, timedelta
-import statistics
-from models.user import User
-from models.listing import Listing
-from dependencies import get_current_user, require_premium_or_network
-from database import db
+import os
+from anthropic import Anthropic
+from motor.motor_asyncio import AsyncIOMotorClient
+from backend.database import get_database
 
-router = APIRouter(prefix="/api/tools", tags=["tools"])
+router = APIRouter(prefix="/tools", tags=["tools"])
 
-@router.get("/benchmarks/{listing_id}")
-async def get_benchmarks(listing_id: str, current_user: User = Depends(require_premium_or_network)):
-    listing = await db.listings.find_one({"_id": listing_id})
-    if not listing:
-        raise HTTPException(status_code=404, detail="Listing not found")
-    
-    if listing["owner_id"] != current_user.id and current_user.plan not in ["network", "admin"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    denomination = listing.get("denomination", "")
-    city = listing.get("address", {}).get("city", "")
-    
-    category_filter = {"denomination": denomination}
-    if city:
-        category_filter["address.city"] = city
-    
-    category_listings = await db.listings.find(category_filter).to_list(length=None)
-    
-    if len(category_listings) < 3:
-        category_listings = await db.listings.find({"denomination": denomination}).to_list(length=None)
-    
-    your_metrics = {
-        "views": listing.get("analytics", {}).get("total_views", 0),
-        "health_score": listing.get("health_score", 0),
-        "followers": listing.get("followers_count", 0),
-        "engagement": listing.get("analytics", {}).get("engagement_rate", 0)
-    }
-    
-    all_metrics = []
-    for l in category_listings:
-        all_metrics.append({
-            "id": l["_id"],
-            "views": l.get("analytics", {}).get("total_views", 0),
-            "health_score": l.get("health_score", 0),
-            "followers": l.get("followers_count", 0),
-            "engagement": l.get("analytics", {}).get("engagement_rate", 0),
-            "sermon_videos": len(l.get("media", {}).get("sermon_videos", [])),
-            "events_count": await db.events.count_documents({"listing_id": l["_id"], "start_date": {"$gte": datetime.utcnow()}}),
-            "instagram_posts": l.get("social", {}).get("instagram_posts_per_week", 0)
-        })
-    
-    sorted_by_health = sorted(all_metrics, key=lambda x: x["health_score"], reverse=True)
-    your_rank = next((i + 1 for i, m in enumerate(sorted_by_health) if m["id"] == listing_id), len(sorted_by_health))
-    percentile = round((len(sorted_by_health) - your_rank) / len(sorted_by_health) * 100)
-    
-    category_avg = {
-        "views": round(statistics.mean([m["views"] for m in all_metrics])),
-        "health_score": round(statistics.mean([m["health_score"] for m in all_metrics])),
-        "followers": round(statistics.mean([m["followers"] for m in all_metrics])),
-        "engagement": round(statistics.mean([m["engagement"] for m in all_metrics]), 1)
-    }
-    
-    top_quartile_count = max(1, len(all_metrics) // 4)
-    top_performers = sorted_by_health[:top_quartile_count]
-    
-    top_quartile = {
-        "views": round(statistics.mean([m["views"] for m in top_performers])),
-        "health_score": round(statistics.mean([m["health_score"] for m in top_performers])),
-        "followers": round(statistics.mean([m["followers"] for m in top_performers])),
-        "engagement": round(statistics.mean([m["engagement"] for m in top_performers]), 1)
-    }
-    
-    your_sermon_videos = len(listing.get("media", {}).get("sermon_videos", []))
-    your_events = await db.events.count_documents({"listing_id": listing_id, "start_date": {"$gte": datetime.utcnow()}})
-    your_instagram = listing.get("social", {}).get("instagram_posts_per_week", 0)
-    
-    top_sermon_avg = round(statistics.mean([m["sermon_videos"] for m in top_performers]))
-    top_events_avg = round(statistics.mean([m["events_count"] for m in top_performers]), 1)
-    top_instagram_avg = round(statistics.mean([m["instagram_posts"] for m in top_performers]), 1)
-    
-    gap_analysis = []
-    if top_sermon_avg > your_sermon_videos:
-        gap_analysis.append({
-            "metric": "sermon_videos",
-            "you": your_sermon_videos,
-            "top_performers_avg": top_sermon_avg,
-            "impact": "4x more followers"
-        })
-    if top_events_avg > your_events:
-        gap_analysis.append({
-            "metric": "events_per_month",
-            "you": your_events,
-            "top_performers_avg": top_events_avg,
-            "impact": "340% more views"
-        })
-    if top_instagram_avg > your_instagram:
-        gap_analysis.append({
-            "metric": "instagram_posts_per_week",
-            "you": your_instagram,
-            "top_performers_avg": top_instagram_avg,
-            "impact": "2.5x more engagement"
-        })
-    
-    top_performer_actions = []
-    if top_instagram_avg >= 3:
-        top_performer_actions.append("Post on Instagram 3x per week")
-    if top_sermon_avg >= 1:
-        top_performer_actions.append("Add new sermon video monthly")
-    if top_events_avg >= 1:
-        top_performer_actions.append("Create events 4+ weeks in advance")
-    
-    return {
-        "your_rank": your_rank,
-        "total_in_category": len(category_listings),
-        "percentile": percentile,
-        "category_description": f"{denomination} churches" + (f" in {city}" if city else ""),
-        "your_metrics": your_metrics,
-        "category_avg": category_avg,
-        "top_quartile": top_quartile,
-        "gap_analysis": gap_analysis,
-        "top_performer_actions": top_performer_actions
-    }
+class SocialHealthInput(BaseModel):
+    church_id: str
+    platform: Literal["instagram", "facebook", "youtube", "tiktok"]
+    follower_count: int = Field(ge=0)
+    posts_per_week: float = Field(ge=0, le=50)
+    avg_likes: int = Field(ge=0)
+    avg_comments: int = Field(ge=0)
+    avg_shares: int = Field(ge=0, default=0)
+    last_post_days_ago: int = Field(ge=0)
+    has_stories: bool = False
+    has_reels: bool = False
+    profile_complete: bool
+    link_in_bio: bool
 
-@router.get("/benchmarks/{listing_id}/network")
-async def get_network_benchmarks(listing_id: str, current_user: User = Depends(require_premium_or_network)):
-    parent_listing = await db.listings.find_one({"_id": listing_id})
-    if not parent_listing:
-        raise HTTPException(status_code=404, detail="Listing not found")
+class MetricScore(BaseModel):
+    score: float
+    label: str
+    description: str
+
+class BenchmarkData(BaseModel):
+    your_value: float
+    peer_average: float
+    label: str
+
+class SocialHealthResponse(BaseModel):
+    overall_score: float
+    metrics: dict[str, MetricScore]
+    benchmarks: list[BenchmarkData]
+    recommendations: list[str]
+    analysis_date: str
+
+def calculate_engagement_rate(avg_likes: int, avg_comments: int, follower_count: int) -> float:
+    if follower_count == 0:
+        return 0.0
+    return ((avg_likes + avg_comments) / follower_count) * 100
+
+def calculate_posting_score(posts_per_week: float) -> float:
+    if posts_per_week >= 3:
+        return 100.0
+    return posts_per_week * 33.33
+
+def calculate_recency_score(last_post_days_ago: int) -> float:
+    if last_post_days_ago <= 3:
+        return 100.0
+    return max(0.0, 100.0 - (last_post_days_ago * 5))
+
+def calculate_profile_score(has_stories: bool, has_reels: bool, profile_complete: bool, link_in_bio: bool) -> float:
+    score = 0
+    if has_stories:
+        score += 25
+    if has_reels:
+        score += 25
+    if profile_complete:
+        score += 25
+    if link_in_bio:
+        score += 25
+    return float(score)
+
+def calculate_overall_score(engagement_rate: float, posting_score: float, recency_score: float, profile_score: float) -> float:
+    engagement_weight = 0.40
+    posting_weight = 0.30
+    recency_weight = 0.20
+    profile_weight = 0.10
     
-    if parent_listing["owner_id"] != current_user.id or current_user.plan != "network":
-        raise HTTPException(status_code=403, detail="Network plan required")
+    engagement_normalized = min(100, engagement_rate * 20)
     
-    branches = await db.listings.find({"parent_listing_id": listing_id}).to_list(length=None)
+    overall = (
+        (engagement_normalized * engagement_weight) +
+        (posting_score * posting_weight) +
+        (recency_score * recency_weight) +
+        (profile_score * profile_weight)
+    )
+    return round(overall, 1)
+
+async def get_peer_benchmarks(db, church_id: str, platform: str, data: SocialHealthInput):
+    church = await db.churches.find_one({"_id": church_id})
+    if not church:
+        return None
     
-    if not branches:
-        raise HTTPException(status_code=404, detail="No branches found")
+    denomination = church.get("denomination", "")
+    size_category = "small"
+    if church.get("congregation_size", 0) > 200:
+        size_category = "medium"
+    if church.get("congregation_size", 0) > 500:
+        size_category = "large"
     
-    branch_data = []
-    for branch in branches:
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-        sixty_days_ago = datetime.utcnow() - timedelta(days=60)
+    pipeline = [
+        {
+            "$match": {
+                "denomination": denomination,
+                f"social_health_cache.{platform}": {"$exists": True}
+            }
+        },
+        {
+            "$project": {
+                "engagement_rate": f"$social_health_cache.{platform}.engagement_rate",
+                "posts_per_week": f"$social_health_cache.{platform}.posts_per_week"
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "avg_engagement": {"$avg": "$engagement_rate"},
+                "avg_posting": {"$avg": "$posts_per_week"}
+            }
+        }
+    ]
+    
+    result = await db.churches.aggregate(pipeline).to_list(1)
+    
+    if result and result[0]:
+        peer_engagement = result[0].get("avg_engagement", 2.5)
+        peer_posting = result[0].get("avg_posting", 2.0)
+    else:
+        peer_engagement = 2.5
+        peer_posting = 2.0
+    
+    user_engagement = calculate_engagement_rate(data.avg_likes, data.avg_comments, data.follower_count)
+    
+    return [
+        BenchmarkData(
+            your_value=round(user_engagement, 2),
+            peer_average=round(peer_engagement, 2),
+            label=f"Engagement Rate (vs {denomination or 'other'} churches)"
+        ),
+        BenchmarkData(
+            your_value=round(data.posts_per_week, 1),
+            peer_average=round(peer_posting, 1),
+            label="Posts Per Week (vs peers)"
+        )
+    ]
+
+async def get_ai_recommendations(data: SocialHealthInput, metrics: dict, benchmarks: list[BenchmarkData], db, church_id: str, platform: str) -> list[str]:
+    cache_key = f"{church_id}_{platform}"
+    cache_expiry = datetime.utcnow() - timedelta(days=7)
+    
+    cached = await db.social_health_recommendations.find_one({
+        "cache_key": cache_key,
+        "created_at": {"$gte": cache_expiry}
+    })
+    
+    if cached:
+        return cached.get("recommendations", [])
+    
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    if not anthropic_key:
+        return [
+            f"Increase posting frequency to at least 3 times per week (currently {data.posts_per_week})",
+            "Complete your profile with stories, reels, and bio link for maximum reach",
+            "Engage with your audience more to boost likes and comments"
+        ]
+    
+    client = Anthropic(api_key=anthropic_key)
+    
+    prompt = f"""You are a social media expert for churches. Analyze this {platform} performance and give exactly 3 specific, actionable recommendations.
+
+Stats:
+- Followers: {data.follower_count}
+- Posts per week: {data.posts_per_week}
+- Avg likes: {data.avg_likes}
+- Avg comments: {data.avg_comments}
+- Last post: {data.last_post_days_ago} days ago
+- Has stories: {data.has_stories}
+- Has reels: {data.has_reels}
+- Profile complete: {data.profile_complete}
+- Link in bio: {data.link_in_bio}
+
+Scores:
+- Engagement: {metrics['engagement'].score}/100
+- Posting: {metrics['posting'].score}/100
+- Recency: {metrics['recency'].score}/100
+- Profile: {metrics['profile'].score}/100
+
+Benchmarks:
+{benchmarks[0].label}: You {benchmarks[0].your_value}% vs peers {benchmarks[0].peer_average}%
+{benchmarks[1].label}: You {benchmarks[1].your_value} vs peers {benchmarks[1].peer_average}
+
+Provide 3 specific recommendations. Each should be one sentence, actionable, and reference specific numbers from above. Format as a simple list, one per line."""
+    
+    try:
+        message = client.messages.create(
+            model="claude-3-haiku-20240307",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}]
+        )
         
-        current_views = await db.analytics.count_documents({
-            "listing_id": branch["_id"],
-            "timestamp": {"$gte": thirty_days_ago}
-        })
-        previous_views = await db.analytics.count_documents({
-            "listing_id": branch["_id"],
-            "timestamp": {"$gte": sixty_days_ago, "$lt": thirty_days_ago}
+        response_text = message.content[0].text
+        recommendations = [line.strip().lstrip('123456789.-) ') for line in response_text.split('\n') if line.strip()]
+        recommendations = [r for r in recommendations if len(r) > 10][:3]
+        
+        if len(recommendations) < 3:
+            recommendations = [
+                f"Increase posting frequency to at least 3 times per week (currently {data.posts_per_week})",
+                "Complete your profile with stories, reels, and bio link for maximum reach",
+                "Engage with your audience more to boost likes and comments"
+            ]
+        
+        await db.social_health_recommendations.insert_one({
+            "cache_key": cache_key,
+            "recommendations": recommendations,
+            "created_at": datetime.utcnow()
         })
         
-        growth_rate = 0
-        if previous_views > 0:
-            growth_rate = round(((current_views - previous_views) / previous_views) * 100, 1)
+        return recommendations
         
-        branch_data.append({
-            "branch_id": branch["_id"],
-            "branch_name": branch["name"],
-            "health_score": branch.get("health_score", 0),
-            "total_views": branch.get("analytics", {}).get("total_views", 0),
-            "followers": branch.get("followers_count", 0),
-            "growth_rate": growth_rate,
-            "current_month_views": current_views
-        })
-    
-    sorted_by_health = sorted(branch_data, key=lambda x: x["health_score"], reverse=True)
-    sorted_by_views = sorted(branch_data, key=lambda x: x["total_views"], reverse=True)
-    sorted_by_growth = sorted(branch_data, key=lambda x: x["growth_rate"], reverse=True)
-    
-    fastest_growing = sorted_by_growth[0] if sorted_by_growth else None
-    needs_attention = sorted_by_health[-1] if sorted_by_health else None
-    
-    network_totals = {
-        "total_views": sum([b["total_views"] for b in branch_data]),
-        "total_followers": sum([b["followers"] for b in branch_data]),
-        "avg_health_score": round(statistics.mean([b["health_score"] for b in branch_data])),
-        "total_branches": len(branch_data)
-    }
-    
-    return {
-        "branches": branch_data,
-        "health_ranking": sorted_by_health,
-        "views_ranking": sorted_by_views,
-        "fastest_growing": fastest_growing,
-        "needs_attention": needs_attention,
-        "network_totals": network_totals
-    }
+    except Exception as e:
+        print(f"Haiku API error: {e}")
+        return [
+            f"Increase posting frequency to at least 3 times per week (currently {data.posts_per_week})",
+            "Complete your profile with stories, reels, and bio link for maximum reach",
+            "Engage with your audience more to boost likes and comments"
+        ]
+
+@router.post("/social-health/analyse", response_model=SocialHealthResponse)
+async def analyse_social_health(data: SocialHealthInput, db = Depends(get_database)):
+    try:
+        engagement_rate = calculate_engagement_rate(data.avg_likes, data.avg_comments, data.follower_count)
+        posting_score = calculate_posting_score(data.posts_per_week)
+        recency_score = calculate_recency_score(data.last_post_days_ago)
+        profile_score = calculate_profile_score(data.has_stories, data.has_reels, data.profile_complete, data.link_in_bio)
+        
+        overall_score = calculate_overall_score(engagement_rate, posting_score, recency_score, profile_score)
+        
+        metrics = {
+            "engagement": MetricScore(
+                score=round(min(100, engagement_rate * 20), 1),
+                label="Engagement Rate",
+                description=f"{round(engagement_rate, 2)}% of followers engage"
+            ),
+            "posting": MetricScore(
+                score=round(posting_score, 1),
+                label="Posting Consistency",
+                description=f"{data.posts_per_week} posts per week"
+            ),
+            "recency": MetricScore(
+                score=round(recency_score, 1),
+                label="Content Freshness",
+                description=f"Last post {data.last_post_days_ago} days ago"
+            ),
+            "profile": MetricScore(
+                score=round(profile_score, 1),
+                label="Profile Completeness",
+                description=f"{int(profile_score)}% profile optimized"
+            )
+        }
+        
+        benchmarks = await get_peer_benchmarks(db, data.church_id, data.platform, data)
+        if not benchmarks:
+            benchmarks = [
+                BenchmarkData(your_value=round(engagement_rate, 2), peer_average=2.5, label="Engagement Rate (vs peers)"),
+                BenchmarkData(your_value=round(data.posts_per_week, 1), peer_average=2.0, label="Posts Per Week (vs peers)")
+            ]
+        
+        recommendations = await get_ai_recommendations(data, metrics, benchmarks, db, data.church_id, data.platform)
+        
+        await db.churches.update_one(
+            {"_id": data.church_id},
+            {
+                "$set": {
+                    f"social_health_cache.{data.platform}": {
+                        "engagement_rate": engagement_rate,
+                        "posts_per_week": data.posts_per_week,
+                        "overall_score": overall_score,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            }
+        )
+        
+        return SocialHealthResponse(
+            overall_score=overall_score,
+            metrics=metrics,
+            benchmarks=benchmarks,
+            recommendations=recommendations,
+            analysis_date=datetime.utcnow().isoformat()
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
