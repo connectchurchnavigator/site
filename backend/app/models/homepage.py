@@ -9,6 +9,7 @@ class HomepageStats(BaseModel):
     cities: int
     registered_users: int
     visits_this_week: int
+    believers_connected: int
 
 class HomepageActivity(BaseModel):
     type: str
@@ -16,12 +17,11 @@ class HomepageActivity(BaseModel):
     subtitle: str
     icon: str
     color: str
-    link: Optional[str] = None
+    link: Optional[str] = ""
     church_id: Optional[str] = None
     created_at: datetime
-    time_ago: Optional[str] = None
 
-class ListingCounts(BaseModel):
+class HomepageCounts(BaseModel):
     churches: int
     pastors: int
     worship_leaders: int
