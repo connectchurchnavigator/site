@@ -1,15 +1,22 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import churches, events, worship_leaders, media_team, visitors, flyer_generator
+from fastapi.responses import JSONResponse
 import os
+from dotenv import load_dotenv
 
-app = FastAPI(title="ChurchNavigator API")
+load_dotenv()
+
+from routers import churches, reviews, pastors, search
+
+app = FastAPI(title="ChurchNavigator API", version="2.0")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:5173",
         "https://churchnavigator.com",
+        "https://www.churchnavigator.com",
         "https://dev.churchnavigator.com"
     ],
     allow_credentials=True,
@@ -18,16 +25,19 @@ app.add_middleware(
 )
 
 app.include_router(churches.router)
-app.include_router(events.router)
-app.include_router(worship_leaders.router)
-app.include_router(media_team.router)
-app.include_router(visitors.router)
-app.include_router(flyer_generator.router)
+app.include_router(reviews.router)
+app.include_router(pastors.router)
+app.include_router(search.router)
 
 @app.get("/")
 async def root():
-    return {"message": "ChurchNavigator API", "version": "1.0.0"}
+    return {"message": "ChurchNavigator API v2.0", "status": "online"}
 
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True)
