@@ -2,105 +2,94 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 const InstallPrompt = () => {
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showPrompt, setShowPrompt] = useState(false);
-  const [pageViews, setPageViews] = useState(0);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    const dismissed = localStorage.getItem('pwa-install-dismissed');
-    const installed = localStorage.getItem('pwa-installed');
-    const views = parseInt(localStorage.getItem('pwa-page-views') || '0', 10);
+    const isDismissed = localStorage.getItem('installPromptDismissed');
+    const pageViews = parseInt(localStorage.getItem('pageViews') || '0', 10);
+    
+    localStorage.setItem('pageViews', (pageViews + 1).toString());
 
-    setPageViews(views + 1);
-    localStorage.setItem('pwa-page-views', String(views + 1));
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(isIOSDevice);
 
-    if (dismissed || installed) return;
+    if (!isDismissed && pageViews >= 1) {
+      if (isIOSDevice) {
+        const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+        if (!isStandalone) {
+          setShowPrompt(true);
+        }
+      }
+    }
 
-    const handler = (e) => {
+    const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      if (views >= 1) {
+      if (!isDismissed && pageViews >= 1) {
         setShowPrompt(true);
       }
     };
 
-    window.addEventListener('beforeinstallprompt', handler);
-
-    window.addEventListener('appinstalled', () => {
-      localStorage.setItem('pwa-installed', 'true');
-      setShowPrompt(false);
-    });
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, []);
 
-  useEffect(() => {
-    if (deferredPrompt && pageViews >= 2) {
-      const dismissed = localStorage.getItem('pwa-install-dismissed');
-      if (!dismissed) {
-        setShowPrompt(true);
-      }
-    }
-  }, [pageViews, deferredPrompt]);
-
   const handleInstall = async () => {
+    if (isIOS) {
+      return;
+    }
     if (!deferredPrompt) return;
 
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-
+    
     if (outcome === 'accepted') {
-      localStorage.setItem('pwa-installed', 'true');
+      setDeferredPrompt(null);
     }
-
-    setDeferredPrompt(null);
     setShowPrompt(false);
+    localStorage.setItem('installPromptDismissed', 'true');
   };
 
   const handleDismiss = () => {
-    localStorage.setItem('pwa-install-dismissed', 'true');
     setShowPrompt(false);
+    localStorage.setItem('installPromptDismissed', 'true');
   };
 
   if (!showPrompt) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 p-4 animate-slide-up">
-      <div className="max-w-lg mx-auto bg-gradient-to-r from-purple-600 to-violet-600 rounded-xl shadow-2xl p-4 text-white">
-        <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 w-12 h-12 bg-white rounded-lg flex items-center justify-center text-2xl">
-            ⛪
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg mb-1">Install ChurchNavigator</h3>
-            <p className="text-sm text-purple-100 mb-3">
-              Get quick access from your home screen - works offline!
+    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-lg shadow-2xl p-4 z-50 animate-slide-up">
+      <button
+        onClick={handleDismiss}
+        className="absolute top-2 right-2 text-white/80 hover:text-white transition-colors"
+        aria-label="Dismiss"
+      >
+        <X className="w-5 h-5" />
+      </button>
+      <div className="pr-6">
+        <h3 className="font-semibold text-lg mb-1">Install ChurchNavigator</h3>
+        {isIOS ? (
+          <p className="text-sm text-white/90 mb-3">
+            Tap the share button <span className="inline-block mx-1">📤</span> and select "Add to Home Screen"
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-white/90 mb-3">
+              Get quick access to churches near you with our app
             </p>
-            <div className="flex gap-2">
-              <button
-                onClick={handleInstall}
-                className="bg-white text-purple-600 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-purple-50 transition-colors"
-              >
-                Install App
-              </button>
-              <button
-                onClick={handleDismiss}
-                className="text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-white/10 transition-colors"
-              >
-                Not Now
-              </button>
-            </div>
-          </div>
-          <button
-            onClick={handleDismiss}
-            className="flex-shrink-0 text-white hover:bg-white/10 rounded-full p-1 transition-colors"
-            aria-label="Close"
-          >
-            <X size={20} />
-          </button>
-        </div>
+            <button
+              onClick={handleInstall}
+              className="bg-white text-purple-600 px-4 py-2 rounded-full font-medium text-sm hover:bg-purple-50 transition-colors"
+            >
+              Install Now
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
