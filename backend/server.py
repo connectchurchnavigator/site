@@ -1,44 +1,50 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import os
-import asyncio
-import logging
+from datetime import datetime
 
-from app.routers import churches, social
-from app.database import connect_to_mongo, close_mongo_connection
-from app.background_jobs import run_background_jobs
+from database import db
+from routes import churches, auth, events, listings, visitor_tracking, premium_tools
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-app = FastAPI(title="Church Navigator API")
+app = FastAPI(title="ChurchNavigator API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://churchnavigator.com", "http://localhost:3000"],
+    allow_origins=[
+        "https://churchnavigator.com",
+        "https://www.churchnavigator.com",
+        "http://localhost:3000",
+        "http://localhost:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(churches.router)
-app.include_router(social.router)
-
-@app.on_event("startup")
-async def startup_event():
-    await connect_to_mongo()
-    if os.getenv("ENABLE_BACKGROUND_JOBS", "true").lower() == "true":
-        asyncio.create_task(run_background_jobs())
-        logger.info("Background jobs started")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    await close_mongo_connection()
+app.include_router(auth.router)
+app.include_router(events.router)
+app.include_router(listings.router)
+app.include_router(visitor_tracking.router)
+app.include_router(premium_tools.router)
 
 @app.get("/")
 async def root():
-    return {"message": "Church Navigator API", "version": "1.0.0"}
+    return {"message": "ChurchNavigator API", "version": "1.0.0"}
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    try:
+        db.command("ping")
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.utcnow().isoformat()}
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "database": "disconnected", "error": str(e)}
+        )
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True)
