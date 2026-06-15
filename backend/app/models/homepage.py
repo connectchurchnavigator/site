@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
@@ -9,19 +9,22 @@ class HomepageStats(BaseModel):
     cities: int
     registered_users: int
     visits_this_week: int
-    believers_connected: int
 
-class HomepageActivity(BaseModel):
+class ActivityItem(BaseModel):
+    id: str = Field(alias="_id")
     type: str
     title: str
     subtitle: str
     icon: str
     color: str
-    link: Optional[str] = ""
-    church_id: Optional[str] = None
+    link: Optional[str] = None
+    time_ago: str
     created_at: datetime
+    
+    class Config:
+        populate_by_name = True
 
-class HomepageCounts(BaseModel):
+class ListingCounts(BaseModel):
     churches: int
     pastors: int
     worship_leaders: int
