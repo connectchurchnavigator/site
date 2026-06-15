@@ -1,19 +1,22 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import RedirectResponse
-from authlib.integrations.starlette_client import OAuth
-from datetime import datetime, timedelta
-from jose import jwt
 from pydantic import BaseModel, EmailStr
+from datetime import datetime, timedelta
+from jose import jwt, JWTError
 from passlib.context import CryptContext
-import os
 from typing import Optional
+import os
+import httpx
+from authlib.integrations.starlette_client import OAuth
+from authlib.integrations.base_client import OAuthError
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-JWT_SECRET = os.getenv("JWT_SECRET_KEY", "fallback-dev-secret-key-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "dev-secret-key-min-32-characters")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRATION = int(os.getenv("JWT_EXPIRATION_MINUTES", "10080"))
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -31,106 +34,103 @@ oauth.register(
     client_secret=os.getenv("FACEBOOK_APP_SECRET"),
     authorize_url="https://www.facebook.com/v18.0/dialog/oauth",
     access_token_url="https://graph.facebook.com/v18.0/oauth/access_token",
-    userinfo_endpoint="https://graph.facebook.com/me?fields=id,name,email,picture",
     client_kwargs={"scope": "email public_profile"},
 )
 
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-class RegisterRequest(BaseModel):
+class UserRegister(BaseModel):
     email: EmailStr
     password: str
     name: str
 
-class TokenResponse(BaseModel):
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class Token(BaseModel):
     access_token: str
     token_type: str
     user: dict
 
-def get_db():
-    from database import db
-    return db
+def create_jwt_token(user_data: dict) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=JWT_EXPIRATION)
+    to_encode = {"sub": str(user_data["_id"]), "email": user_data["email"], "exp": expire}
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-def create_token(user_id: str, email: str) -> str:
-    payload = {
-        "sub": user_id,
-        "email": email,
-        "exp": datetime.utcnow() + timedelta(minutes=JWT_EXPIRATION)
+def get_user_dict(user_doc: dict) -> dict:
+    return {
+        "id": str(user_doc["_id"]),
+        "email": user_doc["email"],
+        "name": user_doc["name"],
+        "auth_provider": user_doc.get("auth_provider", "email"),
+        "created_at": user_doc.get("created_at", ""),
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-def find_or_create_user(db, email: str, name: str, auth_provider: str) -> dict:
-    users = db.users
-    user = users.find_one({"email": email})
+async def find_or_create_oauth_user(db, email: str, name: str, provider: str) -> dict:
+    users_collection = db["users"]
+    user = await users_collection.find_one({"email": email})
     
-    if user:
-        if user.get("auth_provider") != auth_provider:
-            users.update_one(
-                {"_id": user["_id"]},
-                {"$set": {"auth_provider": auth_provider, "updated_at": datetime.utcnow()}}
-            )
-        return user
+    if not user:
+        user_doc = {
+            "email": email,
+            "name": name,
+            "auth_provider": provider,
+            "created_at": datetime.utcnow().isoformat(),
+            "password_hash": None,
+        }
+        result = await users_collection.insert_one(user_doc)
+        user_doc["_id"] = result.inserted_id
+        return user_doc
     
-    new_user = {
-        "email": email,
-        "name": name,
-        "auth_provider": auth_provider,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
-    }
-    result = users.insert_one(new_user)
-    new_user["_id"] = result.inserted_id
-    return new_user
+    if user.get("auth_provider") != provider:
+        await users_collection.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"auth_provider": provider}}
+        )
+        user["auth_provider"] = provider
+    
+    return user
 
-@router.post("/register", response_model=TokenResponse)
-async def register(request: RegisterRequest):
-    db = get_db()
-    if db.users.find_one({"email": request.email}):
+@router.post("/register", response_model=Token)
+async def register(user: UserRegister, request: Request):
+    db = request.app.mongodb
+    users_collection = db["users"]
+    
+    existing = await users_collection.find_one({"email": user.email})
+    if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    user = {
-        "email": request.email,
-        "name": request.name,
-        "password": pwd_context.hash(request.password),
+    user_doc = {
+        "email": user.email,
+        "name": user.name,
+        "password_hash": pwd_context.hash(user.password),
         "auth_provider": "email",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
+        "created_at": datetime.utcnow().isoformat(),
     }
-    result = db.users.insert_one(user)
-    user_id = str(result.inserted_id)
-    token = create_token(user_id, request.email)
     
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {"id": user_id, "email": request.email, "name": request.name}
-    }
+    result = await users_collection.insert_one(user_doc)
+    user_doc["_id"] = result.inserted_id
+    
+    token = create_jwt_token(user_doc)
+    return Token(access_token=token, token_type="bearer", user=get_user_dict(user_doc))
 
-@router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest):
-    db = get_db()
-    user = db.users.find_one({"email": request.email})
+@router.post("/login", response_model=Token)
+async def login(credentials: UserLogin, request: Request):
+    db = request.app.mongodb
+    users_collection = db["users"]
     
-    if not user or not user.get("password"):
+    user = await users_collection.find_one({"email": credentials.email})
+    if not user or not user.get("password_hash"):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    if not pwd_context.verify(request.password, user["password"]):
+    if not pwd_context.verify(credentials.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    user_id = str(user["_id"])
-    token = create_token(user_id, user["email"])
-    
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {"id": user_id, "email": user["email"], "name": user.get("name", "")}
-    }
+    token = create_jwt_token(user)
+    return Token(access_token=token, token_type="bearer", user=get_user_dict(user))
 
 @router.get("/google/login")
 async def google_login(request: Request):
-    redirect_uri = f"{request.base_url}api/auth/google/callback"
+    redirect_uri = f"{BACKEND_URL}/api/auth/google/callback"
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 @router.get("/google/callback")
@@ -138,55 +138,80 @@ async def google_callback(request: Request):
     try:
         token = await oauth.google.authorize_access_token(request)
         user_info = token.get("userinfo")
+        if not user_info:
+            raise HTTPException(status_code=400, detail="Failed to get user info")
         
-        if not user_info or not user_info.get("email"):
-            raise HTTPException(status_code=400, detail="Failed to get user info from Google")
+        email = user_info.get("email")
+        name = user_info.get("name", email.split("@")[0])
         
-        db = get_db()
-        user = find_or_create_user(
-            db,
-            email=user_info["email"],
-            name=user_info.get("name", ""),
-            auth_provider="google"
-        )
+        if not email:
+            raise HTTPException(status_code=400, detail="Email not provided by Google")
         
-        user_id = str(user["_id"])
-        auth_token = create_token(user_id, user["email"])
+        db = request.app.mongodb
+        user = await find_or_create_oauth_user(db, email, name, "google")
+        jwt_token = create_jwt_token(user)
         
-        return RedirectResponse(
-            url=f"{FRONTEND_URL}/auth/callback?token={auth_token}&email={user['email']}&name={user.get('name', '')}"
-        )
-    except Exception as e:
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=google_auth_failed")
+        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
+    
+    except OAuthError as e:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=oauth_failed")
 
 @router.get("/facebook/login")
 async def facebook_login(request: Request):
-    redirect_uri = f"{request.base_url}api/auth/facebook/callback"
+    redirect_uri = f"{BACKEND_URL}/api/auth/facebook/callback"
     return await oauth.facebook.authorize_redirect(request, redirect_uri)
 
 @router.get("/facebook/callback")
 async def facebook_callback(request: Request):
     try:
         token = await oauth.facebook.authorize_access_token(request)
-        resp = await oauth.facebook.get("me?fields=id,name,email,picture", token=token)
-        user_info = resp.json()
+        access_token = token.get("access_token")
         
-        if not user_info or not user_info.get("email"):
-            raise HTTPException(status_code=400, detail="Failed to get user info from Facebook")
+        if not access_token:
+            raise HTTPException(status_code=400, detail="No access token received")
         
-        db = get_db()
-        user = find_or_create_user(
-            db,
-            email=user_info["email"],
-            name=user_info.get("name", ""),
-            auth_provider="facebook"
-        )
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://graph.facebook.com/me?fields=email,name&access_token={access_token}"
+            )
+            user_info = response.json()
         
-        user_id = str(user["_id"])
-        auth_token = create_token(user_id, user["email"])
+        email = user_info.get("email")
+        name = user_info.get("name", "Facebook User")
         
-        return RedirectResponse(
-            url=f"{FRONTEND_URL}/auth/callback?token={auth_token}&email={user['email']}&name={user.get('name', '')}"
-        )
-    except Exception as e:
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=facebook_auth_failed")
+        if not email:
+            raise HTTPException(status_code=400, detail="Email not provided by Facebook")
+        
+        db = request.app.mongodb
+        user = await find_or_create_oauth_user(db, email, name, "facebook")
+        jwt_token = create_jwt_token(user)
+        
+        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
+    
+    except OAuthError as e:
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=oauth_failed")
+
+@router.get("/me")
+async def get_current_user(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        from bson import ObjectId
+        db = request.app.mongodb
+        user = await db["users"].find_one({"_id": ObjectId(user_id)})
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return get_user_dict(user)
+    
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
