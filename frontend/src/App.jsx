@@ -1,32 +1,30 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Home from './pages/Home';
-import ChurchDetail from './pages/ChurchDetail';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Profile from './pages/Profile';
-import PlannerPricing from './pages/PlannerPricing';
-import PlannerSubscription from './pages/PlannerSubscription';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import Home from './pages/Home';
+import SearchResults from './pages/SearchResults';
+import ChurchDetail from './pages/ChurchDetail';
+import About from './pages/About';
+import Contact from './pages/Contact';
+import InstallPrompt from './components/InstallPrompt';
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen flex flex-col">
+      <div className="flex flex-col min-h-screen">
         <Header />
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/church/:id" element={<ChurchDetail />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/planner/pricing" element={<PlannerPricing />} />
-            <Route path="/planner/subscription" element={<PlannerSubscription />} />
+            <Route path="/search" element={<SearchResults />} />
+            <Route path="/church/:slug" element={<ChurchDetail />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
           </Routes>
         </main>
         <Footer />
+        <InstallPrompt />
       </div>
     </Router>
   );
