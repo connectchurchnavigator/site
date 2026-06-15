@@ -1,70 +1,78 @@
 const CACHE_NAME = 'churchnavigator-v1';
-const urlsToCache = [
+const RUNTIME_CACHE = 'churchnavigator-runtime';
+
+const PRECACHE_URLS = [
   '/',
-  '/churches',
-  '/static/css/main.chunk.css',
-  '/static/js/main.chunk.js',
-  '/static/js/bundle.js',
-  '/logo192.png',
-  '/logo512.png',
-  '/manifest.json'
+  '/offline.html',
+  '/static/css/main.css',
+  '/static/js/main.js'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
+      .then((cache) => cache.addAll(PRECACHE_URLS))
       .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
+  const currentCaches = [CACHE_NAME, RUNTIME_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
+      return cacheNames.filter((cacheName) => !currentCaches.includes(cacheName));
+    }).then((cachesToDelete) => {
+      return Promise.all(cachesToDelete.map((cacheToDelete) => {
+        return caches.delete(cacheToDelete);
+      }));
     }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  if (url.origin === location.origin) {
-    event.respondWith(
-      caches.match(request)
-        .then((response) => {
+  if (event.request.url.startsWith(self.location.origin)) {
+    if (event.request.url.includes('/api/')) {
+      event.respondWith(
+        caches.open(RUNTIME_CACHE).then((cache) => {
+          return fetch(event.request).then((response) => {
+            if (response.status === 200) {
+              cache.put(event.request.url, response.clone());
+            }
+            return response;
+          }).catch(() => {
+            return cache.match(event.request);
+          });
+        })
+      );
+    } else {
+      event.respondWith(
+        caches.match(event.request).then((response) => {
           if (response) {
             return response;
           }
-          return fetch(request).then((response) => {
-            if (!response || response.status !== 200 || response.type !== 'basic') {
+          return fetch(event.request).then((response) => {
+            if (!response || response.status !== 200 || response.type === 'error') {
               return response;
             }
             const responseToCache = response.clone();
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(request, responseToCache);
-              });
+            caches.open(RUNTIME_CACHE).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
             return response;
           }).catch(() => {
-            if (request.mode === 'navigate') {
-              return caches.match('/offline.html').then((offlineResponse) => {
-                return offlineResponse || new Response(
-                  '<html><head><title>Offline</title><style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f9fafb}div{text-align:center;color:#6b7280}h1{color:#7c3aed;margin-bottom:1rem}</style></head><body><div><h1>You\'re Offline</h1><p>ChurchNavigator requires an internet connection.</p><p>Please check your connection and try again.</p></div></body></html>',
-                  { headers: { 'Content-Type': 'text/html' } }
-                );
-              });
+            if (event.request.mode === 'navigate') {
+              return caches.match('/offline.html');
             }
-            return new Response('Network error', { status: 408, statusText: 'Network error' });
+            return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
           });
         })
-    );
+      );
+    }
+  }
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 });
